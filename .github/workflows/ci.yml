@@ -1,0 +1,53 @@
+name: CI
+
+# Um job só, e só em PR para o main e no próprio main: cada minuto de runner
+# sai da cota mensal da conta (lição do Trino Intelligence, que esgotou a
+# cota com push em toda branch).
+on:
+  pull_request:
+    branches: [main]
+    paths-ignore: ['**.md']
+  push:
+    branches: [main]
+    paths-ignore: ['**.md']
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  testes:
+    name: Testes (Postgres, como produção)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: facilities_testes
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/facilities_testes
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/facilities_testes
+      SECRET_KEY: ci
+      SESSION_COOKIE_SECURE: '0'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - run: pip install -r requirements-dev.txt
+      - name: Migração — ida, volta e ida
+        run: |
+          flask --app facilities db upgrade
+          flask --app facilities db downgrade base
+          flask --app facilities db upgrade
+          flask --app facilities db check
+      - name: Suíte
+        run: pytest -q
