@@ -122,9 +122,11 @@ def ativo_empresa(eid):
 @admin_required
 def clientes():
     lista = (Contratante.query.order_by(Contratante.is_active.desc(), Contratante.nome).all())
+    from facilities.rotas.models import TIPOS_OCORRENCIA_PUBLICA
     return render_template('cadastros/clientes.html', clientes=lista,
                            empresas=Empresa.query.order_by(Empresa.nome).all(),
-                           gerentes=servico.gerentes_possiveis())
+                           gerentes=servico.gerentes_possiveis(),
+                           tipos_ocorrencia=TIPOS_OCORRENCIA_PUBLICA, prazos_de=servico.prazos_de)
 
 
 @bp.post('/cadastros/clientes')
@@ -294,14 +296,21 @@ def trilha_local(cid):
 # ── O endereço do QR ──────────────────────────────────────────────────────
 
 @bp.get('/q/<codigo>')
-@login_required
 def qr(codigo):
-    """O endereço do QR. Quem executa (posto e supervisor) vai direto ao
-    turno, já no ponto; a gestão vê o ponto e o que foi feito ali hoje (D57)."""
+    """O endereço do QR.
+
+    * Sem login (o público, Fase 4B): o formulário de ocorrência.
+    * Quem executa (posto e supervisor): direto ao turno, já no ponto.
+    * A gestão: o ponto e o que foi feito ali hoje (D57).
+    """
+    from flask_login import current_user as atual
     from facilities.campo.rotas import PERFIS_DO_CAMPO
     ponto = servico.ponto_pelo_codigo(codigo)
     if ponto is None:
         abort(404)
+    if not atual.is_authenticated:
+        from facilities.rotas.publico import pagina_publica
+        return pagina_publica(ponto)
     require_client(ponto.client_id)
     if _perfil() in PERFIS_DO_CAMPO and ponto.is_active:
         return redirect(url_for('rotas.turno', ponto=ponto.codigo_qr))

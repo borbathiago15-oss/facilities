@@ -120,6 +120,12 @@ class Rota(db.Model):
     tolerancia_min = db.Column(db.Integer, nullable=False, default=TOLERANCIA_PADRAO_MIN)
     # Dias da semana em que a rota roda: "1234567" (1 = segunda ... 7 = domingo).
     dias_semana = db.Column(db.String(7), nullable=False, default='1234567')
+    # Confirmação de presença em horário aleatório (D48, Q4): quantas por
+    # turno (0 desliga) e quantos minutos a pessoa tem para responder.
+    presencas_por_turno = db.Column(db.Integer, nullable=False, default=2,
+                                    server_default='2')
+    presenca_prazo_min = db.Column(db.Integer, nullable=False, default=10,
+                                   server_default='10')
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -196,6 +202,8 @@ class TarefaDia(db.Model):
                               nullable=True)
     chamado_id = db.Column(db.Integer, db.ForeignKey('chamados.id', ondelete='RESTRICT'),
                            nullable=True)
+    # Quando o aviso "chegou a hora" foi mandado ao celular (Fase 4B).
+    avisada_em = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     rota = db.relationship('Rota')
@@ -311,6 +319,92 @@ class AgendadorExecucao(db.Model):
     erro = db.Column(db.Text)
 
 
-MODELOS_EM_ORDEM_DE_LIMPEZA = (ExecucaoCorrecao, NaoConformidade, ExecucaoFoto, Execucao,
-                               TarefaDia, RotaEscala, RotaItem, Rota, ChecklistVersao,
-                               ChecklistModelo, AgendadorExecucao)
+# ── Ocorrência do QR público (D47, Q1 a Q3) ───────────────────────────────
+TIPOS_OCORRENCIA_PUBLICA = {
+    'falta_papel': 'Falta papel',
+    'falta_sabonete': 'Falta sabonete ou álcool',
+    'sujo': 'Local sujo',
+    'lixo': 'Lixeira cheia',
+    'vazamento': 'Vazamento ou entupimento',
+    'quebrado': 'Algo quebrado',
+    'outro': 'Outro problema',
+}
+OCORRENCIA_ABERTA = 'aberta'
+OCORRENCIA_EM_ATENDIMENTO = 'em_atendimento'
+OCORRENCIA_RESOLVIDA = 'resolvida'
+SITUACOES_OCORRENCIA = {
+    OCORRENCIA_ABERTA: 'Recebida',
+    OCORRENCIA_EM_ATENDIMENTO: 'Em atendimento',
+    OCORRENCIA_RESOLVIDA: 'Resolvida',
+}
+
+
+class OcorrenciaPublica(db.Model):
+    """O que qualquer pessoa no local abriu pelo QR, sem login.
+
+    Não guarda dado de quem abriu: nem nome, nem contato. O acompanhamento é
+    pelo link com o ``token`` (Q3), que só mostra a situação.
+    """
+    __tablename__ = 'ocorrencias_publicas'
+    id = db.Column(db.Integer, primary_key=True)
+    ponto_id = db.Column(db.Integer, db.ForeignKey('pontos_inspecao.id', ondelete='RESTRICT'),
+                         nullable=False, index=True)
+    client_id = db.Column(db.Integer, db.ForeignKey('clients.id', ondelete='RESTRICT'),
+                          nullable=False, index=True)
+    tipo = db.Column(db.String(20), nullable=False)
+    texto = db.Column(db.String(300))
+    foto_key = db.Column(db.String(300))
+    foto_mime = db.Column(db.String(100))
+    token = db.Column(db.String(40), nullable=False, unique=True)
+    status = db.Column(db.String(20), nullable=False, default=OCORRENCIA_ABERTA, index=True)
+    criada_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    prazo = db.Column(db.DateTime)                 # UTC; nulo = cliente sem prazo definido
+    atendida_por = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='RESTRICT'),
+                             nullable=True)
+    atendida_em = db.Column(db.DateTime)
+    resolvida_por = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='RESTRICT'),
+                              nullable=True)
+    resolvida_em = db.Column(db.DateTime)
+    resolucao = db.Column(db.String(300))
+
+    ponto = db.relationship('PontoInspecao')
+    quem_atendeu = db.relationship('User', foreign_keys=[atendida_por])
+    quem_resolveu = db.relationship('User', foreign_keys=[resolvida_por])
+
+
+# ── Confirmação de presença (D48, Q4) ─────────────────────────────────────
+PRESENCA_PENDENTE = 'pendente'
+PRESENCA_CONFIRMADA = 'confirmada'
+PRESENCA_SEM_RESPOSTA = 'sem_resposta'
+
+
+class ConfirmacaoPresenca(db.Model):
+    """Um pedido de "confirme que você está no posto", num horário sorteado
+    do turno, para quem está escalado na rota."""
+    __tablename__ = 'confirmacoes_presenca'
+    id = db.Column(db.Integer, primary_key=True)
+    rota_id = db.Column(db.Integer, db.ForeignKey('rotas.id', ondelete='RESTRICT'),
+                        nullable=False, index=True)
+    client_id = db.Column(db.Integer, db.ForeignKey('clients.id', ondelete='RESTRICT'),
+                          nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='RESTRICT'),
+                        nullable=False, index=True)
+    data = db.Column(db.Date, nullable=False, index=True)
+    pedido_em = db.Column(db.DateTime, nullable=False, index=True)    # UTC
+    prazo_ate = db.Column(db.DateTime, nullable=False)                # UTC
+    avisado_em = db.Column(db.DateTime)
+    respondida_em = db.Column(db.DateTime)
+    status = db.Column(db.String(20), nullable=False, default=PRESENCA_PENDENTE, index=True)
+    supervisor_avisado = db.Column(db.Boolean, default=False, nullable=False)
+
+    rota = db.relationship('Rota')
+    pessoa = db.relationship('User')
+
+    __table_args__ = (db.UniqueConstraint('rota_id', 'user_id', 'pedido_em',
+                                          name='uq_confirmacoes_presenca_pedido'),)
+
+
+MODELOS_EM_ORDEM_DE_LIMPEZA = (ConfirmacaoPresenca, OcorrenciaPublica, ExecucaoCorrecao,
+                               NaoConformidade, ExecucaoFoto, Execucao, TarefaDia, RotaEscala,
+                               RotaItem, Rota, ChecklistVersao, ChecklistModelo,
+                               AgendadorExecucao)

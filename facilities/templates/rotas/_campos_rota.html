@@ -10,11 +10,15 @@
     <input class="form-control" id="rfim" name="hora_fim" type="time" required value="{{ r.hora_fim.strftime('%H:%M') if r else '15:00' }}"></div>
   <div class="col-md-3"><label class="form-label small fw-semibold" for="rtol">Tolerância (minutos)</label>
     <input class="form-control" id="rtol" name="tolerancia_min" type="number" min="0" max="240" value="{{ r.tolerancia_min if r else 15 }}"></div>
-  <fieldset class="col-md-9"><legend class="form-label small fw-semibold mb-1">Dias da semana</legend>
+  <div class="col-6 col-md-2"><label class="form-label small fw-semibold" for="rpres">Presença por turno</label>
+    <input class="form-control" id="rpres" name="presencas_por_turno" type="number" min="0" max="6" value="{{ r.presencas_por_turno if r else 2 }}"></div>
+  <div class="col-6 col-md-2"><label class="form-label small fw-semibold" for="rpprazo">Minutos para confirmar</label>
+    <input class="form-control" id="rpprazo" name="presenca_prazo_min" type="number" min="5" max="60" value="{{ r.presenca_prazo_min if r else 10 }}"></div>
+  <fieldset class="col-md-5"><legend class="form-label small fw-semibold mb-1">Dias da semana</legend>
     <div class="d-flex flex-wrap gap-2">
       {% for k, v in dias.items() %}
       <label class="border rounded px-2 py-1 small"><input type="checkbox" name="dias_semana" value="{{ k }}" {% if (r and k in r.dias_semana) or (not r) %}checked{% endif %}> {{ v }}</label>
       {% endfor %}
     </div></fieldset>
 </div>
-<p class="form-text mb-0">Turno que passa da meia-noite: ponha o fim menor que o início (ex.: 22:00 às 06:00).</p>
+<p class="form-text mb-0">Turno que passa da meia-noite: ponha o fim menor que o início (ex.: 22:00 às 06:00). Presença: o aplicativo pede a confirmação em horários sorteados do turno a quem está escalado; 0 desliga.</p>

@@ -5,7 +5,7 @@ O dia da Ana: rota "Limpeza 2º andar — turno 1" (07:00–15:00, tolerância
 """
 import io
 import json
-from datetime import date, datetime, time, timedelta
+from datetime import date, time, timedelta
 
 import pytest
 

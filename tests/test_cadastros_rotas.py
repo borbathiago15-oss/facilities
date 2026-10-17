@@ -154,11 +154,13 @@ def test_etiquetas_saem_em_pdf(app_module, auth_client):
     assert r.data[:4] == b'%PDF'
 
 
-def test_qr_exige_login_e_carteira(app_module, auth_client):
+def test_qr_sem_login_e_publico_e_com_login_exige_carteira(app_module, auth_client):
     ids = _ids(app_module)
     anonimo = app_module.app.test_client()
+    # Fase 4B: sem login, o QR abre o formulário PÚBLICO de ocorrência (D47),
+    # que não mostra nada do cadastro além do nome do lugar.
     r = anonimo.get(f"/q/{ids['qr']}")
-    assert r.status_code == 302 and '/login' in r.headers['Location']
+    assert r.status_code == 200 and 'Viu algum problema aqui?' in r.get_data(as_text=True)
     assert 'Porta do banheiro' in auth_client.get(f"/q/{ids['qr']}").get_data(as_text=True)
     assert auth_client.get('/q/codigo-que-nao-existe').status_code == 404
     with app_module.app.app_context():

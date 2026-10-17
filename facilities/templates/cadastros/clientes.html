@@ -18,6 +18,16 @@
         <option value="">Sem gerente ainda</option>
         {% for g in gerentes %}<option value="{{ g.id }}" {% if c and c.gerente_id == g.id %}selected{% endif %}>{{ g.name }}</option>{% endfor %}
       </select></div>
+    {% set prazos = prazos_de(c) %}
+    <details class="col-12"><summary class="small fw-semibold">Prazo de atendimento das ocorrências do QR público (minutos)</summary>
+      <p class="form-text">Vazio = sem prazo. O prazo conta da hora em que a pessoa enviou o aviso.</p>
+      <div class="row g-2">
+        {% for k, v in tipos_ocorrencia.items() %}
+        <div class="col-6 col-md-3"><label class="form-label small" for="pz{{ sfx }}{{ k }}">{{ v }}</label>
+          <input class="form-control form-control-sm" id="pz{{ sfx }}{{ k }}" name="prazo_{{ k }}" type="number" min="5" max="10080" value="{{ prazos.get(k, '') }}"></div>
+        {% endfor %}
+      </div>
+    </details>
   </div>
 {% endmacro %}
 {% block content %}

@@ -259,3 +259,23 @@ class Notification(db.Model):
     link = db.Column(db.String(255))
     status = db.Column(db.String(10), default='unread', nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+
+class PushInscricao(db.Model):
+    """Um celular (navegador) que aceitou receber avisos (Web Push, Fase 4B).
+
+    O endereço é do serviço de push do navegador (Google, Mozilla, Apple,
+    Microsoft) — ``core/push.py`` só aceita esses. Uma pessoa pode ter
+    vários aparelhos; o serviço respondeu 404/410 → a inscrição sai.
+    """
+    __tablename__ = 'push_inscricoes'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='RESTRICT'),
+                        nullable=False, index=True)
+    endpoint = db.Column(db.String(600), nullable=False, unique=True)
+    p256dh = db.Column(db.String(200), nullable=False)
+    auth = db.Column(db.String(100), nullable=False)
+    aparelho = db.Column(db.String(120))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    ultimo_envio_em = db.Column(db.DateTime)
+    falhas = db.Column(db.Integer, default=0, nullable=False)

@@ -574,3 +574,17 @@ body.dark .page-title, body.dark .pg-titulo, body.dark .pg-num-v, body.dark .pg-
 .fc-foto { position: relative; }
 .fc-foto-input { position: absolute; opacity: 0; width: 1px; height: 1px; }
 .fc-foto:has(.fc-foto-input:focus-visible) label { outline: 3px solid var(--info); outline-offset: 2px; }
+
+/* ── Página pública do QR (sem login) ─────────────────────────────────── */
+.fc-publico { background: var(--surface, #fff); }
+.fc-publico-topo { text-align: center; padding: 14px; border-bottom: 1px solid var(--linha); }
+.fc-publico-topo img { max-height: 48px; max-width: 70%; }
+.fc-publico-corpo { position: relative; max-width: 520px; margin: 0 auto; padding: 18px 16px 40px; }
+.fc-opcao-lista { justify-content: flex-start; padding: 0 14px; font-weight: 600; }
+.fc-isca { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+.fc-ocor-aberta { background: var(--aviso); color: #fff; }
+.fc-ocor-em_atendimento { background: var(--info); color: #fff; }
+.fc-ocor-resolvida { background: var(--ok); color: #fff; }
+.fc-presenca { position: fixed; left: 12px; right: 12px; bottom: calc(72px + env(safe-area-inset-bottom));
+  z-index: 1040; background: var(--marca); color: #fff; border-radius: var(--radius-lg);
+  padding: 14px; box-shadow: 0 8px 24px rgba(0, 0, 0, .25); }

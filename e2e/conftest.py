@@ -18,8 +18,6 @@ import urllib.request
 
 import pytest
 
-pw = pytest.importorskip('playwright.sync_api')
-
 AQUI = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, AQUI)
 from servidor import QR_DO_TESTE, SENHA  # noqa: E402
@@ -81,6 +79,9 @@ def servidor():
 
 @pytest.fixture(scope='session')
 def navegador(tmp_path_factory):
+    # Aqui, e não no topo do arquivo: sem Playwright (o CI), cada teste é
+    # pulado — um skip no topo do conftest derrubaria a coleta inteira.
+    pw = pytest.importorskip('playwright.sync_api')
     caminho = _chromium()
     if not caminho:
         pytest.skip('Chromium não encontrado')

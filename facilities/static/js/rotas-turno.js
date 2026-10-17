@@ -125,6 +125,10 @@
       var sb = ordem[situacao(b).cod] !== undefined ? ordem[situacao(b).cod] : 4;
       return sa - sb || Date.parse(a.previsto) - Date.parse(b.previsto);
     });
+    if ((dados.ocorrencias || []).length) {
+      caixaItens.appendChild(el('div', {classe: 'alert alert-warning',
+        texto: dados.ocorrencias.length + ' aviso(s) do público esperando. Leia o QR do local para atender.'}));
+    }
     if (!tarefas.length) {
       caixaItens.appendChild(el('div', {classe: 'fc-cartao fc-vazio',
         texto: 'Nenhuma tarefa de rota para hoje nos seus locais.'}));
@@ -168,6 +172,8 @@
         el('div', {classe: 'small fw-semibold text-muted', texto: 'Sobre este ponto'}),
         el('div', {texto: p.descricao})]));
     }
+    var avisos = (dados.ocorrencias || []).filter(function (o) { return o.ponto === codigo; });
+    if (avisos.length) secPonto.appendChild(cartaoOcorrencias(avisos));
     var doPonto = dados.tarefas.filter(function (t) { return t.ponto === codigo; });
     var cartao = el('div', {classe: 'fc-cartao mb-3'},
       [el('h2', {classe: 'h6 fw-bold', texto: 'Tarefas deste ponto hoje'})]);
@@ -192,6 +198,47 @@
     secPonto.appendChild(el('button', {type: 'button', classe: 'btn btn-outline-secondary w-100',
       onclick: function () { history.replaceState(null, '', '/app/turno'); mostrarLista(); }},
       ['Ver o turno inteiro']));
+  }
+
+  // ── Avisos do público pelo QR (Fase 4B) ───────────────────────────────
+  function cartaoOcorrencias(lista) {
+    var cartao = el('div', {classe: 'fc-cartao mb-3 border-warning'},
+      [el('h2', {classe: 'h6 fw-bold', texto: 'Avisos do público aqui'})]);
+    lista.forEach(function (o) {
+      var linha = el('div', {classe: 'fc-app-item'}, [
+        el('span', {classe: 'fw-semibold', texto: o.tipo + (o.atrasada ? ' · fora do prazo' : '')}),
+        el('span', {classe: 'small text-muted', texto: 'às ' + o.hora + (o.texto ? ' · "' + o.texto + '"' : '') +
+                                                     (o.prazo ? ' · prazo ' + o.prazo : '')})]);
+      var barra = el('div', {classe: 'd-flex gap-2 mt-2'});
+      function agir(acao, botao) {
+        botao.disabled = true;
+        fetch('/app/api/ocorrencias/' + o.id + '/' + acao, {method: 'POST',
+          headers: {'Content-Type': 'application/json'}, body: '{}'})
+          .then(function (r) { return r.json().then(function (x) { return {ok: r.ok, x: x}; }); })
+          .then(function (res) {
+            if (!res.ok) { botao.disabled = false; dizer(res.x.error || 'Não foi possível.', 'danger'); return; }
+            o.status = res.x.status;
+            if (o.status === 'resolvida') {
+              dados.ocorrencias = dados.ocorrencias.filter(function (x) { return x.id !== o.id; });
+              linha.remove();
+              dizer('Aviso resolvido. Quem avisou vê a resposta pelo QR.', 'success');
+            } else {
+              botao.textContent = 'Em atendimento';
+            }
+          }, function () { botao.disabled = false; dizer('Sem sinal: tente de novo.', 'warning'); });
+      }
+      if (o.status === 'aberta') {
+        var b1 = el('button', {type: 'button', classe: 'btn btn-outline-primary flex-fill', texto: 'Vou atender'});
+        b1.addEventListener('click', function () { agir('atender', b1); });
+        barra.appendChild(b1);
+      }
+      var b2 = el('button', {type: 'button', classe: 'btn btn-success flex-fill', texto: 'Resolvido'});
+      b2.addEventListener('click', function () { agir('resolver', b2); });
+      barra.appendChild(b2);
+      linha.appendChild(barra);
+      cartao.appendChild(linha);
+    });
+    return cartao;
   }
 
   // ── O checklist ───────────────────────────────────────────────────────

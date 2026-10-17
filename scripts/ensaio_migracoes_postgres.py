@@ -93,6 +93,17 @@ SEMENTES = [
     "user_id,now() FROM execucoes",
     "INSERT INTO agendador_execucoes (iniciada_em,concluida_em,origem,tarefas_geradas,"
     "tarefas_perdidas,ok) VALUES (now(),now(),'comando',1,0,true)",
+    # Fase 4B: QR público, presença, push e as colunas novas.
+    "UPDATE contratantes SET prazos_ocorrencia_json='{\"sujo\": 30}'",
+    "UPDATE rotas SET presencas_por_turno=3, presenca_prazo_min=15",
+    "UPDATE tarefas_dia SET avisada_em='2026-10-17 12:00'",
+    "INSERT INTO push_inscricoes (user_id,endpoint,p256dh,auth,created_at,falhas) SELECT id,"
+    "'https://fcm.googleapis.com/fcm/send/x','p','a',now(),0 FROM users WHERE email='sup@ensaio'",
+    "INSERT INTO ocorrencias_publicas (ponto_id,client_id,tipo,texto,token,status,criada_em) "
+    "SELECT id,client_id,'sujo','piso molhado','tok-ensaio-1','aberta',now() FROM pontos_inspecao",
+    "INSERT INTO confirmacoes_presenca (rota_id,client_id,user_id,data,pedido_em,prazo_ate,"
+    "status,supervisor_avisado) SELECT r.id,r.client_id,u.id,'2026-10-17','2026-10-17 13:00',"
+    "'2026-10-17 13:15','confirmada',false FROM rotas r, users u WHERE u.email='sup@ensaio'",
 ]
 
 

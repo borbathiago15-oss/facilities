@@ -35,6 +35,47 @@
   <div class="fc-vazio">Nenhuma tarefa prevista neste dia.</div>
   {% endfor %}
 </div>
+<h2 class="h6 fw-bold mt-3">Ocorrências do QR público</h2>
+<div class="fc-cartao p-0 mb-3">
+  {% for o in ocorrencias %}
+  <div class="d-flex flex-wrap gap-2 align-items-center border-bottom px-3 py-2">
+    <span class="fw-bold">{{ o.criada_em|hora_local('%H:%M') }}</span>
+    <span>{{ o.ponto.ambiente.nome }} · {{ o.ponto.nome }}</span>
+    <span class="fw-semibold">{{ tipos_ocorrencia.get(o.tipo, o.tipo) }}</span>
+    {% if o.texto %}<span class="small text-muted">"{{ o.texto }}"</span>{% endif %}
+    {% if o.foto_key %}<a class="small" href="{{ url_for('publico.foto_da_ocorrencia', oid=o.id) }}" target="_blank" rel="noopener">foto</a>{% endif %}
+    <span class="badge fc-sit fc-ocor-{{ o.status }}">{{ situacoes_ocorrencia[o.status] }}</span>
+    {% if atrasada(o, agora) %}<span class="badge text-bg-danger">fora do prazo ({{ o.prazo|hora_local('%H:%M') }})</span>{% elif o.prazo and o.status != 'resolvida' %}<span class="small text-muted">prazo {{ o.prazo|hora_local('%H:%M') }}</span>{% endif %}
+    <span class="ms-auto small">
+      {% if o.status == 'resolvida' %}{{ o.quem_resolveu.name }} · {{ o.resolvida_em|hora_local('%H:%M') }}{% if o.resolucao %}: {{ o.resolucao }}{% endif %}
+      {% elif pode_atender %}
+      <form method="post" action="{{ url_for('publico.ocorrencia_no_site', oid=o.id, acao='resolver') }}" class="d-inline-flex gap-1 m-0">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label class="visually-hidden" for="res{{ o.id }}">O que foi feito</label>
+        <input class="form-control form-control-sm" id="res{{ o.id }}" name="resolucao" placeholder="O que foi feito" maxlength="300">
+        <button class="btn btn-sm btn-outline-success" type="submit">Resolvida</button>
+      </form>
+      {% endif %}
+    </span>
+  </div>
+  {% else %}
+  <div class="fc-vazio">Nenhuma ocorrência do público neste dia.</div>
+  {% endfor %}
+</div>
+
+{% if presencas %}
+<h2 class="h6 fw-bold mt-3">Confirmações de presença</h2>
+<div class="fc-cartao p-0 mb-3">
+  {% for c in presencas %}
+  <div class="d-flex flex-wrap gap-2 align-items-center border-bottom px-3 py-2">
+    <span class="fw-bold">{{ c.pedido_em|hora_local('%H:%M') }}</span><span>{{ c.pessoa.name }}</span><span class="small text-muted">{{ c.rota.nome }}</span>
+    <span class="ms-auto badge {% if c.status == 'confirmada' %}text-bg-success{% elif c.status == 'sem_resposta' %}text-bg-danger{% else %}text-bg-light{% endif %}">
+      {% if c.status == 'confirmada' %}Confirmada às {{ c.respondida_em|hora_local('%H:%M') }}{% elif c.status == 'sem_resposta' %}Sem resposta{% if c.respondida_em %} (respondeu às {{ c.respondida_em|hora_local('%H:%M') }}){% endif %}{% else %}Aguardando{% endif %}</span>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
 {% if extras %}
 <h2 class="h6 fw-bold mt-3">Atividades extras</h2>
 <div class="fc-cartao p-0">

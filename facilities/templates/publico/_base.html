@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b0d0f">
+  <meta name="robots" content="noindex">
+  <title>{% block title %}{% endblock %} — {{ NOME_DO_SISTEMA }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap-icons/bootstrap-icons.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+</head>
+<body class="fc-publico">
+<header class="fc-publico-topo"><img src="{{ url_for('static', filename='marca/trino-facilities.png') }}" alt="Trino Facilities"></header>
+<main class="fc-publico-corpo">{% block content %}{% endblock %}</main>
+</body>
+</html>

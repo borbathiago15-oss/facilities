@@ -212,8 +212,9 @@ def _rotas(app):
     from facilities.cadastros.rotas import bp as cadastros_bp
     from facilities.campo.rotas import bp as campo_bp
     from facilities.rotas.telas import bp as rotas_bp
+    from facilities.rotas.publico import bp as publico_bp
     for bp in (core_bp, auth_bp, admin_bp, app_bp, passagem_bp, chamados_bp, cadastros_bp,
-               campo_bp, rotas_bp):
+               campo_bp, rotas_bp, publico_bp):
         app.register_blueprint(bp)
 
 
@@ -325,6 +326,19 @@ def _comandos(app):
         db.session.commit()
         click.echo(f'{reg.tarefas_geradas} tarefa(s) gerada(s), '
                    f'{reg.tarefas_perdidas} marcada(s) como perdida(s).')
+
+    @app.cli.group('push')
+    def push_cli():
+        """Avisos no celular (Web Push)."""
+
+    @push_cli.command('chaves')
+    def push_chaves():
+        """Gera o par de chaves VAPID para pôr no ambiente."""
+        from facilities.core.push import gerar_chaves
+        privada, publica = gerar_chaves()
+        click.echo(f'VAPID_PRIVATE_KEY={privada}')
+        click.echo(f'VAPID_PUBLIC_KEY={publica}')
+        click.echo('VAPID_SUBJECT=mailto:seu-email@grupotrino.com.br')
 
     @app.cli.command('semear-modelos')
     @click.option('--contrato', 'contrato_id', type=int, required=True,

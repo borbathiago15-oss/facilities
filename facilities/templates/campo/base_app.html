@@ -32,6 +32,8 @@
 </header>
 {% endblock %}
 {% block rodape %}
+{# A faixa do pedido de presença (D48) — preenchida por campo.js. #}
+<div class="fc-presenca" id="fc-presenca" role="alert" hidden></div>
 {% set ep = request.endpoint or '' %}
 <nav class="fc-app-nav" aria-label="Aplicativo de campo">
   <a href="{{ url_for('campo.inicio') }}" {% if ep == 'campo.inicio' %}class="ativo" aria-current="page"{% endif %}><i class="bi bi-house"></i><span>Início</span></a>

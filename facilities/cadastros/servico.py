@@ -181,10 +181,30 @@ def salvar_contratante(contratante, dados, autor):
     contratante.empresa_id = empresa.id
     contratante.centro_custo = _texto(dados, 'centro_custo', 50)
     contratante.gerente_id = _gerente_valido(_id(dados, 'gerente_id'))
+    contratante.prazos_ocorrencia_json = _prazos_de_ocorrencia(dados)
     if nova:
         db.session.add(contratante)
     registrar('contratante', contratante, 'criado' if nova else 'alterado', antes, autor)
     return contratante
+
+
+def _prazos_de_ocorrencia(dados):
+    """Prazo (minutos) por tipo de ocorrência do QR público; vazio = sem prazo."""
+    from facilities.rotas.models import TIPOS_OCORRENCIA_PUBLICA
+    prazos = {}
+    for tipo, rotulo in TIPOS_OCORRENCIA_PUBLICA.items():
+        bruto = str(dados.get(f'prazo_{tipo}') or '').strip()
+        if not bruto:
+            continue
+        if not bruto.isdigit() or not 5 <= int(bruto) <= 7 * 24 * 60:
+            raise CadastroInvalido(f'Prazo de "{rotulo}": em minutos, de 5 a 10080 (7 dias).')
+        prazos[tipo] = int(bruto)
+    return json.dumps(prazos, sort_keys=True) if prazos else None
+
+
+def prazos_de(contratante):
+    return json.loads(contratante.prazos_ocorrencia_json) \
+        if contratante and contratante.prazos_ocorrencia_json else {}
 
 
 def definir_ativo_simples(entidade, obj, ativo, autor):

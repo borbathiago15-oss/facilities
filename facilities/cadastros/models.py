@@ -108,6 +108,9 @@ class Contratante(db.Model):
                            nullable=True, index=True)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    # Prazo de atendimento da ocorrência do QR público, em minutos, por tipo
+    # (Q2: configurável por cliente; sem valor, a ocorrência fica sem prazo).
+    prazos_ocorrencia_json = db.Column(db.Text)
 
     empresa = db.relationship('Empresa')
     gerente = db.relationship('User', foreign_keys=[gerente_id])

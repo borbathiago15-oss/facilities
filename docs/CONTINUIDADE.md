@@ -89,18 +89,45 @@ tests/                 pytest (SQLite por padrão; Postgres com TEST_DATABASE_UR
 - Para quem tem um Postgres local com a migração antiga: recrie o banco de
   teste (a revisão inicial foi reescrita antes do primeiro push).
 
+## Fases 1 a 4 (17/10/2026)
+
+Aprovadas pelo dono do produto e entregues na branch
+`claude/zealous-dijkstra-dkudbo` (um commit por fase). Planejamento
+completo no plano oficial (v3) e nas decisões (v8), fora do repositório.
+
+| Fase | O que entrou | Onde |
+|---|---|---|
+| 1 | Empresa, cliente (contratante), estado, local, setor, ambiente, equipamento, ponto com QR, etiquetas, histórico de cadastros | `facilities/cadastros/` |
+| 2 | Cadeia de pessoas e carteira pela cadeia, sair encerra a sessão, segunda etapa (TOTP), perfil cliente bloqueado, varredura de isolamento | `core/hierarquia.py`, `core/totp.py`, `tests/test_isolamento_varredura.py` |
+| 3 | Aplicativo de campo `/app/`, destino por perfil, leitor de QR (jsQR), testes de navegador | `facilities/campo/`, `e2e/` |
+| 4A | Checklists com versão, rotas, escala, agendador, execução pelo QR (com e sem sinal), não conformidade, acompanhamento | `facilities/rotas/` |
+| 4B | Web Push, QR público com acompanhamento, confirmação de presença aleatória | `core/push.py`, `rotas/ocorrencias.py`, `rotas/presenca.py`, `rotas/publico.py` |
+
+Pontos de atenção:
+
+- **Presença aleatória (D48)**: validar com RH e jurídico ANTES do piloto e
+  constar no aviso de privacidade aos colaboradores. Toda rota nasce com 2
+  por turno; 0 desliga.
+- **Prazo padrão da ocorrência pública (Q2)**: decisão pendente do dono;
+  enquanto isso, cada cliente configura o seu (vazio = sem prazo).
+- **Nome de quem executou visível ao cliente (R5)**: só quando o cliente
+  externo for liberado (Fase 9), depois do aviso aos colaboradores (D25).
+- `totp_segredo` fica em texto no banco (como no Intelligence): proteger o
+  banco e os backups como se protege as senhas.
+- O agendador precisa rodar a cada 5 minutos (ver README, Produção).
+
 ## Pendências conhecidas (próximos passos sugeridos)
 
 1. **Hospedagem e deploy** — decidir onde roda (o Dockerfile serve para
    Cloudflare Containers, Render, Fly, VM…). Precisa de Postgres, `SECRET_KEY`
    e, para anexos, R2 (sem R2 o boot recusa armazenar no disco do contêiner).
    Definir backup do banco.
-2. **Notificação no celular (web push)** — o Trino tem; aqui os avisos ficam
-   só no sino.
+2. **Notificação no celular (web push)** — feita na Fase 4B; falta definir as
+   chaves VAPID e o relógio do agendador na hospedagem.
 3. **Testes da fila sem internet** (`test_fila_offline.py` do Trino) não foram
    portados.
-4. **Sair não revoga cookies copiados** antes do logout (a troca de senha
-   revoga). Avaliar revogar a sessão no logout.
+4. ~~Sair não revoga cookies copiados~~ — resolvido na Fase 2 (sair sobe a
+   época da sessão, em todos os aparelhos).
 5. **CSP**: as telas usam scripts inline (herança do Trino); uma CSP exigiria
    tirar o JS inline primeiro.
 6. **Bloqueio de conta por tentativas** pode ser usado para travar a conta de

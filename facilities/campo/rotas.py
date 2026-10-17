@@ -57,8 +57,12 @@ def _hoje_do_posto(locais):
 @bp.get('/')
 @login_required
 def inicio():
+    from facilities.rotas import ocorrencias
+    from facilities.rotas.models import TIPOS_OCORRENCIA_PUBLICA
     locais = clientes_visiveis()
-    return render_template('campo/inicio.html', locais=locais, **_hoje_do_posto(locais))
+    return render_template('campo/inicio.html', locais=locais, **_hoje_do_posto(locais),
+                           ocorrencias=ocorrencias.abertas([c.id for c in locais]),
+                           tipos_ocorrencia=TIPOS_OCORRENCIA_PUBLICA)
 
 
 @bp.get('/ler-qr')

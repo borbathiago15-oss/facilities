@@ -228,10 +228,21 @@ def salvar_rota(local, rota, dados):
         raise RegraDaRota('Tolerância em minutos, só o número.')
     if not 0 <= tolerancia <= 240:
         raise RegraDaRota('A tolerância vai de 0 a 240 minutos.')
+    try:
+        presencas = int(dados.get('presencas_por_turno') if dados.get('presencas_por_turno')
+                        not in (None, '') else (rota.presencas_por_turno if rota else 2))
+        prazo_presenca = int(dados.get('presenca_prazo_min') or
+                             (rota.presenca_prazo_min if rota else 10))
+    except ValueError:
+        raise RegraDaRota('Confirmação de presença: use só números.')
+    if not 0 <= presencas <= 6 or not 5 <= prazo_presenca <= 60:
+        raise RegraDaRota('Confirmação de presença: de 0 a 6 por turno, com 5 a 60 minutos '
+                          'para responder.')
     rota = rota or Rota(client_id=local.id)
     rota.nome, rota.turno = nome, turno
     rota.hora_inicio, rota.hora_fim = inicio, fim
     rota.tolerancia_min = tolerancia
+    rota.presencas_por_turno, rota.presenca_prazo_min = presencas, prazo_presenca
     rota.dias_semana = _dias(dados.get('dias_semana'))
     if rota.id is None:
         db.session.add(rota)
@@ -291,7 +302,9 @@ def salvar_item(rota, item, dados):
     item.ordem = int(dados.get('ordem') or 0) if str(dados.get('ordem') or '').isdigit() \
         else (item.ordem or len(rota.itens) + 1)
     if item.id is None:
-        db.session.add(item)
+        # Pela relação: a lista ``rota.itens`` já carregada nesta sessão passa
+        # a ter o item (o agendador rodando na mesma operação o enxerga).
+        rota.itens.append(item)
     db.session.flush()
     return item
 
@@ -324,9 +337,9 @@ def salvar_escala(rota, dados):
         raise RegraDaRota('Data inválida.')
     if fim is not None and fim < inicio:
         raise RegraDaRota('O fim da escala é antes do começo.')
-    e = RotaEscala(rota_id=rota.id, user_id=pessoa.id, dias_semana=_dias(dados.get('dias_semana')),
+    e = RotaEscala(user_id=pessoa.id, dias_semana=_dias(dados.get('dias_semana')),
                    data_inicio=inicio, data_fim=fim)
-    db.session.add(e)
+    rota.escalas.append(e)
     db.session.flush()
     return e
 
@@ -375,6 +388,8 @@ def gerar(dia, client_ids=None):
         _ini, fim = _janela(rota, dia)
         fim_utc = tempo.para_utc(fim.date(), fim.time())
         pessoa = escalado(rota, dia)
+        from facilities.rotas import presenca
+        presenca.gerar(rota, dia, pessoa)
         for item in rota.itens:
             versao = item.modelo.versao_atual if item.modelo else None
             if (not item.is_active or versao is None or not item.modelo.is_active
@@ -412,15 +427,37 @@ def fechar_perdidas(agora_utc):
     return n
 
 
+def avisar_tarefas(agora_utc):
+    """Chegou a hora: aviso no celular de quem está escalado (uma vez só)."""
+    from facilities.core import push
+    n = 0
+    for t in TarefaDia.query.filter(TarefaDia.status == PREVISTA, TarefaDia.avisada_em.is_(None),
+                                    TarefaDia.previsto_para <= agora_utc + timedelta(minutes=2),
+                                    TarefaDia.user_id.isnot(None)).all():
+        if agora_utc > t.previsto_para + timedelta(minutes=t.tolerancia_min):
+            t.avisada_em = agora_utc            # passou: não avisa atrasado
+            continue
+        push.avisar([t.user_id], f'{tempo.fmt(t.previsto_para, "%H:%M")} · {t.ponto.nome}',
+                    f'{t.versao.modelo.nome} — {t.ponto.ambiente.nome}. Leia o QR do local.',
+                    f'/app/turno?ponto={t.ponto.codigo_qr}', marca=f'tarefa-{t.id}')
+        t.avisada_em = agora_utc
+        n += 1
+    return n
+
+
 def rodar(origem='comando', agora_utc=None):
-    """Uma rodada: hoje e amanhã gerados; perdidas fechadas. Fica registrada."""
+    """Uma rodada: hoje e amanhã gerados; avisos da hora (tarefas e presença);
+    perdidas e presenças vencidas fechadas. Fica registrada."""
     agora_utc = agora_utc or datetime.utcnow()
     hoje = tempo.local(agora_utc).date()
     reg = AgendadorExecucao(origem=origem, iniciada_em=datetime.utcnow())
     db.session.add(reg)
     db.session.flush()
     try:
+        from facilities.rotas import presenca
         reg.tarefas_geradas = gerar(hoje) + gerar(hoje + timedelta(days=1))
+        avisar_tarefas(agora_utc)
+        presenca.avisar_e_fechar(agora_utc)
         reg.tarefas_perdidas = fechar_perdidas(agora_utc)
         reg.ok = True
     except Exception as erro:            # registra e repassa: quem chamou decide

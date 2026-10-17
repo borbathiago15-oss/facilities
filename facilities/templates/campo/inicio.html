@@ -4,9 +4,24 @@
 <h1 class="fc-titulo">Olá, {{ current_user.name.split(' ')[0] }}</h1>
 <p class="fc-sub">{{ tempo.fmt(tempo.agora(), '%d/%m/%Y') }} · {{ current_user.perfil_rotulo }}</p>
 
-<a class="btn btn-primary btn-lg w-100 fc-app-acao mb-3" href="{{ url_for('campo.ler_qr') }}">
+<a class="btn btn-primary btn-lg w-100 fc-app-acao mb-2" href="{{ url_for('campo.ler_qr') }}">
   <i class="bi bi-qr-code-scan"></i> Ler o QR do local
 </a>
+<a class="btn btn-outline-primary w-100 fc-app-acao mb-3" href="{{ url_for('rotas.turno') }}">
+  <i class="bi bi-list-check"></i> Meu turno (tarefas da rota)
+</a>
+
+{% if ocorrencias %}
+<section class="fc-cartao mb-3 border-warning" aria-labelledby="tit-ocor">
+  <h2 class="h6 fw-bold" id="tit-ocor"><i class="bi bi-megaphone"></i> Avisos do público ({{ ocorrencias|length }})</h2>
+  {% for o in ocorrencias %}
+  <a class="fc-app-item" href="{{ url_for('rotas.turno', ponto=o.ponto.codigo_qr) }}">
+    <span class="fw-semibold">{{ tipos_ocorrencia[o.tipo] }} · {{ o.ponto.nome }}</span>
+    <span class="small text-muted">{{ o.ponto.ambiente.nome }} · {{ o.criada_em|hora_local('%H:%M') }}{% if o.texto %} · "{{ o.texto }}"{% endif %}</span>
+  </a>
+  {% endfor %}
+</section>
+{% endif %}
 
 {% if not locais %}
 <div class="fc-cartao fc-vazio">Você ainda não tem local liberado. Peça ao seu supervisor ou à gestão.</div>
@@ -48,6 +63,12 @@
   {% endfor %}
 </section>
 {% endif %}
+
+<section class="fc-cartao mb-3" aria-labelledby="tit-avisos">
+  <h2 class="h6 fw-bold" id="tit-avisos"><i class="bi bi-bell"></i> Avisos no celular</h2>
+  <p class="small text-muted mb-2" id="fc-avisos-estado">Receba o aviso da hora de cada tarefa e do pedido de presença, mesmo com o aplicativo fechado.</p>
+  <button class="btn btn-outline-primary w-100 fc-app-acao" type="button" id="fc-ativar-avisos"><i class="bi bi-bell"></i> Receber avisos neste celular</button>
+</section>
 
 <section class="fc-cartao" aria-labelledby="tit-locais">
   <h2 class="h6 fw-bold" id="tit-locais"><i class="bi bi-geo-alt"></i> Meus locais</h2>

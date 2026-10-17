@@ -1,0 +1,29 @@
+{% extends 'publico/_base.html' %}
+{% block title %}Avisar um problema{% endblock %}
+{% block content %}
+<h1 class="h4 fw-bold">Viu algum problema aqui?</h1>
+<p class="text-muted">{{ ponto.ambiente.nome }} · {{ ponto.nome }}</p>
+{% if not ponto.is_active %}
+<div class="alert alert-warning">Este QR não está mais em uso. Procure a equipe de limpeza ou a portaria.</div>
+{% else %}
+<p>Conte para a equipe responsável. Não pedimos seu nome nem seu contato.</p>
+{% if erro %}<div class="alert alert-danger" role="alert">{{ erro }}</div>{% endif %}
+<form method="post" action="{{ url_for('publico.abrir_ocorrencia', codigo=ponto.codigo_qr) }}" enctype="multipart/form-data">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <fieldset class="mb-3">
+    <legend class="form-label fw-semibold">O que está acontecendo?</legend>
+    {% for k, v in tipos.items() %}
+    <label class="fc-opcao fc-opcao-lista mb-2"><input class="fc-opcao-radio" type="radio" name="tipo" value="{{ k }}" required> <span>{{ v }}</span></label>
+    {% endfor %}
+  </fieldset>
+  <label class="form-label fw-semibold" for="texto">Quer contar mais? (opcional)</label>
+  <textarea class="form-control mb-3" id="texto" name="texto" rows="3" maxlength="300"></textarea>
+  <label class="form-label fw-semibold" for="foto">Foto (opcional)</label>
+  <input class="form-control mb-1" id="foto" name="foto" type="file" accept="image/*" capture="environment">
+  <p class="small text-muted mb-3">Fotografe só o problema, sem pessoas.</p>
+  <div class="fc-isca" aria-hidden="true"><label for="site">Não preencha</label><input id="site" name="site" tabindex="-1" autocomplete="off"></div>
+  <button class="btn btn-primary btn-lg w-100 fw-bold" type="submit">Enviar</button>
+</form>
+<p class="small text-muted mt-3">É da equipe? <a href="{{ url_for('auth.login', next=request.path) }}">Entre no sistema</a>.</p>
+{% endif %}
+{% endblock %}

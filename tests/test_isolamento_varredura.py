@@ -31,6 +31,9 @@ MARCA = 'SEGREDO-DO-LOCAL-A'
 FORA = {
     'static': 'arquivos estáticos',
     'auth.logout': 'derrubaria a sessão no meio da varredura',
+    # Público por decisão (D47): qualquer pessoa no local abre ocorrência
+    # pelo QR, logada ou não. Testado em test_qr_publico.py.
+    'publico.abrir_ocorrencia': 'aberto ao público por desenho',
 }
 
 
@@ -108,7 +111,7 @@ def _rotas_de_a(app_module, a, ids):
     """Fase 4A: checklist, rota, escala, tarefa, execução com foto e NC em A."""
     from app import User, db
     from facilities.rotas import servico as s
-    from facilities.rotas.models import Execucao, ExecucaoFoto, NaoConformidade, RotaEscala
+    from facilities.rotas.models import ExecucaoFoto, NaoConformidade, RotaEscala
     from tests.test_rotas_servico import Arquivo
     loc = fabrica.local()
     m = s.criar_modelo(a, {'nome': f'Checklist {MARCA}'}, None)
@@ -134,7 +137,19 @@ def _rotas_de_a(app_module, a, ids):
         {'depois': [Arquivo()]}, agora_utc=tarefa.previsto_para)
     # Uma segunda tarefa, ainda aberta, para a rota "não realizada".
     db.session.commit()
-    return {'modelo': m.id, 'rota': rota.id, 'item': item.id,
+    # Fase 4B: uma ocorrência do público e um pedido de presença em A.
+    from facilities.rotas import ocorrencias
+    from facilities.rotas.models import ConfirmacaoPresenca
+    from datetime import datetime, timedelta
+    oc = ocorrencias.abrir(db.session.get(PontoInspecao, ids['ponto']), 'outro',
+                           f'Aviso {MARCA}')
+    pres = ConfirmacaoPresenca(rota_id=rota.id, client_id=a, user_id=dono, data=tempo.hoje(),
+                               pedido_em=datetime.utcnow() - timedelta(minutes=1),
+                               prazo_ate=datetime.utcnow() + timedelta(minutes=9))
+    db.session.add(pres)
+    db.session.commit()
+    return {'ocorrencia_publica': oc.id, 'presenca': pres.id,
+            'modelo': m.id, 'rota': rota.id, 'item': item.id,
             'escala': RotaEscala.query.filter_by(rota_id=rota.id).one().id,
             'tarefa_rota': tarefa.id, 'execucao': ex.id,
             'foto': ExecucaoFoto.query.filter_by(execucao_id=ex.id).first().id,
@@ -163,6 +178,8 @@ def _digital(app_module, a):
 
 
 def _valor_do_parametro(nome, ids, entidade=None, endpoint=''):
+    if endpoint.startswith('publico.') and nome == 'oid':
+        return ids['ocorrencia_publica']
     if endpoint.startswith('rotas.'):
         por_rota = {'eid': ids['escala'] if 'escala' in endpoint else ids['execucao'],
                     'rid': ids['rota'], 'iid': ids['item'], 'mid': ids['modelo'],
@@ -176,6 +193,8 @@ def _valor_do_parametro(nome, ids, entidade=None, endpoint=''):
         'ocorrencia_id': ids['ocorrencia'], 'config_id': ids['cfg'], 'area_id': ids['area'],
         'codigo': ids['qr'], 'aviso_id': 1, 'uid': 1, 'eid': ids['empresa'],
         'entidade': entidade or 'setor',
+        'oid_ocorrencia': ids['ocorrencia_publica'], 'pid': ids['presenca'],
+        'token': 'token-inventado', 'acao': 'resolver',
         'oid': ids.get(entidade or 'setor'),
     }
     return mapa.get(nome)
@@ -215,7 +234,7 @@ def test_ninguem_de_b_le_ou_altera_a(app_module, local_a, papel):
     c = fabrica.entrar(app_module, email)
     antes = _digital(app_module, a)
     corpo = {'client_id': a, 'configuracao_id': local_a['cfg'], 'titulo': 'Invasão',
-             'nome': 'Invasão', 'texto': 'Invasão', 'motivo': 'Invasão', 'resposta': 'x',
+             'nome': 'Invasão', 'texto': 'Invasão', 'resposta': 'x',
              'acao': 'cancelar', 'setor_id': local_a['setor'],
              'ambiente_id': local_a['ambiente'], 'data_turno': tempo.hoje().isoformat(),
              'turno': 'Diurno', 'ativo': '0',
