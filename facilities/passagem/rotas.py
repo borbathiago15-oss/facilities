@@ -271,13 +271,12 @@ def index():
         de=request.args.get('de', ''), ate=request.args.get('ate', ''),
         hoje=hoje, mes_corrente=hoje.month, ano_corrente=hoje.year,
         # Os dois botões de ação do painel perguntam o que a ROTA vai
-        # perguntar. O Visualizador abre Plano de Ação mas só LÊ a Passagem:
-        # com a pergunta pela metade, ele via "Abrir PDCA" e "marcar
-        # resolvida" e recebia 403 no clique — o POST passa pelo
+        # perguntar: quem só LÊ a Passagem (a diretoria) não vê "Abrir
+        # chamado" nem "marcar resolvida" — o POST passa pelo
         # `module_required`, que exige poder gravar no módulo.
         pode_gravar=current_user.can_access(MODULO),
-        pode_pdca=(current_user.can_access('action_plans')
-                   and current_user.can_access(MODULO)))
+        pode_chamado=(current_user.can_access('chamados')
+                      and current_user.can_access(MODULO)))
 
 
 @bp.get('/configuracao')
@@ -334,7 +333,7 @@ def configuracao():
                 .group_by(DiarioConfiguracao.area_id).all())
 
     editar = request.args.get('editar', type=int)
-    return render_template('diario_operacional/configuracao.html',
+    return render_template('diario_operacional/configuracao.html', modelos_prontos=_modelos_prontos(),
                            clients=clients, client_id=client_id,
                            configs=[_config_payload(c) for c in configs],
                            areas=[{'id': a.id, 'nome': a.nome,
@@ -356,6 +355,36 @@ def _area_do_contrato(client_id, area_id):
     a = DiarioArea.query.get(int(area_id))
     return a.id if (a is not None and a.client_id == int(client_id)) else None
 
+
+
+def _modelos_prontos():
+    from facilities.passagem.modelos_prontos import MODELOS
+    return MODELOS
+
+
+@bp.post('/modelos-prontos')
+@login_required
+@permissao_requerida('diario_config')
+@module_required(MODULO)
+def usar_modelos_prontos():
+    """Cria as áreas e os modelos prontos escolhidos (formulário da configuração)."""
+    from flask import flash, redirect, url_for
+    from facilities.passagem import modelos_prontos
+    client_id = request.form.get('client_id', type=int)
+    _client_allowed(client_id)
+    servicos = [s for s in request.form.getlist('servico') if s in modelos_prontos.MODELOS]
+    destino = url_for('diario_operacional.configuracao', client_id=client_id)
+    if not servicos:
+        flash('Escolha ao menos um serviço.', 'warning')
+        return redirect(destino)
+    criados = modelos_prontos.semear(client_id, servicos, criado_por=current_user.id)
+    db.session.commit()
+    if criados:
+        flash('Modelo(s) criado(s): ' + ', '.join(criados) + '. Ajuste o que precisar.',
+              'success')
+    else:
+        flash('Esses modelos já existiam neste contrato — nada foi duplicado.', 'info')
+    return redirect(destino)
 
 @bp.post('/api/areas')
 @login_required
@@ -2122,62 +2151,32 @@ def excluir_anexo(anexo_id):
     return jsonify({'ok': True, 'id': anexo_id})
 
 
-ORIGEM_PDCA = 'diario_operacional'
-
-
-def _titulo_da_ocorrencia(o):
-    """O título com que a ocorrência aparece no Plano de Ação.
-
-    Carrega o tipo e a referência (nota, DTS, placa) porque é por eles que a
-    operação reconhece o caso na lista de ações — e é o que torna a ação
-    reencontrável sem abrir o Diário.
-    """
-    ref = (o.referencia or '').strip()
-    cabeca = f'Passagem de Turno · {o.tipo}' + (f' — {ref}' if ref else '')
-    corpo = ' '.join((o.descricao or '').split())
-    titulo = f'{cabeca}: {corpo}' if corpo else cabeca
-    return titulo[:300]
-
-
-@bp.post('/api/ocorrencias/<int:ocorrencia_id>/pdca')
+@bp.post('/api/ocorrencias/<int:ocorrencia_id>/chamado')
 @login_required
 @module_required(MODULO)
-def abrir_pdca(ocorrencia_id):
-    """Ocorrência crítica → ação no Plano de Ação, sem redigitar nada.
+def abrir_chamado(ocorrencia_id):
+    """Ocorrência da passagem → chamado de manutenção, sem redigitar nada.
 
-    Segue o caminho que o módulo de Ocorrências já usa (``origem`` na tabela
-    ``action_plans``), então não há schema novo: o que muda é de onde a ação
-    nasce. A ação entra mínima — título, cliente, descrição e origem — e é
-    completada na tela do Plano de Ação, onde moram prazo, responsável e 5W2H.
-
-    Idempotente de propósito: o botão fica numa lista que o supervisor relê
-    todo dia, e clicar duas vezes na mesma ocorrência não pode virar duas
-    ações. A checagem é por título + cliente + origem, que é o que identifica
-    a ocorrência do lado do Plano de Ação.
+    É a mesma porta da tela de chamados (``chamados.servico``): contrato,
+    área do modelo, descrição e referência vêm da ocorrência; a crítica entra
+    com prioridade alta. Idempotente — o botão fica numa lista que o gestor
+    relê todo dia, e o segundo clique leva ao chamado do primeiro.
     """
-    from app import ActionPlan, require_client
+    from facilities.core.acesso import require_client
+    from facilities.chamados import servico as chamados
 
     o = DiarioOcorrencia.query.get_or_404(ocorrencia_id)
     require_client(o.client_id)
-    if not current_user.can_access('action_plans'):
-        return jsonify({'error': 'Seu perfil não abre Plano de Ação.'}), 403
-
-    titulo = _titulo_da_ocorrencia(o)
-    existente = (ActionPlan.query
-                 .filter_by(title=titulo, client_id=o.client_id,
-                            origem=ORIGEM_PDCA)
-                 .order_by(ActionPlan.id.desc()).first())
-    if existente:
-        return jsonify({'ok': True, 'id': existente.id, 'criado': False,
-                        'url': f'/action-plans/cliente/{o.client_id}'}), 200
-
-    plano = ActionPlan(title=titulo, client_id=o.client_id,
-                       description=(o.descricao or '').strip(),
-                       origem=ORIGEM_PDCA, created_by=current_user.id)
-    db.session.add(plano)
+    if not current_user.can_access('chamados'):
+        return jsonify({'error': 'Seu perfil não abre chamado.'}), 403
+    try:
+        ch, criado = chamados.abrir_de_ocorrencia(current_user, o)
+    except chamados.RecusaChamado as ex:
+        db.session.rollback()
+        return jsonify({'error': ex.mensagem}), ex.status
     db.session.commit()
-    return jsonify({'ok': True, 'id': plano.id, 'criado': True,
-                    'url': f'/action-plans/cliente/{o.client_id}'}), 201
+    return jsonify({'ok': True, 'id': ch.id, 'numero': ch.numero, 'criado': criado,
+                    'url': f'/chamados/{ch.id}'}), (201 if criado else 200)
 
 
 def _turno_do_lancamento(p, data):

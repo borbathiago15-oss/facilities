@@ -555,49 +555,66 @@ def test_data_personalizada_invalida_nao_derruba_a_tela(auth_client, cenario):
     assert r.status_code == 200
 
 
-# ── Ocorrência crítica → Plano de Ação ───────────────────────────────────
+# ── Ocorrência → chamado de manutenção ───────────────────────────────────
 
-def test_abrir_pdca_cria_a_acao_com_a_origem_certa(auth_client, app_module,
-                                                   cenario):
+def _chamados_de(oid):
+    from facilities.chamados.models import Chamado
+    return Chamado.query.filter_by(origem='ocorrencia', origem_id=oid)
+
+
+def test_abrir_chamado_cria_com_a_origem_certa(auth_client, app_module, cenario):
     with app_module.app.app_context():
         o = _ocorrencia(app_module, cenario, 'Devolução')
         app_module.db.session.commit()
         oid = o.id
 
-    r = auth_client.post(f'/passagem-de-turno/api/ocorrencias/{oid}/pdca')
+    r = auth_client.post(f'/passagem-de-turno/api/ocorrencias/{oid}/chamado')
     assert r.status_code == 201
     corpo = r.get_json()
     assert corpo['criado'] is True
-    assert corpo['url'] == f'/action-plans/cliente/{cenario["client_id"]}'
+    assert corpo['url'] == f'/chamados/{corpo["id"]}'
+    assert corpo['numero'].startswith('OS-')
 
     with app_module.app.app_context():
-        plano = app_module.ActionPlan.query.get(corpo['id'])
-        assert plano.origem == 'diario_operacional'
-        assert plano.client_id == cenario['client_id']
-        assert 'Devolução' in plano.title
-        assert plano.description == 'Ocorrência de Devolução.'
+        ch = _chamados_de(oid).one()
+        assert ch.client_id == cenario['client_id']
+        assert 'Devolução' in ch.titulo
+        assert 'Ocorrência de Devolução.' in ch.descricao
+        assert ch.prioridade == 'media'
+        assert ch.status == 'aberto'
+        assert [e.tipo for e in ch.eventos] == ['aberto']
 
 
-def test_abrir_pdca_duas_vezes_nao_duplica_a_acao(auth_client, app_module,
-                                                  cenario):
+def test_ocorrencia_critica_vira_chamado_de_prioridade_alta(auth_client, app_module,
+                                                            cenario):
+    with app_module.app.app_context():
+        o = _ocorrencia(app_module, cenario, 'Vazamento')
+        o.gravidade = 'critica'
+        app_module.db.session.commit()
+        oid = o.id
+    assert auth_client.post(f'/passagem-de-turno/api/ocorrencias/{oid}/chamado'
+                            ).status_code == 201
+    with app_module.app.app_context():
+        assert _chamados_de(oid).one().prioridade == 'alta'
+
+
+def test_abrir_chamado_duas_vezes_nao_duplica(auth_client, app_module, cenario):
     """O botão fica numa lista relida todo dia: clicar de novo não duplica."""
     with app_module.app.app_context():
         o = _ocorrencia(app_module, cenario, 'Retrabalho')
         app_module.db.session.commit()
         oid = o.id
 
-    primeiro = auth_client.post(f'/passagem-de-turno/api/ocorrencias/{oid}/pdca')
-    segundo = auth_client.post(f'/passagem-de-turno/api/ocorrencias/{oid}/pdca')
+    primeiro = auth_client.post(f'/passagem-de-turno/api/ocorrencias/{oid}/chamado')
+    segundo = auth_client.post(f'/passagem-de-turno/api/ocorrencias/{oid}/chamado')
     assert (primeiro.status_code, segundo.status_code) == (201, 200)
     assert segundo.get_json()['criado'] is False
     assert primeiro.get_json()['id'] == segundo.get_json()['id']
-
     with app_module.app.app_context():
-        assert app_module.ActionPlan.query.filter_by(
-            origem='diario_operacional').count() == 1
+        assert _chamados_de(oid).count() == 1
 
 
-def test_abrir_pdca_de_contrato_alheio_da_403(app_module, client, cenario):
+def test_abrir_chamado_de_contrato_alheio_da_403(app_module, client, cenario):
     from tests.test_authz import _cleanup_users, _login, _make_user
 
     with app_module.app.app_context():
@@ -606,21 +623,17 @@ def test_abrir_pdca_de_contrato_alheio_da_403(app_module, client, cenario):
         o = _ocorrencia(app_module, cenario, 'Devolução')
         app_module.db.session.commit()
         oid = o.id
-        _uid, email = _make_user(app_module, role='pleno',
-                                 perms=['diario_operacional', 'action_plans'],
-                                 client_ids=[outro.id])
+        _uid, email = _make_user(app_module, role='pleno', client_ids=[outro.id])
 
     _login(client, email)
     assert client.post(
-        f'/passagem-de-turno/api/ocorrencias/{oid}/pdca').status_code == 403
+        f'/passagem-de-turno/api/ocorrencias/{oid}/chamado').status_code == 403
     with app_module.app.app_context():
-        assert app_module.ActionPlan.query.filter_by(
-            origem='diario_operacional').count() == 0
+        assert _chamados_de(oid).count() == 0
         _cleanup_users(app_module, email)
 
 
-def test_sem_o_modulo_de_plano_de_acao_o_botao_nao_funciona(app_module, client,
-                                                            cenario):
+def test_quem_so_le_nao_abre_chamado(app_module, client, cenario):
     """Esconder o botão não basta — a rota também precisa recusar."""
     from tests.test_authz import _cleanup_users, _login, _make_user
 
@@ -628,16 +641,17 @@ def test_sem_o_modulo_de_plano_de_acao_o_botao_nao_funciona(app_module, client,
         o = _ocorrencia(app_module, cenario, 'Devolução')
         app_module.db.session.commit()
         oid = o.id
-        _uid, email = _make_user(app_module, role='pleno',
-                                 perms=['diario_operacional'],   # sem action_plans
+        _uid, email = _make_user(app_module, role='visualizador',
                                  client_ids=[cenario['client_id']])
 
     _login(client, email)
-    r = client.post(f'/passagem-de-turno/api/ocorrencias/{oid}/pdca')
+    html = client.get(f'/passagem-de-turno/?client_id={cenario["client_id"]}'
+                      ).get_data(as_text=True)
+    assert 'dopAbrirChamado(' not in html
+    r = client.post(f'/passagem-de-turno/api/ocorrencias/{oid}/chamado')
     assert r.status_code == 403
     with app_module.app.app_context():
-        assert app_module.ActionPlan.query.filter_by(
-            origem='diario_operacional').count() == 0
+        assert _chamados_de(oid).count() == 0
         _cleanup_users(app_module, email)
 
 

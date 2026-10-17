@@ -532,7 +532,7 @@
       // cortado no meio ("Ponto de ate…"), que é pior do que abreviar. O
       // título do campo carrega a frase inteira.
       '<div class="col-md-2"><select class="form-select o-grav" ' +
-        'title="Marque &quot;Atenção&quot; para o fato subir à Torre de Comando ' +
+        'title="Marque &quot;Atenção&quot; para o fato aparecer em destaque no painel do gestor ' +
         'como ponto de atenção do contrato">' +
         '<option value="normal">Normal</option>' +
         '<option value="critica">⚠ Atenção</option></select></div>' +

@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Turno de {{ turno.data_turno.strftime('%d/%m/%Y') }} — Trino Intelligence{% endblock %}
+{% block title %}Turno de {{ turno.data_turno.strftime('%d/%m/%Y') }}{% endblock %}
 
 {% block breadcrumb %}
 <li class="breadcrumb-item"><a href="{{ url_for('diario_operacional.index', client_id=turno.client_id) }}">Passagem de Turno</a></li>
@@ -258,7 +258,7 @@
                 {{ o.tipo }}
                 {% if o.gravidade == 'critica' %}
                 <span class="badge text-bg-warning ms-1"
-                      title="Sobe para a Torre de Comando como ponto de atenção">
+                      title="Ponto de atenção — aparece em destaque no painel">
                   <i class="bi bi-exclamation-triangle"></i> ponto de atenção</span>
                 {% endif %}
               </strong>

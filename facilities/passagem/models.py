@@ -1,4 +1,4 @@
-"""Modelos do Diário Operacional do Trino Intelligence.
+"""Modelos da Passagem de Turno (vindos do Diário Operacional do Trino Intelligence).
 
 O módulo é configurável por cliente: a configuração guarda os campos e
 atividades que cada operação precisa registrar. Os lançamentos preservam o
@@ -37,6 +37,7 @@ class DiarioArea(db.Model):
     o que duplicaria contrato, centro de custo e carteira.
     """
     __tablename__ = 'diario_operacional_areas'
+    __table_args__ = (db.Index('ix_diario_area_cliente_nome', 'client_id', 'nome'),)
     id = db.Column(db.Integer, primary_key=True)
     client_id = db.Column(db.Integer, db.ForeignKey('clients.id'),
                           nullable=False, index=True)
@@ -81,6 +82,7 @@ class DiarioConfiguracao(db.Model):
 
 class DiarioTurno(db.Model):
     __tablename__ = 'diario_operacional_turnos'
+    __table_args__ = (db.Index('ix_diario_turnos_cliente_data', 'client_id', 'data_turno'),)
     id = db.Column(db.Integer, primary_key=True)
     client_id = db.Column(db.Integer, db.ForeignKey('clients.id'), nullable=False, index=True)
     configuracao_id = db.Column(db.Integer, db.ForeignKey('diario_operacional_configuracoes.id'), nullable=False, index=True)
@@ -120,6 +122,7 @@ class DiarioAnexo(db.Model):
     tamanho e quem subiu.
     """
     __tablename__ = 'diario_operacional_anexos'
+    __table_args__ = (db.Index('ix_diario_anexo_turno_ativ', 'turno_id', 'atividade_codigo'),)
     id = db.Column(db.Integer, primary_key=True)
     turno_id = db.Column(db.Integer, db.ForeignKey('diario_operacional_turnos.id'),
                          nullable=False, index=True)
@@ -161,6 +164,7 @@ class DiarioPendencia(db.Model):
     botão de limpar a tela.
     """
     __tablename__ = 'diario_operacional_pendencias'
+    __table_args__ = (db.Index('ix_diario_pend_cliente_criacao', 'client_id', 'created_at'),)
     id = db.Column(db.Integer, primary_key=True)
     client_id = db.Column(db.Integer, db.ForeignKey('clients.id'), nullable=False, index=True)
     # O turno que ABRIU a pendência. Os que a carregaram depois estão em
@@ -201,6 +205,7 @@ class DiarioPendenciaEvento(db.Model):
     resolvendo pelo dashboard, por exemplo).
     """
     __tablename__ = 'diario_operacional_pendencia_eventos'
+    __table_args__ = (db.Index('ix_diario_pend_evento_pend_data', 'pendencia_id', 'created_at'),)
     id = db.Column(db.Integer, primary_key=True)
     pendencia_id = db.Column(db.Integer,
                              db.ForeignKey('diario_operacional_pendencias.id'),
@@ -361,6 +366,10 @@ class DiarioOcorrencia(db.Model):
     consumado em item de fazer criaria uma tarefa que ninguém pode fechar.
     """
     __tablename__ = 'diario_operacional_ocorrencias'
+    __table_args__ = (
+        db.Index('ix_diario_ocor_cliente_criacao', 'client_id', 'created_at'),
+        db.Index('ix_diario_ocorrencia_cliente_gravidade', 'client_id', 'gravidade'),
+    )
     id = db.Column(db.Integer, primary_key=True)
     client_id = db.Column(db.Integer, db.ForeignKey('clients.id'), nullable=False, index=True)
     turno_id = db.Column(db.Integer, db.ForeignKey('diario_operacional_turnos.id'), nullable=True, index=True)

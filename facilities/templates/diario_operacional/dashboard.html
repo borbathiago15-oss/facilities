@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Passagem de Turno — Trino Intelligence{% endblock %}
+{% block title %}Passagem de Turno{% endblock %}
 
 {# O caminho no topo dizia "Dashboard" (o padrão do base.html) em todas as
    telas da passagem — e, no celular, é a única palavra que sobra na barra. #}
@@ -15,7 +15,7 @@
   Torre de controle da operação. O que esta tela responde, de cima para baixo:
   que recorte estou olhando → a operação cumpriu a rotina? → o que ficou
   pendente apodrecendo? → onde estão os desvios (tipo e turno)? → qual rotina
-  é o gargalo? → o que eu faço agora (abrir PDCA).
+  é o gargalo? → o que eu faço agora (abrir chamado).
 
   Nada aqui consulta o banco: tudo vem de `dados`, montado numa chamada só em
   `trino.web.diario_analitico.painel`.
@@ -362,7 +362,7 @@
         <div class="table-responsive">
           <table class="table align-middle mb-0 tab-cartao">
             <thead><tr><th>Quando</th><th>Tipo</th><th>Referência</th>
-              <th>Descrição</th>{% if pode_pdca %}<th class="text-end">Ação</th>{% endif %}</tr></thead>
+              <th>Descrição</th>{% if pode_chamado %}<th class="text-end">Ação</th>{% endif %}</tr></thead>
             <tbody>
               {% for o in dados.ocorrencias %}
               <tr>
@@ -370,19 +370,19 @@
                 <td class="text-nowrap small" data-rot="Quando">{{ q.dia.strftime('%d/%m') if q.dia else '—' }}{% if q.turno %} · {{ q.turno }}{% endif %}</td>
                 <td data-rot="Tipo">
                   <span class="badge {{ 'text-bg-warning' if o.gravidade == 'critica' else 'text-bg-light border' }}"
-                        {% if o.gravidade == 'critica' %}title="Ponto de atenção — sobe para a Torre de Comando"{% endif %}>{{ o.tipo }}</span></td>
+                        {% if o.gravidade == 'critica' %}title="Ponto de atenção"{% endif %}>{{ o.tipo }}</span></td>
                 <td class="small text-muted" data-rot="Referência">{{ o.referencia or '—' }}</td>
                 <td class="small" data-rot="Descrição">{{ o.descricao }}</td>
-                {% if pode_pdca %}
+                {% if pode_chamado %}
                 <td class="text-end" data-rot="">
                   <button class="btn btn-sm btn-outline-primary text-nowrap"
-                          onclick="dopAbrirPdca({{ o.id }}, this)">
-                    <i class="bi bi-diagram-3"></i> Abrir PDCA</button>
+                          onclick="dopAbrirChamado({{ o.id }}, this)">
+                    <i class="bi bi-tools"></i> Abrir chamado</button>
                 </td>
                 {% endif %}
               </tr>
               {% else %}
-              <tr><td colspan="{{ 5 if pode_pdca else 4 }}" class="dop-vazio">
+              <tr><td colspan="{{ 5 if pode_chamado else 4 }}" class="dop-vazio">
                 Nenhuma ocorrência no período.</td></tr>
               {% endfor %}
             </tbody>
@@ -666,18 +666,18 @@
     });
   };
 
-  // Ocorrência → ação no Plano de Ação. O botão é desabilitado no clique:
+  // Ocorrência → chamado de manutenção. O botão é desabilitado no clique:
   // a rota é idempotente, mas o retorno visual evita a dúvida de "clicou?".
-  window.dopAbrirPdca = function (id, botao) {
+  window.dopAbrirChamado = function (id, botao) {
     if (botao) { botao.disabled = true; }
-    fetch('/passagem-de-turno/api/ocorrencias/' + id + '/pdca', {
+    fetch('/passagem-de-turno/api/ocorrencias/' + id + '/chamado', {
       method: 'POST', headers: {'X-CSRFToken': CSRF()}
     }).then(function (r) {
       return r.json().then(function (x) { return {ok: r.ok, x: x}; });
     }).then(function (res) {
       if (!res.ok) {
         if (botao) { botao.disabled = false; }
-        alert(res.x.error || 'Não foi possível abrir o plano.');
+        alert(res.x.error || 'Não foi possível abrir o chamado.');
         return;
       }
       window.location = res.x.url;

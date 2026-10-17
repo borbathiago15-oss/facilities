@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+{% block title %}Abrir chamado{% endblock %}
+{% block breadcrumb %}
+  <li class="breadcrumb-item"><a href="{{ url_for('chamados.index') }}">Chamados</a></li>
+  <li class="breadcrumb-item active" aria-current="page">Abrir</li>
+{% endblock %}
+{% block content %}
+<div class="fc-cartao" style="max-width:720px">
+  <h1 class="fc-titulo">Abrir chamado</h1>
+  <p class="fc-sub">Diga o que está errado e onde. Os gestores do contrato são avisados e atribuem a um técnico.</p>
+  <form method="post" action="{{ url_for('chamados.criar') }}" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="row g-3">
+      <div class="col-md-6">
+        <label class="form-label small fw-semibold" for="client_id">Contrato</label>
+        <select class="form-select" id="client_id" name="client_id" required>
+          {% if contratos|length != 1 %}<option value="">Escolha…</option>{% endif %}
+          {% for c in contratos %}<option value="{{ c.id }}" {% if c.id == client_id or contratos|length == 1 %}selected{% endif %}>{{ c.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label small fw-semibold" for="area_id">Área / serviço <span class="text-muted fw-normal">(opcional)</span></label>
+        <select class="form-select" id="area_id" name="area_id"><option value="">—</option></select>
+      </div>
+      <div class="col-12">
+        <label class="form-label small fw-semibold" for="titulo">O que está errado?</label>
+        <input class="form-control" id="titulo" name="titulo" required maxlength="200" placeholder="Ex.: Torneira do banheiro masculino vazando">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label small fw-semibold" for="local">Onde?</label>
+        <input class="form-control" id="local" name="local" maxlength="200" placeholder="Ex.: Bloco B, 2º andar">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small fw-semibold" for="categoria">Categoria</label>
+        <select class="form-select" id="categoria" name="categoria">
+          {% for k, v in categorias.items() %}<option value="{{ k }}" {% if k == 'outro' %}selected{% endif %}>{{ v }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small fw-semibold" for="prioridade">Prioridade</label>
+        <select class="form-select" id="prioridade" name="prioridade">
+          {% for k, v in prioridades.items() %}<option value="{{ k }}" {% if k == 'media' %}selected{% endif %}>{{ v }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-12">
+        <p class="small text-muted mb-0" id="regua-prazo">Prazo para resolver: urgente 4h · alta 24h · média 3 dias · baixa 7 dias.</p>
+      </div>
+      <div class="col-12">
+        <label class="form-label small fw-semibold" for="descricao">Detalhes <span class="text-muted fw-normal">(opcional)</span></label>
+        <textarea class="form-control" id="descricao" name="descricao" rows="3"></textarea>
+      </div>
+      <div class="col-12">
+        <label class="form-label small fw-semibold" for="arquivo">Fotos <span class="text-muted fw-normal">(opcional, até 6)</span></label>
+        <input class="form-control" id="arquivo" name="arquivo" type="file" accept="image/*,application/pdf" multiple>
+      </div>
+    </div>
+    <button class="btn btn-primary fw-bold mt-3" type="submit">Abrir chamado</button>
+  </form>
+</div>
+<script id="areas-por-contrato" type="application/json">{{ areas|tojson }}</script>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  var areas = JSON.parse(document.getElementById('areas-por-contrato').textContent || '{}');
+  var cont = document.getElementById('client_id'), sel = document.getElementById('area_id');
+  function preencher() {
+    var lista = areas[cont.value] || [];
+    sel.innerHTML = '<option value="">—</option>' + lista.map(function (a) {
+      return '<option value="' + a.id + '">' + esc(a.nome) + '</option>';
+    }).join('');
+    sel.disabled = !lista.length;
+  }
+  cont.addEventListener('change', preencher);
+  preencher();
+})();
+</script>
+{% endblock %}

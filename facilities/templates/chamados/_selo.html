@@ -1,0 +1,14 @@
+{# Selos de um chamado: prioridade, status e prazo. #}
+{% macro prioridade(ch) %}<span class="ch-pri ch-pri-{{ ch.prioridade }}">{{ ch.prioridade_rotulo }}</span>{% endmacro %}
+{% macro status(ch) %}<span class="ch-st ch-st-{{ ch.status }}">{{ ch.status_rotulo }}</span>{% endmacro %}
+{% macro prazo(ch, agora) %}
+  {%- if ch.status in ('fechado', 'cancelado') -%}
+  {%- elif ch.status == 'resolvido' -%}<span class="ch-prazo ok">resolvido {{ ch.resolvido_em|hora_local('%d/%m %H:%M') }}</span>
+  {%- elif ch.prazo and agora > ch.prazo -%}
+    {%- set h = ((agora - ch.prazo).total_seconds() // 3600)|int -%}
+    <span class="ch-prazo atrasado"><i class="bi bi-exclamation-triangle"></i> atrasado há {% if h < 24 %}{{ h if h > 0 else 'menos de 1' }}h{% else %}{{ h // 24 }} {{ 'dia' if h // 24 == 1 else 'dias' }}{% endif %}</span>
+  {%- elif ch.prazo -%}
+    {%- set h = ((ch.prazo - agora).total_seconds() // 3600)|int -%}
+    <span class="ch-prazo {% if h < 4 %}perto{% endif %}">vence {% if h < 24 %}em {{ h if h > 0 else 'menos de 1' }}h{% else %}{{ ch.prazo|hora_local('%d/%m %H:%M') }}{% endif %}</span>
+  {%- endif -%}
+{% endmacro %}

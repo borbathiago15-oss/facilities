@@ -1,0 +1,188 @@
+{% extends 'base.html' %}
+{% import 'chamados/_selo.html' as selo %}
+{% block title %}{{ ch.numero }}{% endblock %}
+{% block breadcrumb %}
+  <li class="breadcrumb-item"><a href="{{ url_for('chamados.index', client_id=ch.client_id) }}">Chamados</a></li>
+  <li class="breadcrumb-item active" aria-current="page">{{ ch.numero }}</li>
+{% endblock %}
+{% set ROTULO_EVENTO = {'aberto': 'abriu o chamado', 'atribuido': 'atribuiu', 'prioridade': 'mudou a prioridade',
+  'iniciado': 'iniciou o atendimento', 'aguardando': 'pôs em espera', 'retomado': 'retomou o atendimento',
+  'resolvido': 'resolveu', 'fechado': 'confirmou a solução', 'reaberto': 'reabriu', 'cancelado': 'cancelou',
+  'comentario': 'comentou'} %}
+{% block content %}
+<div class="ch-cab {% if ch.atrasado(agora) %}atrasado{% endif %}">
+  <div class="d-flex flex-wrap gap-2 align-items-center">
+    <span class="ch-num-os">{{ ch.numero }}</span>
+    {{ selo.prioridade(ch) }} {{ selo.status(ch) }} {{ selo.prazo(ch, agora) }}
+  </div>
+  <h1 class="fc-titulo mt-2">{{ ch.titulo }}</h1>
+  <dl class="ch-dados">
+    <div><dt>Contrato</dt><dd>{{ ch.contrato.name }}{% if ch.area %} · {{ ch.area.nome }}{% endif %}</dd></div>
+    {% if ch.local %}<div><dt>Onde</dt><dd>{{ ch.local }}</dd></div>{% endif %}
+    <div><dt>Categoria</dt><dd>{{ ch.categoria_rotulo }}</dd></div>
+    <div><dt>Pedido por</dt><dd>{{ ch.solicitante.name }} · {{ ch.aberto_em|hora_local }}</dd></div>
+    <div><dt>Responsável</dt><dd>{{ ch.responsavel.name if ch.responsavel else '—' }}</dd></div>
+    <div><dt>Prazo</dt><dd>{{ ch.prazo|hora_local if ch.prazo else '—' }}</dd></div>
+    {% if ch.origem == 'ocorrencia' %}<div><dt>Origem</dt><dd>Ocorrência da passagem de turno</dd></div>{% endif %}
+  </dl>
+  {% if ch.descricao %}<p class="ch-desc">{{ ch.descricao }}</p>{% endif %}
+  {% if ch.status == 'aguardando' and ch.motivo_espera %}<div class="alert alert-warning py-2 small mb-0"><b>Aguardando:</b> {{ ch.motivo_espera }}</div>{% endif %}
+  {% if ch.solucao and ch.status in ('resolvido', 'fechado') %}<div class="alert alert-success py-2 small mb-0"><b>O que foi feito:</b> {{ ch.solucao }}</div>{% endif %}
+</div>
+
+{% if acoes %}
+<div class="fc-cartao mt-3">
+  <h2 class="h6 fw-bold mb-3">O que fazer agora</h2>
+  <div class="ch-acoes">
+    {% if 'iniciar' in acoes %}
+    <form method="post" action="{{ url_for('chamados.acao', chamado_id=ch.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="acao" value="iniciar">
+      <button class="btn btn-primary fw-bold" type="submit"><i class="bi bi-play-fill"></i> Iniciar atendimento</button>
+    </form>
+    {% endif %}
+    {% if 'retomar' in acoes %}
+    <form method="post" action="{{ url_for('chamados.acao', chamado_id=ch.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="acao" value="retomar">
+      <button class="btn btn-primary fw-bold" type="submit"><i class="bi bi-play-fill"></i> Retomar atendimento</button>
+    </form>
+    {% endif %}
+    {% if 'confirmar' in acoes %}
+    <form method="post" action="{{ url_for('chamados.acao', chamado_id=ch.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="acao" value="confirmar">
+      <button class="btn btn-success fw-bold" type="submit"><i class="bi bi-check2-circle"></i> Ficou bom — fechar</button>
+    </form>
+    {% endif %}
+  </div>
+
+  {% if 'resolver' in acoes %}
+  <details class="ch-acao" open>
+    <summary>Resolver</summary>
+    <form method="post" action="{{ url_for('chamados.acao', chamado_id=ch.id) }}" enctype="multipart/form-data">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="acao" value="resolver">
+      <textarea class="form-control mb-2" name="texto" rows="2" required placeholder="O que foi feito (ex.: troquei o reparo da torneira)"></textarea>
+      <label class="form-label small">Foto do serviço feito <span class="text-muted">(opcional)</span></label>
+      <input class="form-control mb-2" name="arquivo" type="file" accept="image/*,application/pdf" multiple>
+      <button class="btn btn-success fw-bold" type="submit">Marcar como resolvido</button>
+    </form>
+  </details>
+  {% endif %}
+  {% if 'aguardar' in acoes %}
+  <details class="ch-acao">
+    <summary>Pôr em espera</summary>
+    <form method="post" action="{{ url_for('chamados.acao', chamado_id=ch.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="acao" value="aguardar">
+      <input class="form-control mb-2" name="texto" required maxlength="300" placeholder="O que está faltando (peça, terceiro, acesso…)">
+      <button class="btn btn-outline-secondary" type="submit">Aguardar</button>
+    </form>
+  </details>
+  {% endif %}
+  {% if 'reabrir' in acoes %}
+  <details class="ch-acao">
+    <summary>Não ficou bom — reabrir</summary>
+    <form method="post" action="{{ url_for('chamados.acao', chamado_id=ch.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="acao" value="reabrir">
+      <textarea class="form-control mb-2" name="texto" rows="2" required placeholder="O que ainda não está bom"></textarea>
+      <button class="btn btn-outline-danger" type="submit">Reabrir</button>
+    </form>
+  </details>
+  {% endif %}
+  {% if 'atribuir' in acoes %}
+  <details class="ch-acao" {% if not ch.responsavel_id %}open{% endif %}>
+    <summary>{{ 'Trocar responsável' if ch.responsavel_id else 'Atribuir a um técnico' }}</summary>
+    <form method="post" action="{{ url_for('chamados.acao', chamado_id=ch.id) }}" class="d-flex flex-wrap gap-2">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="acao" value="atribuir">
+      <select class="form-select" name="responsavel_id" required style="max-width:320px">
+        <option value="">Escolha…</option>
+        {% for t in tecnicos %}<option value="{{ t.id }}" {% if t.id == ch.responsavel_id %}selected{% endif %}>{{ t.name }} — {{ t.perfil_rotulo }}</option>{% endfor %}
+      </select>
+      <button class="btn btn-primary" type="submit">Atribuir</button>
+    </form>
+    {% if not tecnicos %}<p class="small text-muted mt-2 mb-0">Nenhum técnico ou gestor vinculado a este contrato. Vincule no cadastro de pessoas.</p>{% endif %}
+  </details>
+  {% endif %}
+  {% if 'prioridade' in acoes %}
+  <details class="ch-acao">
+    <summary>Mudar prioridade</summary>
+    <form method="post" action="{{ url_for('chamados.acao', chamado_id=ch.id) }}" class="d-flex flex-wrap gap-2">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="acao" value="prioridade">
+      <select class="form-select" name="prioridade" style="max-width:200px">
+        {% for k, v in prioridades.items() %}<option value="{{ k }}" {% if k == ch.prioridade %}selected{% endif %}>{{ v }}</option>{% endfor %}
+      </select>
+      <input class="form-control" name="texto" maxlength="200" placeholder="Motivo (opcional)" style="max-width:320px">
+      <button class="btn btn-outline-secondary" type="submit">Salvar</button>
+    </form>
+    <p class="small text-muted mt-2 mb-0">O prazo é recalculado a partir da abertura.</p>
+  </details>
+  {% endif %}
+  {% if 'comentar' in acoes %}
+  <details class="ch-acao">
+    <summary>Comentar</summary>
+    <form method="post" action="{{ url_for('chamados.acao', chamado_id=ch.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="acao" value="comentar">
+      <textarea class="form-control mb-2" name="texto" rows="2" required></textarea>
+      <button class="btn btn-outline-secondary" type="submit">Comentar</button>
+    </form>
+  </details>
+  {% endif %}
+  {% if 'cancelar' in acoes %}
+  <details class="ch-acao">
+    <summary class="text-danger">Cancelar chamado</summary>
+    <form method="post" action="{{ url_for('chamados.acao', chamado_id=ch.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="acao" value="cancelar">
+      <input class="form-control mb-2" name="texto" required maxlength="300" placeholder="Por que está sendo cancelado (duplicado, aberto por engano…)">
+      <button class="btn btn-outline-danger" type="submit">Cancelar chamado</button>
+    </form>
+  </details>
+  {% endif %}
+</div>
+{% endif %}
+
+<div class="row g-3 mt-0">
+  <div class="col-lg-7">
+    <div class="fc-cartao">
+      <h2 class="h6 fw-bold mb-3">Histórico</h2>
+      <ol class="ch-trilha">
+        {% for e in ch.eventos %}
+        <li class="ev-{{ e.tipo }}">
+          <div><b>{{ e.autor.name if e.autor else 'Sistema' }}</b> {{ ROTULO_EVENTO.get(e.tipo, e.tipo) }}
+            <time>{{ e.created_at|hora_local }}</time></div>
+          {% if e.texto %}<p>{{ e.texto }}</p>{% endif %}
+        </li>
+        {% endfor %}
+      </ol>
+    </div>
+  </div>
+  <div class="col-lg-5">
+    <div class="fc-cartao">
+      <h2 class="h6 fw-bold mb-3">Fotos e arquivos</h2>
+      {% set antes = ch.anexos|selectattr('momento', 'equalto', 'antes')|list %}
+      {% set depois = ch.anexos|selectattr('momento', 'equalto', 'depois')|list %}
+      {% for titulo, lista in (('Antes', antes), ('Depois', depois)) %}
+        {% if lista %}
+        <div class="small fw-semibold text-muted mb-1">{{ titulo }}</div>
+        <div class="ch-anexos mb-2">
+          {% for a in lista %}
+          <a href="{{ url_for('chamados.baixar_anexo', anexo_id=a.id) }}" target="_blank" rel="noopener">
+            {% if (a.mime or '').startswith('image/') %}<img src="{{ url_for('chamados.baixar_anexo', anexo_id=a.id) }}" alt="{{ a.nome }}" loading="lazy">{% else %}<span class="ch-arq"><i class="bi bi-file-earmark"></i> {{ a.nome }}</span>{% endif %}
+          </a>
+          {% endfor %}
+        </div>
+        {% endif %}
+      {% endfor %}
+      {% if not ch.anexos %}<p class="small text-muted">Nenhum arquivo.</p>{% endif %}
+      {% if pode_anexar %}
+      <form method="post" action="{{ url_for('chamados.anexar', chamado_id=ch.id) }}" enctype="multipart/form-data" class="mt-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input class="form-control form-control-sm mb-2" name="arquivo" type="file" accept="image/*,application/pdf" multiple required>
+        <div class="d-flex gap-2 align-items-center">
+          <select class="form-select form-select-sm" name="momento" style="max-width:150px">
+            <option value="antes">do problema</option><option value="depois">do serviço feito</option>
+          </select>
+          <button class="btn btn-sm btn-outline-secondary" type="submit">Anexar</button>
+        </div>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

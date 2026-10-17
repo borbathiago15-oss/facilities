@@ -73,7 +73,9 @@
 {% endif %}
 
 <main class="fc-conteudo">
-  {% block breadcrumb %}{% endblock %}
+  {% if self.breadcrumb()|trim %}
+  <nav aria-label="breadcrumb"><ol class="breadcrumb">{% block breadcrumb %}{% endblock %}</ol></nav>
+  {% endif %}
   {% with mensagens = get_flashed_messages(with_categories=true) %}
     {% for categoria, texto in mensagens %}
     <div class="alert alert-{{ 'danger' if categoria == 'error' else categoria }} alert-dismissible fade show" role="alert">

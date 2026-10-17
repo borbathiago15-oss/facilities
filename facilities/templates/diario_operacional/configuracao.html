@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Modelo de Passagem — Trino Intelligence{% endblock %}
+{% block title %}Modelo de Passagem{% endblock %}
 
 {% block breadcrumb %}
 <li class="breadcrumb-item"><a href="{{ url_for('diario_operacional.index', client_id=client_id) }}">Passagem de Turno</a></li>
@@ -96,6 +96,23 @@
   <div class="card shadow-sm border-0"><div class="p-4 text-center text-muted">
     Nenhum contrato disponível.</div></div>
   {% else %}
+  {# Modelos prontos de facilities: ponto de partida para o contrato novo
+     não começar com o modelo em branco. Rodar de novo não duplica. #}
+  <details class="card shadow-sm border-0 mb-3" id="cfg-prontos" {% if not configs %}open{% endif %}>
+    <summary class="card-header bg-white fw-bold">Começar com um modelo pronto</summary>
+    <form class="card-body" method="post" action="{{ url_for('diario_operacional.usar_modelos_prontos') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="client_id" value="{{ client_id }}">
+      <p class="small text-muted mb-2">Cria a área e um modelo com turnos, rotina e tipos de ocorrência típicos. Depois é só ajustar aqui mesmo.</p>
+      <div class="d-flex flex-wrap gap-3 mb-2">
+        {% for chave, m in modelos_prontos.items() %}
+        <label class="form-check"><input class="form-check-input" type="checkbox" name="servico" value="{{ chave }}"> {{ m.area }}
+          <span class="small text-muted d-block">{{ m.turnos|join(' · ') }}</span></label>
+        {% endfor %}
+      </div>
+      <button class="btn btn-outline-primary btn-sm" type="submit">Criar modelos</button>
+    </form>
+  </details>
   {# ── As áreas do contrato ─────────────────────────────────────────────
      Existe para não ser preciso cadastrar um CLIENTE novo só para dividir a
      operação — o que duplicaria contrato, centro de custo e carteira. E é

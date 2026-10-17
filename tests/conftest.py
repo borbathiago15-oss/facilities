@@ -20,9 +20,17 @@ CONTRATOS_SEMEADOS = ('Shopping Centro', 'Hospital Norte', 'Condomínio Sul')
 
 @pytest.fixture(scope='session')
 def app_module():
-    fd, path = tempfile.mkstemp(suffix='.db')
-    os.close(fd)
-    os.environ['DATABASE_URL'] = f'sqlite:///{path}'
+    # TEST_DATABASE_URL=postgresql://... roda a suíte contra um Postgres de
+    # verdade (o banco da produção), com o schema vindo das MIGRAÇÕES — não do
+    # create_all. O banco é zerado no começo: use um banco só de teste.
+    pg = os.environ.get('TEST_DATABASE_URL', '').strip()
+    path = None
+    if pg:
+        os.environ['DATABASE_URL'] = pg
+    else:
+        fd, path = tempfile.mkstemp(suffix='.db')
+        os.close(fd)
+        os.environ['DATABASE_URL'] = f'sqlite:///{path}'
     os.environ['UPLOAD_FOLDER'] = tempfile.mkdtemp(prefix='facilities-uploads-')
     import app as app_mod
     app_mod.app.config['WTF_CSRF_ENABLED'] = False
@@ -30,6 +38,13 @@ def app_module():
     app_mod.app.config['TESTING'] = True
     with app_mod.app.app_context():
         db = app_mod.db
+        if pg:
+            from flask_migrate import downgrade, upgrade
+            raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            pasta = os.path.join(raiz, 'migrations')
+            db.session.remove()
+            downgrade(directory=pasta, revision='base')
+            upgrade(directory=pasta)
         for nome in CONTRATOS_SEMEADOS:
             if not app_mod.Client.query.filter_by(name=nome).first():
                 db.session.add(app_mod.Client(name=nome, cost_center='CC-' + nome[:3].upper(),
@@ -42,10 +57,11 @@ def app_module():
         admin.must_change_password = False
         db.session.commit()
     yield app_mod
-    try:
-        os.remove(path)
-    except OSError:
-        pass
+    if path:
+        try:
+            os.remove(path)
+        except OSError:
+            pass
 
 
 @pytest.fixture(autouse=True)

@@ -335,7 +335,7 @@ def test_e_o_403_que_o_botao_escondia_e_real(visualizador, painel_com_acao):
 def test_o_master_continua_vendo_as_duas_acoes(mestre, contrato, painel_com_acao):
     html = mestre.get(f'/passagem-de-turno/?client_id={contrato["client_id"]}'
                       ).get_data(as_text=True)
-    assert 'Abrir PDCA' in html
+    assert 'Abrir chamado' in html
     assert 'marcar resolvida' in html
 
 
