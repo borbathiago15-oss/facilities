@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% block title %}Trocar senha{% endblock %}
+{% block content %}
+<div class="fc-cartao" style="max-width:440px">
+  <h1 class="fc-titulo">Trocar senha</h1>
+  {% if current_user.must_change_password %}
+  <p class="fc-sub">Este é o seu primeiro acesso (ou a senha foi redefinida). Escolha uma senha só sua para continuar.</p>
+  {% else %}
+  <p class="fc-sub">A senha nova vale em todos os aparelhos; os outros acessos abertos serão encerrados.</p>
+  {% endif %}
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label class="form-label small fw-semibold" for="atual">Senha atual</label>
+    <input class="form-control mb-3" id="atual" name="atual" type="password" autocomplete="current-password" required>
+    <label class="form-label small fw-semibold" for="nova">Senha nova (mínimo 8 caracteres)</label>
+    <input class="form-control mb-3" id="nova" name="nova" type="password" minlength="8" autocomplete="new-password" required>
+    <label class="form-label small fw-semibold" for="confirma">Repita a senha nova</label>
+    <input class="form-control mb-3" id="confirma" name="confirma" type="password" minlength="8" autocomplete="new-password" required>
+    <button class="btn btn-primary fw-bold" type="submit">Salvar senha</button>
+  </form>
+</div>
+{% endblock %}

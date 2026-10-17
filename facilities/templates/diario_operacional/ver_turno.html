@@ -1,0 +1,353 @@
+{% extends 'base.html' %}
+{% block title %}Turno de {{ turno.data_turno.strftime('%d/%m/%Y') }} — Trino Intelligence{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('diario_operacional.index', client_id=turno.client_id) }}">Passagem de Turno</a></li>
+<li class="breadcrumb-item active">Passagem de turno</li>
+{% endblock %}
+
+{% block content %}
+{#
+  A passagem já lançada, para leitura. Existe por causa do anexo: sem uma tela
+  que mostre a foto, o encarregado prende a prova do 5S e ninguém nunca mais a
+  vê. É aqui que o supervisor confere o que foi feito e com que evidência.
+#}
+<style>
+  .vt-doc{max-width:980px;margin:0 auto}
+  .vt-cab{border-bottom:2px solid var(--blue-900);padding-bottom:.8rem;margin-bottom:1.1rem}
+  .vt-cab h2{margin:0;color:var(--blue-900)}
+  .vt-meta{font-size:.85rem;color:var(--gray-500)}
+  .vt-lin{border:1px solid var(--gray-200);border-radius:12px;padding:.8rem .95rem;
+          margin-bottom:.7rem;background:var(--surface)}
+  .vt-lin.nao{border-left:4px solid var(--red-500)}
+  .vt-lin.sim{border-left:4px solid var(--green-500)}
+  .vt-nome{font-weight:600;color:var(--gray-900)}
+  .vt-obs{font-size:.88rem;color:var(--gray-700);margin-top:.35rem;white-space:pre-wrap}
+  .vt-tag{display:inline-block;font-size:.72rem;font-weight:700;border-radius:999px;
+          padding:.12rem .5rem}
+  .vt-tag.ok{background:var(--green-100);color:var(--green-700)}
+  .vt-tag.bad{background:var(--red-100);color:var(--red-700)}
+  .vt-tag.neutro{background:var(--gray-100,#f3f4f6);color:var(--gray-500)}
+  .vt-provas{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.6rem}
+  .vt-prova{border:1px solid var(--gray-200);border-radius:10px;overflow:hidden;
+            width:132px;background:var(--gray-50,#f9fafb)}
+  .vt-prova img{width:100%;height:92px;object-fit:cover;display:block}
+  .vt-prova .vt-pdf{height:92px;display:flex;align-items:center;justify-content:center;
+                    font-size:1.8rem;color:var(--red-700)}
+  .vt-prova .vt-nome-arq{font-size:.68rem;padding:.3rem .4rem;color:var(--gray-600);
+                         word-break:break-word;line-height:1.25}
+  .vt-vazio{color:var(--gray-500);font-size:.88rem}
+  .vt-ref{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.75rem;
+          background:var(--gray-100);border-radius:5px;padding:.05rem .35rem;
+          color:var(--gray-700);font-weight:400}
+  .vt-trilha{list-style:none;margin:.5rem 0 0;padding:0 0 0 .7rem;
+             border-left:2px solid var(--gray-200)}
+  .vt-ev{font-size:.8rem;margin-bottom:.4rem}
+  .vt-ev-quem{font-weight:600;color:var(--gray-800)}
+  .vt-ev-turno,.vt-ev-quando{color:var(--gray-500);margin-left:.35rem}
+  .vt-ev-txt{color:var(--gray-700)}
+  .vt-ev-recebida .vt-ev-txt{color:var(--gray-500);font-style:italic}
+  .vt-ev-resolvida .vt-ev-txt{color:var(--green-700,#15803d)}
+</style>
+
+<div class="container-fluid py-3 diario-page vt-doc">
+
+  <div class="pg-topo">
+    <div>
+      <div class="pg-olho">PASSAGEM DE TURNO</div>
+      <h1 class="pg-titulo">{{ turno.turno }} · {{ turno.data_turno.strftime('%d/%m') }}</h1>
+    </div>
+    <div class="d-flex gap-2">
+      {% if pode_corrigir %}
+      {# Só para quem lançou, e só enquanto o turno seguinte não fechou — a
+         rota recusa o resto. O botão não aparece para quem não pode: botão
+         que aparece e depois recusa ensina a não confiar na tela. #}
+      <button type="button" class="btn btn-outline-primary"
+              onclick="vtCorrigir()"><i class="bi bi-pencil"></i> Corrigir</button>
+      {% endif %}
+      <a class="btn btn-light"
+         href="{{ url_for('diario_operacional.index', client_id=turno.client_id) }}">Voltar</a>
+    </div>
+  </div>
+
+  {% if correcoes %}
+  {# A correção é VISÍVEL, e é isso que a torna aceitável: a passagem continua
+     valendo como prova porque quem lê sabe o que foi trocado e por quê. #}
+  <div class="pg-item" style="border-left:3px solid var(--amber-600)">
+    <i class="bi bi-pencil-square" style="color:var(--amber-600)"></i>
+    <div class="flex-grow-1">
+      <div class="pg-item-tit" style="font-size:13px">
+        Esta passagem foi corrigida {{ correcoes|length }}×</div>
+      {% for c in correcoes %}
+      <div class="pg-item-meta">
+        {{ quem_corrigiu.get(c.created_by, '—') }} ·
+        {{ c.created_at|hora_local }} · mudou {{ c.campos or '—' }}
+      </div>
+      <div class="pg-nota">{{ c.motivo }}</div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="vt-cab">
+    <h2>{{ turno.turno }} · {{ turno.data_turno.strftime('%d/%m/%Y') }}
+      <span class="vt-tag {{ 'ok' if turno.status == 'encerrado' else 'neutro' }} align-middle">
+        {{ 'Encerrado' if turno.status == 'encerrado' else 'Em aberto (rascunho)' }}</span>
+    </h2>
+    <div class="vt-meta">
+      {{ cliente.name if cliente else '—' }}
+      {% if configuracao %} · modelo <strong>{{ configuracao.nome }}</strong>{% endif %}
+      {% if autor %} · lançado por {{ autor.name }}{% endif %}
+      {# Encerrado sem sinal, a passagem chega quando a conexão volta. As duas
+         horas aparecem quando a fila as separou: a do toque em "Encerrar"
+         (do aparelho) e a de chegada (a da auditoria, que não muda). #}
+      {% set no_aparelho = encerramento_no_aparelho(turno) %}
+      {% if no_aparelho %}
+        {% set fmt_ap = '%H:%M' if no_aparelho.mesmo_dia else '%d/%m às %H:%M' %}
+        {% set prep = 'às' if no_aparelho.mesmo_dia else 'em' %}
+        · encerrado no aparelho {{ prep }} {{ no_aparelho.aparelho|hora_local(fmt_ap) }}
+        · chegou ao sistema {{ prep }} {{ no_aparelho.chegada|hora_local(fmt_ap) }}
+      {% elif turno.submitted_at %} · encerrado em {{ turno.submitted_at|hora_local }}{% endif %}
+    </div>
+    {% if not congelada and turno.status == 'encerrado' %}
+    <div class="vt-meta mt-1">
+      <i class="bi bi-info-circle"></i>
+      Turno lançado antes de o sistema passar a congelar a régua: as atividades
+      abaixo são as do modelo de hoje, não necessariamente as exigidas naquele dia.
+    </div>
+    {% endif %}
+  </div>
+
+  {# As provas presas a uma pergunta — rotina ou campo. Uma macro só para os
+     dois lugares: a miniatura não pode ter dois desenhos na mesma tela. #}
+  {% macro provas(lista) %}
+    <div class="vt-provas">
+      {% for a in lista %}
+      <a class="vt-prova text-decoration-none" target="_blank" rel="noopener"
+         href="{{ url_for('diario_operacional.baixar_anexo', anexo_id=a.id) }}"
+         title="{{ a.nome }}">
+        {% if (a.mime or '').startswith('image/') %}
+        <img src="{{ url_for('diario_operacional.baixar_anexo', anexo_id=a.id) }}"
+             alt="{{ a.nome }}" loading="lazy">
+        {% else %}
+        <div class="vt-pdf"><i class="bi bi-file-earmark-pdf"></i></div>
+        {% endif %}
+        <div class="vt-nome-arq">{{ a.nome }}</div>
+      </a>
+      {% endfor %}
+    </div>
+  {% endmacro %}
+
+  {% if campos %}
+  <div class="card shadow-sm border-0 mb-3">
+    <div class="card-header bg-white fw-bold">Dados do turno</div>
+    <div class="card-body">
+      <div class="row g-3">
+        {% for c in campos %}
+        <div class="col-md-4">
+          <div class="text-uppercase small text-muted fw-semibold">{{ c.nome }}</div>
+          <div class="fs-5">{{ c.valor if c.valor not in (None, '') else '—' }}</div>
+          {% if c.anexos %}{{ provas(c.anexos) }}{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <h6 class="text-uppercase small text-muted fw-semibold mt-3">Checklist do turno</h6>
+  {# A rotina OPCIONAL aparece também — com a foto que a acompanha —, depois
+     das obrigatórias e marcada como tal. Ela não conta na aderência, então
+     "não feita" não pinta de vermelho: não é falta, é o que não se fez de
+     extra. #}
+  {% for l in linhas %}
+  <div class="vt-lin {{ 'sim' if l.feito else ('' if l.opcional else 'nao') }}">
+    <div class="d-flex justify-content-between align-items-start gap-2">
+      <span class="vt-nome">{{ l.nome }}
+        {% if l.opcional %}<span class="vt-tag neutro ms-1"
+              title="Rotina opcional: aparece na leitura, mas não conta na aderência do turno">opcional</span>{% endif %}
+      </span>
+      {% if l.opcional and not l.feito %}
+      <span class="vt-tag neutro">Não feita</span>
+      {% else %}
+      <span class="vt-tag {{ 'ok' if l.feito else 'bad' }}">
+        {{ 'Concluído' if l.feito else 'Não concluído' }}</span>
+      {% endif %}
+    </div>
+    {% if l.observacao %}<div class="vt-obs">{{ l.observacao }}</div>{% endif %}
+    {% if l.anexos %}{{ provas(l.anexos) }}{% endif %}
+  </div>
+  {% else %}
+  <div class="card shadow-sm border-0"><div class="p-4 vt-vazio text-center">
+    Este turno não tinha checklist configurado.</div></div>
+  {% endfor %}
+
+  <div class="card shadow-sm border-0 mt-3">
+    <div class="card-header bg-white fw-bold">Observação do turno</div>
+    <div class="card-body">
+      {% if turno.observacao %}<div class="vt-obs">{{ turno.observacao }}</div>
+      {% else %}<div class="vt-vazio">Sem observação.</div>{% endif %}
+      {% if anexos_gerais %}
+      <div class="vt-provas">
+        {% for a in anexos_gerais %}
+        <a class="vt-prova text-decoration-none" target="_blank" rel="noopener"
+           href="{{ url_for('diario_operacional.baixar_anexo', anexo_id=a.id) }}"
+           title="{{ a.nome }}">
+          {% if (a.mime or '').startswith('image/') %}
+          <img src="{{ url_for('diario_operacional.baixar_anexo', anexo_id=a.id) }}"
+               alt="{{ a.nome }}" loading="lazy">
+          {% else %}<div class="vt-pdf"><i class="bi bi-file-earmark-pdf"></i></div>{% endif %}
+          <div class="vt-nome-arq">{{ a.nome }}</div>
+        </a>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="row g-3 mt-0">
+    <div class="col-lg-6">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-header bg-white fw-bold">Pendências deixadas</div>
+        <div class="list-group list-group-flush">
+          {% for linha in pendencias %}
+          {% set p = linha.p %}
+          <div class="list-group-item">
+            <div class="d-flex justify-content-between align-items-start gap-2">
+              <strong class="small">{{ p.titulo }}{% if p.referencia %}
+                <span class="vt-ref">{{ p.referencia }}</span>{% endif %}</strong>
+              <span class="vt-tag {{ 'ok' if p.status == 'resolvida' else 'neutro' }}">
+                {{ 'Resolvida' if p.status == 'resolvida' else 'Em aberto' }}</span>
+            </div>
+            <div class="small text-muted">{{ p.descricao or 'Sem descrição' }}</div>
+            {# A trilha: quem carregou esta pendência e o que tentou. É o que
+               impede o supervisor de perguntar "e daí?" para uma linha que
+               só dizia 'Em aberto'. #}
+            {% if linha.trilha %}
+            <ol class="vt-trilha">
+              {% for e in linha.trilha %}
+              <li class="vt-ev vt-ev-{{ e.tipo }}">
+                <span class="vt-ev-quem">{{ e.quem }}</span>
+                {% if e.turno %}<span class="vt-ev-turno">{{ e.turno }} ·
+                  {{ e.data_turno.strftime('%d/%m') }}</span>{% endif %}
+                <span class="vt-ev-quando">{{ e.quando|hora_local('%d/%m %H:%M') }}</span>
+                <div class="vt-ev-txt">
+                  {%- if e.texto %}{{ e.texto }}
+                  {%- elif e.tipo == 'recebida' %}recebeu e não resolveu
+                  {%- else %}—{% endif -%}
+                </div>
+              </li>
+              {% endfor %}
+            </ol>
+            {% endif %}
+          </div>
+          {% else %}
+          <div class="p-4 vt-vazio text-center">Nenhuma pendência deixada.</div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-6">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-header bg-white fw-bold">Ocorrências registradas</div>
+        <div class="list-group list-group-flush">
+          {% for o in ocorrencias %}
+          <div class="list-group-item">
+            <div class="d-flex justify-content-between align-items-start gap-2">
+              <strong class="small">
+                {{ o.tipo }}
+                {% if o.gravidade == 'critica' %}
+                <span class="badge text-bg-warning ms-1"
+                      title="Sobe para a Torre de Comando como ponto de atenção">
+                  <i class="bi bi-exclamation-triangle"></i> ponto de atenção</span>
+                {% endif %}
+              </strong>
+              <span class="small text-muted">{{ o.referencia or '' }}</span>
+            </div>
+            <div class="small text-muted">{{ o.descricao }}</div>
+          </div>
+          {% else %}
+          <div class="p-4 vt-vazio text-center">Nenhuma ocorrência registrada.</div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if pode_corrigir %}
+<div class="modal fade" id="vt-modal-corrigir" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Corrigir esta passagem</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"
+                aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small mb-3">
+          A correção fica registrada: o valor antigo é guardado e quem abrir a
+          passagem vê o que mudou e por quê. Pendências e ocorrências já
+          lançadas não são tocadas — elas se resolvem no módulo.
+        </p>
+        <div class="row g-2">
+          <div class="col-6 tsel">
+            <label for="vt-c-data">Data do turno</label>
+            <input type="date" class="form-control" id="vt-c-data"
+                   value="{{ turno.data_turno.isoformat() }}">
+          </div>
+          <div class="col-6 tsel">
+            <label for="vt-c-turno">Turno</label>
+            <input type="text" class="form-control" id="vt-c-turno"
+                   value="{{ turno.turno }}" maxlength="50">
+          </div>
+        </div>
+        <div class="tsel mt-2">
+          <label for="vt-c-obs">Observação do turno</label>
+          <textarea class="form-control" id="vt-c-obs" rows="3">{{ turno.observacao or '' }}</textarea>
+        </div>
+        <div class="tsel mt-2">
+          <label for="vt-c-motivo">O que estava errado <span class="text-danger">*</span></label>
+          <input type="text" class="form-control" id="vt-c-motivo" maxlength="300"
+                 placeholder="Ex.: lancei no 1º turno e era o 2º">
+          <div class="tsel-ajuda">
+            Obrigatório. É o que permite a alguém entender a troca meses depois.
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">
+          Cancelar</button>
+        <button type="button" class="btn btn-primary" id="vt-c-enviar"
+                onclick="vtEnviarCorrecao()">Registrar a correção</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  var VT_TURNO_ID = {{ turno.id }};
+  function vtCorrigir() {
+    new bootstrap.Modal(document.getElementById('vt-modal-corrigir')).show();
+  }
+  function vtEnviarCorrecao() {
+    var v = function (id) { return document.getElementById(id).value; };
+    if (!v('vt-c-motivo').trim()) {
+      alert('Diga em uma linha o que estava errado.'); return;
+    }
+    var botao = document.getElementById('vt-c-enviar');
+    botao.disabled = true;
+    fetch('/passagem-de-turno/api/turnos/' + VT_TURNO_ID + '/corrigir', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content},
+      body: JSON.stringify({data_turno: v('vt-c-data'), turno: v('vt-c-turno'),
+                            observacao: v('vt-c-obs'), motivo: v('vt-c-motivo')})
+    }).then(function (r) { return r.json().then(function (x) { return {ok: r.ok, x: x}; }); })
+      .then(function (res) {
+        if (!res.ok) { alert(res.x.error || 'Não foi possível corrigir.'); botao.disabled = false; return; }
+        location.reload();
+      }).catch(function () { alert('Falha de rede.'); botao.disabled = false; });
+  }
+</script>
+{% endif %}
+{% endblock %}

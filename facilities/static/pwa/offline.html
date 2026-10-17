@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b0d0f">
+  <title>Sem conexão — Trino Facilities</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+      background:#f8fafc;color:#0f172a}
+    .caixa{max-width:420px;width:100%;background:#fff;border:1px solid #e2e8f0;border-radius:12px;
+      padding:32px 24px;text-align:center}
+    img{width:72px;height:72px;margin-bottom:16px}
+    h1{font-size:20px;color:#0f172a;margin-bottom:12px}
+    p{font-size:16px;line-height:1.5;color:#64748b;margin-bottom:12px}
+    .aviso{background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:12px;
+      font-size:15px;color:#7c2d12;text-align:left}
+    button{margin-top:20px;width:100%;min-height:48px;border:0;border-radius:8px;
+      background:#9d202c;color:#fff;font-size:16px;font-weight:600;cursor:pointer}
+  </style>
+</head>
+<body>
+  <main class="caixa">
+    <img src="/static/pwa/icone-192.png" alt="">
+    <h1>Sem conexão</h1>
+    <p>O aparelho não conseguiu falar com o Trino Facilities agora.</p>
+    <p class="aviso"><b>Estava enviando um formulário?</b> Ele não chegou ao servidor.
+      Volte para a tela anterior e envie de novo quando a conexão voltar.
+      O que já tinha sido salvo antes continua salvo.</p>
+    <button type="button" onclick="location.reload()">Tentar de novo</button>
+  </main>
+</body>
+</html>

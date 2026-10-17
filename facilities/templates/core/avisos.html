@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% block title %}Avisos{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
+  <h1 class="fc-titulo">Avisos</h1>
+  {% if avisos_nao_lidos %}
+  <form method="post" action="{{ url_for('core.ler_todos') }}" class="m-0">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="btn btn-sm btn-outline-secondary" type="submit">Marcar todos como lidos</button>
+  </form>
+  {% endif %}
+</div>
+<div class="fc-cartao p-0">
+  {% for a in avisos %}
+  <form method="post" action="{{ url_for('core.abrir_aviso', aviso_id=a.id) }}" class="m-0">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit" class="fc-aviso w-100 text-start border-0 {% if a.status == 'unread' %}nao-lido{% else %}bg-transparent{% endif %}">
+      <div class="flex-grow-1">
+        <h3>{{ a.title }}</h3>
+        {% if a.message %}<p>{{ a.message }}</p>{% endif %}
+      </div>
+      <time>{{ a.created_at|hora_local }}</time>
+    </button>
+  </form>
+  {% else %}
+  <div class="fc-vazio">Nenhum aviso por aqui.</div>
+  {% endfor %}
+</div>
+{% endblock %}

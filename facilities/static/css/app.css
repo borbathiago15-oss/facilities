@@ -1,0 +1,382 @@
+/* Trino Facilities — identidade do Grupo Trino (a mesma do Trino Intelligence):
+   bordô de ação, moldura preta, faixa de quatro cores, telas de trabalho claras.
+   Os tokens abaixo são os do Trino: as telas da Passagem de Turno vieram de lá
+   e falam por eles (--gray-*, --blue-*, --surface, --tint-*). */
+:root {
+  /* ── IDENTIDADE TRINO (o padrão do Trino Supply, 2026-09) ───────────────
+     A cor de ação é o bordô da seta do logo, e é a ÚNICA cor de botão
+     primário e de link de destaque. O preto é a MOLDURA (menu, login), não
+     o fundo das telas de trabalho — essas são claras.
+     A escala --blue-* nasceu azul-marinho e é o acento de 70 lugares do
+     sistema (templates inclusive): em vez de caçar um por um, ela passa a
+     ser a escala da marca. O azul continua existindo como cor de
+     INFORMAÇÃO (--info, e o --blue-400 da faixa), nunca como ação. */
+  --marca:        #9d202c;
+  --marca-escuro: #7e1a23;
+  --fundo:        #0b0d0f;   /* preto da moldura */
+  --fundo-cartao: #161616;   /* grafite */
+  --fundo-profundo:#040607;
+  --prata:        #a1aab5;   /* texto de apoio sobre o preto */
+  /* A faixa de quatro cores: apoio, nunca ação (e o laranja nunca é fundo
+     de botão com texto branco — não passa no contraste). */
+  --faixa-vermelho: #9d202c;
+  --faixa-azul:     #67a6dd;
+  --faixa-laranja:  #df8e24;
+  --faixa-verde:    #a6bf38;
+  --faixa-da-marca: linear-gradient(90deg,
+      #9d202c 0 25%, #67a6dd 25% 50%, #df8e24 50% 75%, #a6bf38 75% 100%);
+  /* Estado: tinta clara com texto colorido. Sólido bordô é ação. */
+  --ok: #047857;     --ok-fundo: #ecfdf5;     --ok-borda: #a7f3d0;
+  --aviso: #b45309;  --aviso-fundo: #fffbeb;  --aviso-borda: #fde68a;
+  --perigo: #be123c; --perigo-fundo: #fff1f2; --perigo-borda: #fecdd3;
+  --ok-forte: #10b981; --aviso-forte: #f59e0b; --perigo-forte: #f43f5e;
+  --info: #2f78b7;
+
+  --blue-900: #0b0d0f;
+  --blue-800: #6a161e;
+  --blue-700: #7e1a23;
+  --blue-600: #9d202c;
+  --blue-500: #b3303c;
+  --blue-400: #67a6dd;
+  --blue-200: #e8b9be;
+  --blue-100: #f6dfe1;
+  --blue-50:  #fbf0f1;
+
+  --amber-600: #d97706;
+  --amber-500: #f59e0b;
+  --amber-400: #fbbf24;
+  --amber-300: #fcd34d;
+  --amber-100: #fef3c7;
+
+  --green-700: #15803d;
+  --green-600: #16a34a;
+  --green-500: #22c55e;
+  --green-100: #dcfce7;
+  --yellow-600: #ca8a04;
+  --yellow-100: #fef9c3;
+  --red-700:   #b91c1c;
+  --red-600:   #dc2626;
+  --red-500:   #ef4444;
+  --red-100:   #fee2e2;
+
+  /* Cinzas: a escala slate do padrão. */
+  --gray-950: #020617;
+  --gray-900: #0f172a;
+  --gray-800: #1e293b;
+  --gray-700: #334155;
+  --gray-600: #475569;
+  --gray-500: #64748b;
+  --gray-400: #94a3b8;
+  --gray-300: #cbd5e1;
+  --gray-200: #e2e8f0;
+  --gray-100: #f1f5f9;
+  --gray-50:  #f8fafc;
+  --white:    #ffffff;
+
+  /* O Bootstrap também fala a língua da marca: .btn-primary, .text-primary,
+     .bg-primary, os links e o foco dos campos. */
+  --bs-primary: #9d202c;
+  --bs-primary-rgb: 157, 32, 44;
+  --bs-link-color: #9d202c;
+  --bs-link-color-rgb: 157, 32, 44;
+  --bs-link-hover-color: #7e1a23;
+  --bs-link-hover-color-rgb: 126, 26, 35;
+  --bs-border-radius: 8px;
+  --bs-border-radius-lg: 12px;
+  --bs-border-color: #e2e8f0;
+  --bs-body-color: #0f172a;
+  --bs-font-sans-serif: 'Inter', system-ui, 'Segoe UI', Roboto, sans-serif;
+
+  /* SUPERFÍCIE — o token que faltava, e que custava caro.
+     Cinquenta e uma telas cravaram `background:#fff` no <style> delas, e no
+     modo escuro cada uma vira um retângulo branco no meio da página escura.
+     `--white` não serve para isso: branco tem de continuar branco (texto
+     sobre azul, por exemplo). `--surface` é "o fundo de um cartão", e é ele
+     que vira escuro lá embaixo, num lugar só. */
+  --surface:   #ffffff;
+  --surface-2: #f8fafc;
+  --linha:     #e2e8f0;
+
+  /* TINTAS — o fundo claro de um bloco com significado (crítico, atenção,
+     informação, ok). Mesmo problema do branco cravado: `#fee2e2` no <style>
+     da tela continua rosa-claro no modo escuro, e o texto vermelho por cima
+     some. Com token, viram fundo escuro tingido de uma vez só. */
+  --tint-critico: #fee2e2;
+  --tint-atencao: #fff4e5;
+  --tint-info:    #dbeafe;
+  --tint-ok:      #dcfce7;
+  --tint-suave:   #fffbf5;
+
+  --sidebar-w:   256px;
+  --topbar-h:    60px;
+  /* Três raios, e só três: 12px no cartão e no diálogo, 8px no botão, no
+     campo e no item de lista, e a pílula. */
+  --radius-sm:   8px;
+  --radius-md:   8px;
+  --radius-lg:   12px;
+  --radius-xl:   12px;
+  --shadow-xs:   0 1px 2px rgba(0,0,0,.05);
+  --shadow-sm:   0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.04);
+  --shadow-md:   0 4px 16px rgba(0,0,0,.10), 0 2px 6px rgba(0,0,0,.05);
+  --shadow-lg:   0 12px 32px rgba(0,0,0,.12), 0 4px 10px rgba(0,0,0,.06);
+  --shadow-blue: 0 4px 14px rgba(157,32,44,.22);
+  --shadow-green:0 4px 12px rgba(21,128,61,.2);
+  --shadow-red:  0 4px 12px rgba(185,28,28,.2);
+  --transition:  .2s cubic-bezier(.4,0,.2,1);
+}
+
+html, body { background: var(--gray-50); color: var(--gray-900); }
+body { font-family: var(--bs-font-sans-serif); font-size: 15px; min-height: 100vh; }
+a { text-decoration: none; }
+
+/* ── Moldura ─────────────────────────────────────────────── */
+.fc-topo { background: var(--fundo); color: #fff; position: sticky; top: 0; z-index: 1030; }
+.fc-topo::after { content: ''; display: block; height: 3px; background: var(--faixa-da-marca); }
+.fc-topo-in { display: flex; align-items: center; gap: 14px; height: var(--topbar-h);
+  padding: 0 16px; max-width: 1280px; margin: 0 auto; }
+.fc-marca { display: flex; align-items: center; gap: 10px; color: #fff; font-weight: 800;
+  letter-spacing: .2px; white-space: nowrap; }
+.fc-marca img { height: 26px; width: auto; }
+.fc-marca small { color: var(--prata); font-weight: 600; }
+.fc-nav { display: flex; gap: 4px; margin-left: 12px; overflow-x: auto; scrollbar-width: none; }
+.fc-nav a { color: var(--prata); padding: 8px 12px; border-radius: var(--radius-sm);
+  font-weight: 600; font-size: 14px; white-space: nowrap; }
+.fc-nav a:hover, .fc-nav a.ativo { color: #fff; background: var(--fundo-cartao); }
+.fc-direita { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+.fc-sino { position: relative; color: #fff; font-size: 20px; padding: 6px 8px; }
+.fc-sino .n { position: absolute; top: 0; right: 0; background: var(--marca); color: #fff;
+  font-size: 11px; font-weight: 700; border-radius: 999px; padding: 1px 6px; }
+.fc-usuario { color: #fff; }
+.fc-usuario .dropdown-toggle { color: #fff; background: transparent; border: 0;
+  font-weight: 600; font-size: 14px; }
+.fc-conteudo { max-width: 1280px; margin: 0 auto; padding: 20px 16px 48px; }
+.fc-titulo { font-size: 22px; font-weight: 800; margin: 0 0 4px; }
+.fc-sub { color: var(--gray-500); margin: 0 0 18px; }
+.breadcrumb { font-size: 13px; margin-bottom: 10px; }
+
+/* ── Cartões e listas do núcleo ──────────────────────────── */
+.fc-cartao { background: var(--surface); border: 1px solid var(--linha); border-radius: var(--radius-lg);
+  padding: 18px; box-shadow: var(--shadow-xs); }
+.fc-modulos { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.fc-modulo { display: block; color: inherit; }
+.fc-modulo:hover { border-color: var(--marca); box-shadow: var(--shadow-md); }
+.fc-modulo i { font-size: 28px; color: var(--marca); }
+.fc-modulo h2 { font-size: 18px; font-weight: 800; margin: 8px 0 4px; }
+.fc-modulo p { color: var(--gray-500); margin: 0; font-size: 14px; }
+.fc-tabela { width: 100%; }
+.fc-tabela th { font-size: 12px; text-transform: uppercase; letter-spacing: .4px; color: var(--gray-500); }
+.fc-vazio { color: var(--gray-500); text-align: center; padding: 28px 12px; }
+.fc-aviso { display: flex; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--linha); }
+.fc-aviso.nao-lido { background: var(--blue-50); }
+.fc-aviso h3 { font-size: 15px; font-weight: 700; margin: 0; }
+.fc-aviso p { margin: 2px 0 0; color: var(--gray-600); font-size: 14px; }
+.fc-aviso time { color: var(--gray-500); font-size: 12px; white-space: nowrap; }
+
+/* ── Login ───────────────────────────────────────────────── */
+.fc-login-fundo { min-height: 100vh; background: var(--fundo); display: flex; align-items: center;
+  justify-content: center; padding: 16px; }
+.fc-login { width: 100%; max-width: 400px; background: #fff; border-radius: var(--radius-lg);
+  overflow: hidden; box-shadow: var(--shadow-lg); }
+.fc-login-topo { background: var(--fundo-cartao); color: #fff; padding: 22px; text-align: center; }
+.fc-login-topo::after { content: ''; display: block; height: 3px; margin: 18px -22px -22px;
+  background: var(--faixa-da-marca); }
+.fc-login-topo img { height: 34px; }
+.fc-login-topo h1 { font-size: 20px; font-weight: 800; margin: 10px 0 0; }
+.fc-login-corpo { padding: 22px; }
+
+.faixa-versao { position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 2000;
+  background: var(--fundo); color: #fff; border-radius: var(--radius-lg); padding: 12px 14px;
+  display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between;
+  box-shadow: var(--shadow-lg); }
+.faixa-versao button { border: 0; border-radius: var(--radius-sm); padding: 6px 12px; font-weight: 700; }
+.faixa-versao-sim { background: var(--marca); color: #fff; }
+.faixa-versao-nao { background: transparent; color: var(--prata); }
+
+@media (max-width: 720px) {
+  .fc-marca small { display: none; }
+  .fc-nav { margin-left: 0; }
+  .fc-conteudo { padding: 14px 12px 40px; }
+}
+
+
+/* ── Componentes vindos do Trino Intelligence (Passagem de Turno, fila sem
+   internet, cabeçalho de página e tabela que vira cartão no celular) ── */
+@media (max-width: 768px) {
+  .diario-page .form-control,
+  .diario-page .form-select,
+  .diario-page .btn { min-height: 44px; }
+  .diario-page .btn-sm { min-height: 44px; font-size: 13px !important;
+                         padding: 8px 14px !important; }
+  .diario-page .form-label { font-size: .8rem; }
+  .tab-cartao thead { display: none; }
+  .tab-cartao, .tab-cartao tbody, .tab-cartao tr, .tab-cartao td { display: block; width: 100%; }
+  .tab-cartao tr {
+    border: 1px solid var(--gray-200); border-radius: 12px;
+    padding: .6rem .75rem; margin-bottom: .6rem; background: #fff;
+  }
+  .tab-cartao tr:last-child { margin-bottom: 0; }
+  .tab-cartao td {
+    border: 0 !important; padding: .22rem 0 !important;
+    display: flex; gap: .75rem; align-items: baseline; text-align: left !important;
+  }
+  .tab-cartao td::before {
+    content: attr(data-rot); flex: 0 0 38%; font-size: .7rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .03em; color: var(--gray-500);
+  }
+  .tab-cartao td > * { min-width: 0; }
+  .tab-cartao td { overflow-wrap: anywhere; }
+  .tab-cartao td[data-rot=""]::before { content: none; }
+  .tab-cartao td[data-rot=""] { padding-top: .5rem !important; }
+  .tab-cartao td[colspan] { display: block; }
+  .tab-cartao td[colspan]::before { content: none; }
+  .tab-cartao tr:has(td[colspan]) { border: 0; padding: 0; }
+  .tab-cartao td.cel-pilha { display: block; }
+  .tab-cartao td.cel-pilha::before { display: block; margin-bottom: .1rem; }
+  .dt-linha-remover { text-align: right; }
+  .dt-linha-remover .btn {
+    width: auto !important; border: 0; background: none;
+    color: var(--red-600, #dc2626); font-size: .85rem; font-weight: 600;
+    padding: 0 .25rem !important; text-decoration: underline;
+  }
+  .dt-linha-remover .btn:hover, .dt-linha-remover .btn:focus {
+    background: none; color: var(--red-700, #b91c1c);
+  }
+  .dt-linha-remover .dt-x { display: none; }
+  .dt-linha-remover .dt-remover-txt { display: inline; }
+  .pending-row, .occurrence-row {
+    border: 1px solid var(--gray-200); border-radius: 10px;
+    padding: .5rem .25rem .25rem; margin-left: 0; margin-right: 0;
+  }
+}
+.dt-remover-txt { display: none; }
+.pg-topo {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  gap: 12px; flex-wrap: wrap; margin-bottom: 14px;
+}
+.pg-olho {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--gray-500); font-weight: 700; line-height: 1;
+}
+.pg-titulo {
+  font-size: 26px; font-weight: 800; color: var(--gray-900);
+  line-height: 1.1; margin: 2px 0 0;
+}
+.pg-sub { font-size: 13px; color: var(--gray-500); margin-top: 2px; }
+.pg-acoes {
+  display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+  margin-bottom: 14px;
+}
+.pg-acoes .btn { min-height: 40px; white-space: nowrap; }
+@media (max-width: 768px) {
+  .pg-titulo { font-size: 22px; }
+  .pg-acoes { flex-wrap: wrap; }
+  .pg-acoes .btn { flex: 0 1 auto; min-height: 44px; }
+}
+.pg-filtros {
+  border: 1px solid var(--gray-200); border-radius: var(--radius-md);
+  background: var(--white); margin-bottom: 12px;
+}
+.pg-filtros > summary {
+  list-style: none; cursor: pointer; padding: 10px 14px; min-height: 46px;
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 600; color: var(--gray-700);
+}
+.pg-filtros > summary::-webkit-details-marker { display: none; }
+.pg-filtros > summary::after {
+  content: '▾'; margin-left: auto; color: var(--gray-500);
+}
+.pg-filtros[open] > summary::after { content: '▴'; }
+.pg-recorte { color: var(--gray-500); font-weight: 400; }
+.pg-filtros-corpo {
+  padding: 0 14px 14px; display: grid; gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+.pg-item {
+  display: flex; align-items: flex-start; gap: 11px; padding: 11px 14px;
+  border: 1px solid var(--gray-200); border-radius: var(--radius-md);
+  background: var(--white); margin-bottom: 7px;
+}
+.pg-item-tit { font-weight: 600; color: var(--gray-900); font-size: 15px;
+               line-height: 1.3; }
+.pg-item-meta {
+  font-size: 12px; color: var(--gray-500); display: flex; gap: 6px;
+  flex-wrap: wrap; align-items: center; margin-top: 2px;
+}
+.pg-nota {
+  font-size: 12.5px; color: var(--gray-700); margin-top: 4px;
+  border-left: 2px solid var(--gray-300); padding-left: 7px;
+}
+.tsel { position: relative; }
+.tsel > label {
+  display: block; font-size: 12px; font-weight: 600; color: var(--gray-700);
+  margin-bottom: 3px;
+}
+.tsel select, .tsel input { min-height: 44px; }
+.tsel-novo { display: none; gap: 6px; margin-top: 6px; }
+.tsel-novo.on { display: flex; }
+.tsel-ajuda { font-size: 11.5px; color: var(--gray-500); margin-top: 3px; }
+body.dark .pg-titulo, body.dark .pg-num-v, body.dark .pg-item-tit {
+  color: #f1f5f9;
+}
+body.dark .pg-olho, body.dark .pg-sub, body.dark .pg-num-rot,
+body.dark .pg-num-sub, body.dark .pg-item-meta, body.dark .pg-recorte,
+body.dark .pg-vazio, body.dark .tsel-ajuda { color: #94a3b8; }
+body.dark .pg-filtros, body.dark .pg-num, body.dark .pg-item {
+  background: #1e293b; border-color: rgba(255,255,255,.08);
+}
+body.dark .pg-filtros > summary { color: #cbd5e1; }
+body.dark .pg-nota { color: #cbd5e1; border-left-color: rgba(255,255,255,.18); }
+body.dark .tsel > label { color: #cbd5e1; }
+@media (display-mode: standalone) {
+  .so-computador { display: none !important; }
+  .sidebar .nav-group:not(:has(.nav-link:not(.so-computador))) { display: none !important; }
+}
+.fila-selo {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  top: calc(64px + env(safe-area-inset-top, 0px));
+  z-index: 1080; max-width: calc(100vw - 32px);
+  border: 0; border-radius: 999px; padding: .5rem 1rem;
+  background: #161616; color: #fff; font-size: .85rem; font-weight: 600;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, .25);
+}
+.fila-selo-alerta { background: #b45309; }
+.fila-painel-fundo {
+  position: fixed; inset: 0; z-index: 1090; background: rgba(15, 23, 42, .45);
+  display: flex; align-items: flex-end; justify-content: center;
+}
+.fila-painel {
+  background: #fff; width: 100%; max-width: 560px; max-height: 85vh; overflow-y: auto;
+  border-radius: 12px 12px 0 0; padding: 1rem 1rem calc(1rem + env(safe-area-inset-bottom, 0px));
+}
+.fila-painel-topo { display: flex; justify-content: space-between; align-items: center; margin-bottom: .5rem; }
+.fila-painel-nota { font-size: .85rem; color: #475569; }
+.fila-item { border: 1px solid #e2e8f0; border-radius: 8px; padding: .6rem .75rem; margin-bottom: .6rem; }
+.fila-item-rotulo { font-weight: 600; }
+.fila-item-meta { font-size: .8rem; color: #64748b; }
+.fila-item-msg { font-size: .85rem; margin-top: .35rem; }
+.fila-item-texto { white-space: pre-wrap; font-size: .8rem; background: #f1f5f9;
+  border-radius: 6px; padding: .5rem; margin-top: .4rem; user-select: text; }
+.fila-item-acoes { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .5rem; }
+.fila-painel-rodape { text-align: right; margin-top: .25rem; }
+.dt-guardado { border: 1px solid #d97706; background: #fffbeb; border-radius: 10px; padding: .75rem 1rem; }
+.dt-guardado.dt-enviado { border-color: #16a34a; background: #f0fdf4; }
+body.dark .dt-guardado { background: rgba(217, 119, 6, .12); }
+body.dark .dt-guardado.dt-enviado { background: rgba(22, 163, 74, .12); }
+.page-title, .pg-titulo { font-size: 24px; font-weight: 700; letter-spacing: -.02em; }
+.section-label, .kpi-label, .pg-olho, .pg-num-rot {
+  font-size: 12px; font-weight: 600; letter-spacing: .06em; color: var(--gray-500);
+}
+@media (max-width: 768px) {
+  .page-title, .pg-titulo { font-size: 20px; }
+}
+.card, .pg-num, .pg-filtros, .pg-item, .region-card {
+  background: var(--surface); border: 1px solid rgba(226,232,240,.8);
+  box-shadow: 0 1px 2px rgba(15,23,42,.05);
+}
+body.dark .card, body.dark .kpi-card,
+body.dark .kpi-card:not(.accent-green):not(.accent-amber):not(.accent-red),
+body.dark .region-card, body.dark .pg-num, body.dark .pg-filtros, body.dark .pg-item,
+body.dark .modal-content {
+  background: #161616; border-color: #2e2e2e; box-shadow: none;
+}
+body.dark .page-title, body.dark .pg-titulo, body.dark .pg-num-v, body.dark .pg-item-tit { color: #ececec; }

@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  {% if current_user.is_authenticated %}
+  {# Dono dos envios guardados sem internet (static/js/fila-offline.js): a
+     fila só sobe o que foi escrito por quem está logado neste aparelho. #}
+  <meta name="usuario-id" content="{{ current_user.id }}">
+  {% endif %}
+  <meta name="app-versao" content="{{ versao_do_app() }}">
+  <meta name="theme-color" content="#0b0d0f">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='pwa/apple-touch-icon.png') }}">
+  <title>{% block title %}Início{% endblock %} — {{ NOME_DO_SISTEMA }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap-icons/bootstrap-icons.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+  {% block head %}{% endblock %}
+</head>
+<body>
+{% if current_user.is_authenticated %}
+<header class="fc-topo">
+  <div class="fc-topo-in">
+    <a class="fc-marca" href="{{ url_for('core.inicio') }}">
+      <img src="{{ url_for('static', filename='img/logo_trino.png') }}" alt="">
+      <span>Facilities <small>Grupo Trino</small></span>
+    </a>
+    {% set ep = request.endpoint or '' %}
+    <nav class="fc-nav" aria-label="Módulos">
+      {% if current_user.can_view('diario_operacional') %}
+      <a href="{{ url_for('diario_operacional.index') }}"
+         class="{% if ep.startswith('diario_operacional.') %}ativo{% endif %}">Passagem de Turno</a>
+      {% endif %}
+      {% if current_user.can_view('chamados') %}
+      <a href="{{ url_for('chamados.index') }}"
+         class="{% if ep.startswith('chamados.') %}ativo{% endif %}">Chamados</a>
+      {% endif %}
+      {% if current_user._effective_role() == 'master' %}
+      <a href="{{ url_for('admin.contratos') }}"
+         class="{% if ep == 'admin.contratos' %}ativo{% endif %}">Contratos</a>
+      <a href="{{ url_for('admin.usuarios') }}"
+         class="{% if ep == 'admin.usuarios' %}ativo{% endif %}">Pessoas</a>
+      {% endif %}
+    </nav>
+    <div class="fc-direita">
+      <a class="fc-sino" href="{{ url_for('core.avisos') }}" aria-label="Avisos{% if avisos_nao_lidos %}: {{ avisos_nao_lidos }} não lido(s){% endif %}">
+        <i class="bi bi-bell"></i>{% if avisos_nao_lidos %}<span class="n">{{ avisos_nao_lidos if avisos_nao_lidos < 100 else '99+' }}</span>{% endif %}
+      </a>
+      <div class="dropdown fc-usuario">
+        <button class="dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+          <i class="bi bi-person-circle"></i> <span class="d-none d-sm-inline">{{ current_user.name.split(' ')[0] }}</span>
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end">
+          <li><span class="dropdown-item-text small text-muted">{{ current_user.name }}<br>{{ current_user.perfil_rotulo }}</span></li>
+          <li><hr class="dropdown-divider"></li>
+          <li><a class="dropdown-item" href="{{ url_for('auth.trocar_senha') }}"><i class="bi bi-key"></i> Trocar senha</a></li>
+          <li>
+            <form method="post" action="{{ url_for('auth.logout') }}" class="m-0">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="dropdown-item" type="submit"><i class="bi bi-box-arrow-right"></i> Sair</button>
+            </form>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</header>
+{% endif %}
+
+<main class="fc-conteudo">
+  {% block breadcrumb %}{% endblock %}
+  {% with mensagens = get_flashed_messages(with_categories=true) %}
+    {% for categoria, texto in mensagens %}
+    <div class="alert alert-{{ 'danger' if categoria == 'error' else categoria }} alert-dismissible fade show" role="alert">
+      {{ texto }}
+      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
+    </div>
+    {% endfor %}
+  {% endwith %}
+  {% block content %}{% endblock %}
+</main>
+
+<script src="{{ url_for('static', filename='vendor/bootstrap/bootstrap.bundle.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/chart/chart.umd.min.js') }}"></script>
+<script>
+/* esc(): escape de HTML, um só para o sistema inteiro. Escapa também as
+   aspas: o texto às vezes cai dentro de um atributo. */
+window.esc = function (s) {
+  return String(s === null || s === undefined ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+};
+/* CSRF: injeta X-CSRFToken em toda requisição fetch que altera algo. */
+(function () {
+  const meta = document.querySelector('meta[name="csrf-token"]');
+  const csrf = meta ? meta.content : '';
+  const orig = window.fetch;
+  const SAFE = ['GET', 'HEAD', 'OPTIONS', 'TRACE'];
+  window.fetch = function (input, init) {
+    init = init || {};
+    const method = (init.method ||
+      (typeof input === 'object' && input && input.method) || 'GET').toUpperCase();
+    const url = typeof input === 'string' ? input : (input && input.url) || '';
+    const sameOrigin = !/^https?:\/\//i.test(url) || url.startsWith(location.origin);
+    if (csrf && sameOrigin && !SAFE.includes(method)) {
+      const headers = new Headers(init.headers ||
+        (typeof input === 'object' && input && input.headers) || {});
+      if (!headers.has('X-CSRFToken')) headers.set('X-CSRFToken', csrf);
+      init.headers = headers;
+    }
+    return orig(input, init);
+  };
+})();
+</script>
+<script src="{{ url_for('static', filename='js/fila-offline.js') }}"></script>
+<script src="{{ url_for('static', filename='js/foto-leve.js') }}"></script>
+<script src="{{ url_for('static', filename='js/app-instalavel.js') }}"></script>
+<script src="{{ url_for('static', filename='js/tsel.js') }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,829 @@
+{% extends 'base.html' %}
+{% block title %}Passagem de Turno — Trino Intelligence{% endblock %}
+
+{# O caminho no topo dizia "Dashboard" (o padrão do base.html) em todas as
+   telas da passagem — e, no celular, é a única palavra que sobra na barra. #}
+{% block breadcrumb %}
+<li class="breadcrumb-item active">Passagem de Turno</li>
+{% endblock %}
+
+{# "1 turno(s) encerrado(s)" é a tela admitindo que não sabe contar. #}
+{% macro plural(n, um, varios) %}{{ n }} {{ um if n == 1 else varios }}{% endmacro %}
+
+{% block content %}
+{#
+  Torre de controle da operação. O que esta tela responde, de cima para baixo:
+  que recorte estou olhando → a operação cumpriu a rotina? → o que ficou
+  pendente apodrecendo? → onde estão os desvios (tipo e turno)? → qual rotina
+  é o gargalo? → o que eu faço agora (abrir PDCA).
+
+  Nada aqui consulta o banco: tudo vem de `dados`, montado numa chamada só em
+  `trino.web.diario_analitico.painel`.
+#}
+<style>
+  .dop-gov{border-radius:12px;padding:.6rem .95rem;font-size:.86rem;
+           display:flex;align-items:center;gap:.55rem;flex-wrap:wrap;
+           border:1px solid var(--gray-200);background:var(--gray-50,#f9fafb);
+           color:var(--gray-700)}
+  .dop-gov .bi{font-size:1rem}
+  .dop-hero{border:1px solid var(--gray-200);border-radius:14px;padding:1rem 1.1rem;
+            height:100%;background:var(--white);display:flex;flex-direction:column;gap:.35rem}
+  .dop-hero-label{font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;
+                  color:var(--gray-500);font-weight:700}
+  .dop-hero-value{font-size:2.1rem;font-weight:700;line-height:1.05;color:var(--gray-900)}
+  .dop-hero-value.critico{color:var(--red-700)}
+  .dop-hero-sub{font-size:.8rem;color:var(--gray-500)}
+  .dop-tag{display:inline-block;font-size:.72rem;font-weight:700;border-radius:999px;
+           padding:.12rem .5rem;white-space:nowrap}
+  .dop-tag.ok{background:var(--green-100);color:var(--green-700)}
+  .dop-tag.alerta{background:var(--yellow-100);color:var(--yellow-600)}
+  .dop-tag.critico{background:var(--red-100);color:var(--red-700)}
+  .dop-tag.neutro{background:var(--gray-100,#f3f4f6);color:var(--gray-500)}
+  .dop-track{height:7px;border-radius:999px;background:var(--gray-200);overflow:hidden}
+  .dop-fill{height:100%;border-radius:999px;background:var(--blue-600)}
+  .dop-fill.ok{background:var(--green-500)}
+  .dop-fill.alerta{background:var(--amber-500)}
+  .dop-fill.critico{background:var(--red-500)}
+  .dop-meta{position:relative;height:7px;margin-top:.15rem}
+  .dop-meta-mark{position:absolute;top:-9px;width:2px;height:11px;background:var(--gray-700)}
+  .dop-rot{display:grid;grid-template-columns:1fr 92px 58px;gap:.6rem;align-items:center;
+           padding:.42rem 0;border-bottom:1px solid var(--gray-100,#f3f4f6)}
+  .dop-rot:last-child{border-bottom:0}
+  .dop-rot-nome{font-size:.86rem;color:var(--gray-800)}
+  .dop-rot-pct{font-size:.84rem;font-weight:700;text-align:right}
+  .dop-vazio{padding:2rem 1rem;text-align:center;color:var(--gray-500)}
+  .dop-crit{border-left:3px solid var(--red-500)}
+  .dop-crit.so-alta{border-left-color:var(--amber-500)}
+</style>
+
+<div class="container-fluid py-3 diario-page">
+
+  {#
+    Cabeçalho no padrão da casa (.pg-* em static/css/style.css). O que estava
+    aqui custava, no celular, mais de mil pixels de rolagem antes do primeiro
+    dado: olho, título, subtítulo de duas linhas, quatro botões empilhados de
+    largura inteira e quatro selects rotulados. Agora é uma ação primária, uma
+    fileira que rola na horizontal e um filtro recolhido que DIZ o recorte.
+  #}
+  <div class="pg-topo">
+    <div>
+      <div class="pg-olho">TRINO INTELLIGENCE</div>
+      <h1 class="pg-titulo">Passagem de Turno</h1>
+      <div class="pg-sub">O turno, as pendências e as ocorrências num histórico só.</div>
+    </div>
+    <a class="btn btn-primary px-3" href="{{ url_for('diario_operacional.turno', client_id=client_id) }}">
+      <i class="bi bi-plus-lg"></i> Nova passagem</a>
+  </div>
+
+  <div class="pg-acoes">
+    {% if client_id %}
+    <a class="btn btn-outline-secondary btn-sm"
+       href="{{ url_for('diario_operacional.relatorio_mensal', client_id=client_id) }}">
+      <i class="bi bi-file-earmark-pdf"></i> Relatório mensal</a>
+    {% endif %}
+    {% if current_user._effective_role() in ('master','pleno') %}
+    <button class="btn btn-outline-primary btn-sm" data-bs-toggle="modal"
+            data-bs-target="#modalPendencia">
+      <i class="bi bi-flag"></i> Deixar pendência</button>
+    {# Vizinha da pendência, e a diferença entre as duas está no tempo: a
+       pendência é "alguém resolve quando der"; a tarefa de turno tem DONO
+       (o turno) e DATA, e volta respondida. #}
+    <button class="btn btn-outline-primary btn-sm" data-bs-toggle="modal"
+            data-bs-target="#modalTarefaTurno">
+      <i class="bi bi-clipboard-plus"></i> Tarefa para um turno</button>
+    {% endif %}
+    {# O botão pergunta pela PERMISSÃO, e não pelo perfil. Enquanto
+       perguntava "é master", quem recebia a concessão no cadastro ganhava o
+       acesso e não ganhava o caminho — a rota abria e a tela não oferecia
+       nenhuma porta para ela. #}
+    {% if current_user.pode('diario_config') %}
+    <a class="btn btn-light btn-sm so-computador" href="{{ url_for('diario_operacional.configuracao', client_id=client_id) }}">
+      <i class="bi bi-sliders"></i> Configurar</a>
+    {% endif %}
+  </div>
+
+  {# ── Recorte: cliente, período, área e turno ───────────────────────────
+     Recolhido, e o resumo mostra o recorte FECHADO. Abrir o filtro para
+     descobrir o que se está vendo era a pergunta mais cara desta tela. #}
+  {% set ns_cli = namespace(nome='') %}
+  {% for c in clients %}{% if c.id == client_id %}{% set ns_cli.nome = c.name %}{% endif %}{% endfor %}
+  <details class="pg-filtros">
+    <summary>
+      <i class="bi bi-funnel"></i> Filtros
+      <span class="pg-recorte">·
+        {{ ns_cli.nome or 'sem contrato' }} ·
+        {{ periodos.get(periodo, periodo)|lower }}{%
+        if area_sel and area_sel != todas_as_areas %}{%
+          for a in (dados.areas_disponiveis if dados else []) %}{%
+            if a.id == area_sel %} · {{ a.nome }}{% endif %}{%
+          endfor %}{% endif %}{%
+        if turno_sel and turno_sel != 'todos' %} · {{ turno_sel }}{% endif %}
+      </span>
+    </summary>
+    <form class="pg-filtros-corpo" method="get" id="dopFiltros">
+      <div class="tsel">
+        <label for="dopCliente">Cliente</label>
+        <select class="form-select" id="dopCliente" name="client_id" onchange="this.form.submit()">
+          {% for c in clients %}
+          <option value="{{ c.id }}" {% if c.id == client_id %}selected{% endif %}>{{ c.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="tsel">
+        <label for="dopPeriodo">Período</label>
+        <select class="form-select" name="periodo" id="dopPeriodo" onchange="dopPeriodoMudou(this.value)">
+          {% for chave, rotulo in periodos.items() %}
+          <option value="{{ chave }}" {% if chave == periodo %}selected{% endif %}>{{ rotulo }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="tsel dop-custom" {% if periodo != 'custom' %}hidden{% endif %}>
+        <label for="dopDe">De</label>
+        <input type="date" class="form-control" id="dopDe" name="de" value="{{ de }}">
+      </div>
+      <div class="tsel dop-custom" {% if periodo != 'custom' %}hidden{% endif %}>
+        <label for="dopAte">Até</label>
+        <input type="date" class="form-control" id="dopAte" name="ate" value="{{ ate }}">
+      </div>
+      {# A área só vira filtro quando o contrato tem mais de uma. Contrato de
+         área única não precisa escolher nada, e um seletor com uma opção só é
+         ruído na tela. #}
+      {% if dados and dados.areas_disponiveis %}
+      {#
+        ESTE FILTRO NUNCA FUNCIONOU, e o defeito era mudo. O <select> mandava
+        `?setor=<nome da área>` e a rota lê `?area_id=<id>`: escolher uma área
+        recarregava a tela idêntica. E o `selected` comparava com `setor_sel`,
+        que a rota nunca passou (ela passa `area_sel`) — em Jinja isso não é
+        erro, é vazio, então nem a área escolhida aparecia marcada.
+        Agora os dois lados falam a mesma língua: id, e `area_sel`.
+      #}
+      <div class="tsel">
+        <label for="dopArea">Área</label>
+        <select class="form-select" id="dopArea" name="area_id" onchange="this.form.submit()">
+          <option value="{{ todas_as_areas }}"
+                  {% if area_sel == todas_as_areas %}selected{% endif %}>Todas</option>
+          {% for a in dados.areas_disponiveis %}
+          <option value="{{ a.id }}" {% if area_sel == a.id %}selected{% endif %}>{{ a.nome }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
+      <div class="tsel">
+        <label for="dopTurno">Turno</label>
+        <select class="form-select" id="dopTurno" name="turno" onchange="this.form.submit()">
+          <option value="todos" {% if turno_sel == 'todos' %}selected{% endif %}>Todos</option>
+          {% for nome in (dados.turnos_disponiveis if dados else []) %}
+          <option value="{{ nome }}" {% if turno_sel == nome %}selected{% endif %}>{{ nome }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="dop-custom d-flex align-items-end" {% if periodo != 'custom' %}hidden{% endif %}>
+        <button class="btn btn-outline-primary w-100" type="submit">Aplicar</button>
+      </div>
+    </form>
+  </details>
+
+  {% if not client_id %}
+  <div class="card shadow-sm border-0"><div class="dop-vazio">
+    Nenhum contrato disponível na sua carteira.</div></div>
+  {% else %}
+
+  <div class="dop-gov mb-3">
+    <i class="bi bi-calendar3"></i>
+    <span><strong>{{ dados.periodo_label }}</strong>
+      ({{ dados.inicio.strftime('%d/%m/%Y') }} a {{ dados.fim.strftime('%d/%m/%Y') }})
+      {% if dados.turno != 'todos' %}· turno <strong>{{ dados.turno }}</strong>{% endif %}
+      · <strong>{{ dados.n_turnos }}</strong> {{ 'turno encerrado' if dados.n_turnos == 1 else 'turnos encerrados' }} no recorte</span>
+    <span class="text-muted">Turno em aberto não entra nos indicadores — ainda é rascunho do encarregado.</span>
+  </div>
+
+  {# ── Os quatro indicadores mestres ─────────────────────────────────── #}
+  <div class="row g-3 mb-3" id="dopHero">
+    <div class="col-xl-3 col-md-6">
+      <div class="dop-hero">
+        <div class="dop-hero-label">Aderência às rotinas obrigatórias</div>
+        <div class="dop-hero-value">
+          {% if dados.aderencia.pct is none %}—{% else %}{{ '%.1f'|format(dados.aderencia.pct)|replace('.', ',') }}%{% endif %}
+          <span class="dop-tag {{ dados.aderencia.faixa }} align-middle ms-1">
+            {% if dados.aderencia.faixa == 'ok' %}No alvo
+            {% elif dados.aderencia.faixa == 'alerta' %}Atenção
+            {% elif dados.aderencia.faixa == 'critico' %}Crítico
+            {% else %}Sem rotina cadastrada{% endif %}</span>
+        </div>
+        <div class="dop-track">
+          <div class="dop-fill {{ dados.aderencia.faixa }}"
+               style="width:{{ dados.aderencia.pct or 0 }}%"></div>
+        </div>
+        <div class="dop-meta">
+          <span class="dop-meta-mark" style="left:{{ dados.aderencia.meta }}%"
+                title="Meta {{ dados.aderencia.meta }}%"></span>
+        </div>
+        <div class="dop-hero-sub">
+          {{ dados.aderencia.cumpridas }} de {{ plural(dados.aderencia.exigidas, 'atividade', 'atividades') }} ·
+          meta {{ dados.aderencia.meta|int }}%</div>
+      </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6">
+      <div class="dop-hero">
+        <div class="dop-hero-label">Taxa de resolução de pendências</div>
+        <div class="dop-hero-value">
+          {% if dados.resolucao.pct is none %}—{% else %}{{ '%.1f'|format(dados.resolucao.pct)|replace('.', ',') }}%{% endif %}
+        </div>
+        <div class="dop-track">
+          <div class="dop-fill {{ dados.resolucao.faixa }}"
+               style="width:{{ dados.resolucao.pct or 0 }}%"></div>
+        </div>
+        <div class="dop-hero-sub">
+          {{ plural(dados.resolucao.abertas, 'aberta', 'abertas') }} | {{ plural(dados.resolucao.resolvidas, 'resolvida', 'resolvidas') }}
+          <span class="dop-help text-muted" data-bs-toggle="tooltip" data-bs-placement="top"
+                data-bs-title="Da safra do período: das pendências abertas nesta janela, quantas já foram baixadas. Mutirão de backlog antigo não infla este número.">
+            <i class="bi bi-question-circle"></i></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6">
+      <div class="dop-hero">
+        <div class="dop-hero-label">Pendências críticas e vencidas</div>
+        <div class="dop-hero-value {% if dados.n_criticas %}critico{% endif %}">
+          {{ dados.n_criticas }}</div>
+        <div class="dop-hero-sub">
+          Prioridade alta ou paradas há mais de 24h, em aberto agora
+          <span class="dop-help text-muted" data-bs-toggle="tooltip" data-bs-placement="top"
+                data-bs-title="Este cartão ignora o filtro de período de propósito: pendência velha em aberto é problema de hoje, e esconder por ter nascido fora da janela seria o erro que ele existe para evitar.">
+            <i class="bi bi-question-circle"></i></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6">
+      <div class="dop-hero">
+        <div class="dop-hero-label">Índice de ocorrências por turno</div>
+        <div class="dop-hero-value">
+          {% if dados.indice_ocorrencias.valor is none %}—
+          {% else %}{{ '%.2f'|format(dados.indice_ocorrencias.valor)|replace('.', ',') }}{% endif %}
+          <span class="fs-6 fw-normal text-muted">ocorrências/turno</span>
+        </div>
+        <div class="dop-hero-sub">
+          {{ plural(dados.indice_ocorrencias.ocorrencias, 'ocorrência', 'ocorrências') }} ÷
+          {{ plural(dados.indice_ocorrencias.turnos, 'turno', 'turnos') }}
+          {% if dados.indice_ocorrencias.delta is not none %}
+            {% if dados.indice_ocorrencias.delta > 0 %}
+            <span class="dop-tag critico ms-1">▲ {{ '%.2f'|format(dados.indice_ocorrencias.delta)|replace('.', ',') }} vs. janela anterior</span>
+            {% elif dados.indice_ocorrencias.delta < 0 %}
+            <span class="dop-tag ok ms-1">▼ {{ '%.2f'|format(-dados.indice_ocorrencias.delta)|replace('.', ',') }} vs. janela anterior</span>
+            {% else %}
+            <span class="dop-tag neutro ms-1">estável</span>
+            {% endif %}
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ── Gráficos: onde dói, em que turno, e se a fila anda ────────────── #}
+  <div class="row g-3 mb-3">
+    <div class="col-xl-6">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-header bg-white fw-bold d-flex justify-content-between align-items-center">
+          <span>Pareto de ocorrências por categoria</span>
+          <span class="small text-muted fw-normal">vermelho = 80% do volume</span>
+        </div>
+        <div class="card-body">
+          {% if dados.pareto %}
+          <canvas id="dopPareto" height="{{ 60 + dados.pareto|length * 34 }}"></canvas>
+          {% else %}<div class="dop-vazio">Nenhuma ocorrência no período.</div>{% endif %}
+        </div>
+      </div>
+    </div>
+    <div class="col-xl-6">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-header bg-white fw-bold">Eficiência entre turnos</div>
+        <div class="card-body">
+          {% if dados.turnos_comparativo %}
+          <canvas id="dopTurnos" height="240"></canvas>
+          {% else %}<div class="dop-vazio">Nenhum turno encerrado no período.</div>{% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-3">
+    <div class="col-xl-7">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-header bg-white fw-bold d-flex justify-content-between align-items-center">
+          <span>Evolução diária de pendências</span>
+          <span class="small text-muted fw-normal">
+            {% set n_dias = dados.burndown.labels|length %}
+            {{ 'último dia' if n_dias == 1 else 'últimos %d dias'|format(n_dias) }}</span>
+        </div>
+        <div class="card-body"><canvas id="dopBurndown" height="190"></canvas></div>
+      </div>
+    </div>
+    <div class="col-xl-5">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-header bg-white fw-bold d-flex justify-content-between align-items-center">
+          <span>Raio-X do checklist</span>
+          <span class="small text-muted fw-normal">pior primeiro</span>
+        </div>
+        <div class="card-body">
+          {% for r in dados.rotinas %}
+          <div class="dop-rot">
+            <div>
+              <div class="dop-rot-nome">{{ r.nome }}</div>
+              <div class="dop-track mt-1">
+                <div class="dop-fill {{ r.faixa }}" style="width:{{ r.pct or 0 }}%"></div>
+              </div>
+            </div>
+            <div class="small text-muted">{{ r.cumprida }}/{{ r.exigida }}</div>
+            {# Uma casa decimal, como os cartões de cima. Arredondado para
+               inteiro, 94,7% virava "95%" pintado de amarelo: a cor vinha do
+               número real (abaixo da meta de 95) e o texto dizia que bateu. #}
+            <div class="dop-rot-pct">
+              {% if r.pct is none %}—{% else %}{{ '%.1f'|format(r.pct)|replace('.', ',') }}%{% endif %}
+              {% if r.faixa == 'critico' %}<i class="bi bi-exclamation-triangle-fill text-danger ms-1"
+                 title="Gargalo de rotina"></i>{% endif %}
+            </div>
+          </div>
+          {% else %}
+          <div class="dop-vazio">Nenhuma atividade obrigatória exigida no período.</div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ── O que fazer agora ─────────────────────────────────────────────── #}
+  <div class="row g-3">
+    <div class="col-xl-7">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-header bg-white fw-bold">Ocorrências do período</div>
+        <div class="table-responsive">
+          <table class="table align-middle mb-0 tab-cartao">
+            <thead><tr><th>Quando</th><th>Tipo</th><th>Referência</th>
+              <th>Descrição</th>{% if pode_pdca %}<th class="text-end">Ação</th>{% endif %}</tr></thead>
+            <tbody>
+              {% for o in dados.ocorrencias %}
+              <tr>
+                {% set q = dados.quando_ocorrencias.get(o.id, {}) %}
+                <td class="text-nowrap small" data-rot="Quando">{{ q.dia.strftime('%d/%m') if q.dia else '—' }}{% if q.turno %} · {{ q.turno }}{% endif %}</td>
+                <td data-rot="Tipo">
+                  <span class="badge {{ 'text-bg-warning' if o.gravidade == 'critica' else 'text-bg-light border' }}"
+                        {% if o.gravidade == 'critica' %}title="Ponto de atenção — sobe para a Torre de Comando"{% endif %}>{{ o.tipo }}</span></td>
+                <td class="small text-muted" data-rot="Referência">{{ o.referencia or '—' }}</td>
+                <td class="small" data-rot="Descrição">{{ o.descricao }}</td>
+                {% if pode_pdca %}
+                <td class="text-end" data-rot="">
+                  <button class="btn btn-sm btn-outline-primary text-nowrap"
+                          onclick="dopAbrirPdca({{ o.id }}, this)">
+                    <i class="bi bi-diagram-3"></i> Abrir PDCA</button>
+                </td>
+                {% endif %}
+              </tr>
+              {% else %}
+              <tr><td colspan="{{ 5 if pode_pdca else 4 }}" class="dop-vazio">
+                Nenhuma ocorrência no período.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-xl-5">
+      <div class="card shadow-sm border-0 mb-3">
+        <div class="card-header bg-white fw-bold">Pendências críticas e vencidas</div>
+        <div class="list-group list-group-flush">
+          {% for c in dados.criticas %}
+          <div class="list-group-item dop-crit {% if c.alta and not c.vencida %}so-alta{% endif %}">
+            <div class="d-flex justify-content-between align-items-start gap-2">
+              <strong class="small">{{ c.pendencia.titulo }}</strong>
+              {# "há 0h" é a pendência que acabou de entrar: diz "agora". #}
+              <span class="dop-tag {{ 'critico' if c.vencida else 'alerta' }}">
+                {% if c.dias >= 1 %}há {{ c.dias }}d{% elif c.horas >= 1 %}há {{ c.horas }}h{% else %}agora{% endif %}</span>
+            </div>
+            <div class="small text-muted">{{ c.pendencia.descricao or 'Sem descrição' }}</div>
+            <div class="small">
+              <span class="dop-tag {{ 'critico' if c.alta else 'neutro' }}">{{ {'baixa':'Baixa','media':'Média','alta':'Alta'}.get((c.pendencia.prioridade or '')|lower, c.pendencia.prioridade) }}</span>
+              {# Só para quem pode GRAVAR na Passagem: o Visualizador lê o
+                 painel, e o botão dava 403 no clique. #}
+              {% if pode_gravar %}
+              <button class="btn btn-sm btn-link p-0 ms-2"
+                      onclick="resolverPendenciaDop({{ c.pendencia.id }})">marcar resolvida</button>
+              {% endif %}
+            </div>
+          </div>
+          {% else %}
+          <div class="dop-vazio">Nenhuma pendência crítica ou vencida. Fila limpa.</div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="card shadow-sm border-0">
+        <div class="card-header bg-white fw-bold">Últimos turnos do período</div>
+        <div class="table-responsive">
+          <table class="table table-sm align-middle mb-0 tab-cartao">
+            <thead><tr><th>Data</th><th>Área</th><th>Turno</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+              {% for linha in turnos %}
+              {% set t = linha.t %}
+              <tr>
+                <td class="small" data-rot="Data">{{ t.data_turno.strftime('%d/%m/%Y') }}</td>
+                {# Um contrato tem mais de uma área, e no mesmo dia e turno.
+                   Sem esta coluna, duas passagens diferentes ficariam duas
+                   linhas idênticas na tela. #}
+                <td class="small" data-rot="Área">{{ linha.area or '—' }}</td>
+                <td class="small" data-rot="Turno">{{ t.turno }}</td>
+                <td data-rot="Status"><span class="badge text-bg-{{ 'success' if t.status == 'encerrado' else 'warning' }}">
+                  {{ t.status }}</span></td>
+                <td class="text-end" data-rot="">
+                  <a class="btn btn-sm btn-link p-0"
+                     href="{{ url_for('diario_operacional.ver_turno', turno_id=t.id) }}">abrir</a>
+                </td>
+              </tr>
+              {% else %}
+              <tr><td colspan="5" class="dop-vazio">Nenhum turno registrado no período.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+{% if current_user._effective_role() in ('master','pleno') %}
+<div class="modal fade" id="modalPendencia" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header">
+      <h5 class="modal-title">Deixar pendência para a operação</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body">
+      <label class="form-label">Pendência</label>
+      <input id="gestor-p-title" class="form-control mb-2">
+      <label class="form-label">Descrição</label>
+      <textarea id="gestor-p-desc" class="form-control mb-2"></textarea>
+      <label class="form-label">Prioridade</label>
+      <select id="gestor-p-priority" class="form-select">
+        <option value="baixa">Baixa</option>
+        <option value="media" selected>Média</option>
+        <option value="alta">Alta</option>
+      </select>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="criarPendenciaGestor()">Salvar</button>
+    </div>
+  </div></div>
+</div>
+
+{#
+  ── Tarefa para um turno ────────────────────────────────────────────────
+
+  A gestão sabia pedir a ROTINA (o checklist do modelo, que vale todo dia) e
+  não sabia pedir a EXCEÇÃO: "no 2º turno de quinta, confira a temperatura da
+  câmara depois da manutenção". Isso ia por WhatsApp e voltava "ok".
+
+  A FORMA DE RESPOSTA é escolhida por quem PEDE, e é o que dá valor ao
+  recurso: quem pede é quem sabe o que vai fazer com o dado. "Ok" e "-18,4"
+  custam o mesmo para digitar e valem coisas diferentes em três meses.
+#}
+<div class="modal fade" id="modalTarefaTurno" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+    <div class="modal-header">
+      <h5 class="modal-title">Tarefa para um turno</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body">
+      <p class="text-muted small">
+        Ela aparece na passagem daquele turno, e volta respondida — ou vira
+        pendência, se não for possível fazer.
+      </p>
+      <div class="row g-2">
+        <div class="col-12 tsel">
+          <label for="tt-area">Área</label>
+          <select class="form-select" id="tt-area" onchange="ttTrocouArea()">
+            {% for m in modelos %}
+            <option value="{{ m.id }}">{{ m.nome }}</option>
+            {% else %}
+            <option value="">Nenhum modelo ativo neste contrato</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 tsel">
+          <label for="tt-data">Dia</label>
+          <input type="date" class="form-control" id="tt-data" value="{{ hoje.isoformat() }}">
+        </div>
+        <div class="col-6 tsel">
+          <label for="tt-turno">Turno</label>
+          <select class="form-select" id="tt-turno"></select>
+        </div>
+      </div>
+      <div class="tsel mt-2">
+        <label for="tt-titulo">O que precisa ser feito</label>
+        <input type="text" class="form-control" id="tt-titulo" maxlength="300"
+               placeholder="Ex.: Conferir a temperatura da câmara após a manutenção">
+      </div>
+      <div class="tsel mt-2">
+        <label for="tt-desc">Detalhe <span class="fw-normal text-muted">(opcional)</span></label>
+        <textarea class="form-control" id="tt-desc" rows="2"></textarea>
+      </div>
+      <div class="tsel mt-2">
+        <label for="tt-forma">Como o turno deve responder</label>
+        <select class="form-select" id="tt-forma">
+          <option value="sim_nao">Sim ou não</option>
+          <option value="numero">Um número</option>
+          <option value="texto">Uma descrição</option>
+        </select>
+        <div class="tsel-ajuda">
+          Escolha "um número" quando o valor for o ponto — "ok" não entra em
+          série, "-18,4" entra.
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+      <button class="btn btn-primary" id="tt-enviar"
+              onclick="ttCriarTarefa()">Atribuir ao turno</button>
+    </div>
+  </div></div>
+</div>
+<script>
+  var TT_MODELOS = {{ modelos|tojson }};
+
+  function ttTrocouArea() {
+    var sel = document.getElementById('tt-area');
+    var alvo = document.getElementById('tt-turno');
+    var m = TT_MODELOS.filter(function (x) { return String(x.id) === sel.value; })[0];
+    alvo.innerHTML = '';
+    var turnos = (m && m.turnos && m.turnos.length) ? m.turnos : [];
+    if (!turnos.length) {
+      // Modelo sem turno cadastrado: em vez de um select vazio, que não
+      // explica nada, a tela diz onde se resolve isso.
+      alvo.innerHTML = '<option value="">— nenhum turno no modelo —</option>';
+      return;
+    }
+    turnos.forEach(function (t) {
+      var nome = (typeof t === 'string') ? t : (t.nome || t.codigo || '');
+      if (!nome) { return; }
+      var o = document.createElement('option');
+      o.value = nome; o.textContent = nome;
+      alvo.appendChild(o);
+    });
+  }
+  document.addEventListener('DOMContentLoaded', ttTrocouArea);
+
+  function ttCriarTarefa() {
+    var v = function (id) { return document.getElementById(id).value; };
+    // A mensagem tem de dizer o que RESOLVE. "Escolha a área" num contrato
+    // que não tem área nenhuma manda a pessoa procurar o que não existe.
+    if (!v('tt-area')) {
+      alert('Este contrato ainda não tem modelo de passagem ativo. ' +
+            'Cadastre um em Configurar e volte aqui.'); return;
+    }
+    if (!v('tt-turno')) {
+      alert('Este modelo não tem turno cadastrado. Cadastre os turnos dele ' +
+            'em Configurar.'); return;
+    }
+    if (!v('tt-titulo').trim()) { alert('Escreva o que precisa ser feito.'); return; }
+    var botao = document.getElementById('tt-enviar');
+    botao.disabled = true;
+    fetch('/passagem-de-turno/api/tarefas-turno', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content},
+      body: JSON.stringify({
+        client_id: {{ client_id or 0 }}, configuracao_id: v('tt-area'),
+        data_turno: v('tt-data'), turno: v('tt-turno'),
+        titulo: v('tt-titulo'), descricao: v('tt-desc'),
+        forma_resposta: v('tt-forma')})
+    }).then(function (r) { return r.json().then(function (x) { return {ok: r.ok, x: x}; }); })
+      .then(function (res) {
+        if (!res.ok) { alert(res.x.error || 'Não foi possível atribuir.'); botao.disabled = false; return; }
+        location.reload();
+      }).catch(function () { alert('Falha de rede.'); botao.disabled = false; });
+  }
+</script>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  'use strict';
+  var CSRF = function () {
+    var m = document.querySelector('meta[name="csrf-token"]');
+    return m ? m.content : '';
+  };
+  var CLIENTE = Number({{ client_id or 0 }});
+
+  // O par de datas só aparece em "Personalizado" — e o formulário não pode
+  // auto-submeter enquanto a pessoa ainda está escolhendo De/Até.
+  window.dopPeriodoMudou = function (valor) {
+    var campos = document.querySelectorAll('.dop-custom');
+    for (var i = 0; i < campos.length; i++) { campos[i].hidden = (valor !== 'custom'); }
+    if (valor !== 'custom') { document.getElementById('dopFiltros').submit(); }
+  };
+
+  window.criarPendenciaGestor = function () {
+    var corpo = {
+      client_id: CLIENTE,
+      titulo: document.getElementById('gestor-p-title').value,
+      descricao: document.getElementById('gestor-p-desc').value,
+      prioridade: document.getElementById('gestor-p-priority').value
+    };
+    fetch('/passagem-de-turno/api/pendencias', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF()},
+      body: JSON.stringify(corpo)
+    }).then(function (r) {
+      return r.json().then(function (x) { return {ok: r.ok, x: x}; });
+    }).then(function (res) {
+      if (!res.ok) { alert(res.x.error || 'Não foi possível salvar.'); return; }
+      location.reload();
+    });
+  };
+
+  // A nota é obrigatória aqui também: o gestor que baixa a pendência pelo
+  // painel deve a mesma frase que se pede ao encarregado. Se o caminho curto
+  // continuasse existindo no dashboard, ele viraria O caminho.
+  window.resolverPendenciaDop = function (id) {
+    var texto = prompt('O que foi feito para resolver?');
+    if (texto === null) { return; }
+    texto = texto.trim();
+    if (!texto) { alert('Diga em uma linha o que foi feito.'); return; }
+    fetch('/passagem-de-turno/api/pendencias/' + id + '/resolver', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF()},
+      body: JSON.stringify({resolucao: texto})
+    }).then(function (r) {
+      return r.json().then(function (x) { return {ok: r.ok, x: x}; });
+    }).then(function (res) {
+      if (!res.ok) { alert(res.x.error || 'Não foi possível resolver.'); return; }
+      location.reload();
+    });
+  };
+
+  // Ocorrência → ação no Plano de Ação. O botão é desabilitado no clique:
+  // a rota é idempotente, mas o retorno visual evita a dúvida de "clicou?".
+  window.dopAbrirPdca = function (id, botao) {
+    if (botao) { botao.disabled = true; }
+    fetch('/passagem-de-turno/api/ocorrencias/' + id + '/pdca', {
+      method: 'POST', headers: {'X-CSRFToken': CSRF()}
+    }).then(function (r) {
+      return r.json().then(function (x) { return {ok: r.ok, x: x}; });
+    }).then(function (res) {
+      if (!res.ok) {
+        if (botao) { botao.disabled = false; }
+        alert(res.x.error || 'Não foi possível abrir o plano.');
+        return;
+      }
+      window.location = res.x.url;
+    });
+  };
+
+  if (typeof Chart === 'undefined' || !CLIENTE) { return; }
+
+  var NAVY = '#0c2340', BLUE = '#1a5fb4', RED = '#ef4444',
+      GREEN = '#22c55e', GREY = '#9ca3af';
+  Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+  Chart.defaults.color = '#6b7280';
+
+  var pareto = {{ (dados.pareto if dados else [])|tojson }};
+  var comparativo = {{ (dados.turnos_comparativo if dados else [])|tojson }};
+  var burndown = {{ (dados.burndown if dados else {'labels': [], 'criadas': [], 'resolvidas': []})|tojson }};
+
+  // "1 ocorrência(s)" no tooltip é o mesmo defeito do texto da tela.
+  function plural(n, um, varios) { return n + ' ' + (n === 1 ? um : varios); }
+
+  // ── Pareto: barras horizontais, vitais em vermelho ───────────────────
+  // O nome da categoria mora no eixo da esquerda. Em 390px ele saía cortado
+  // na borda do cartão, e o eixo largo esmagava as barras.
+  // O eixo mostra o nome abreviado com reticências — limite medido pela
+  // largura do gráfico — e o tooltip mostra o nome inteiro.
+  var elPareto = document.getElementById('dopPareto');
+  function rotuloCurto(nome) {
+    nome = String(nome || '');
+    var largura = elPareto ? elPareto.clientWidth : 600;
+    var max = largura < 420 ? 16 : (largura < 640 ? 22 : 34);
+    return nome.length > max ? nome.slice(0, max - 1).trim() + '…' : nome;
+  }
+  if (elPareto && pareto.length) {
+    new Chart(elPareto, {
+      type: 'bar',
+      data: {
+        labels: pareto.map(function (p) { return p.tipo; }),
+        datasets: [{
+          label: 'Ocorrências',
+          data: pareto.map(function (p) { return p.qtd; }),
+          backgroundColor: pareto.map(function (p) { return p.vital ? RED : GREY; }),
+          borderRadius: 4, barThickness: 18
+        }]
+      },
+      options: {
+        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: {display: false},
+          tooltip: {callbacks: {
+            title: function (itens) { return pareto[itens[0].dataIndex].tipo; },
+            label: function (ctx) {
+              var p = pareto[ctx.dataIndex];
+              return plural(p.qtd, 'ocorrência', 'ocorrências') + ' · ' +
+                     String(p.pct).replace('.', ',') + '% do total · acumulado ' +
+                     String(p.acumulado).replace('.', ',') + '%';
+            }}}
+        },
+        scales: {
+          x: {beginAtZero: true, ticks: {precision: 0}, grid: {color: '#f3f4f6'}},
+          y: {grid: {display: false},
+              ticks: {callback: function (valor) {
+                return rotuloCurto(this.getLabelForValue(valor));
+              }}}
+        }
+      }
+    });
+  }
+
+  // ── Turnos: aderência (%) em barra, ocorrências em linha no 2º eixo ──
+  var elTurnos = document.getElementById('dopTurnos');
+  if (elTurnos && comparativo.length) {
+    var cor = {ok: GREEN, alerta: '#f59e0b', critico: RED, neutro: GREY};
+    new Chart(elTurnos, {
+      data: {
+        labels: comparativo.map(function (t) { return t.turno; }),
+        datasets: [
+          {
+            type: 'bar', label: 'Aderência (%)', yAxisID: 'y',
+            data: comparativo.map(function (t) { return t.pct; }),
+            backgroundColor: comparativo.map(function (t) { return cor[t.faixa] || GREY; }),
+            borderRadius: 4, maxBarThickness: 46, order: 2
+          },
+          {
+            type: 'line', label: 'Ocorrências', yAxisID: 'y2',
+            data: comparativo.map(function (t) { return t.ocorrencias; }),
+            // Reta entre os turnos: são categorias, não uma série contínua,
+            // e a curva sugeria valores entre um turno e outro.
+            borderColor: NAVY, backgroundColor: NAVY, tension: 0,
+            pointRadius: 4, borderWidth: 2, order: 1
+          }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: {position: 'bottom', labels: {boxWidth: 12, usePointStyle: true}},
+          tooltip: {callbacks: {afterBody: function (itens) {
+            var t = comparativo[itens[0].dataIndex];
+            return plural(t.turnos, 'turno encerrado', 'turnos encerrados') + ' · ' +
+                   t.cumpridas + '/' + plural(t.exigidas, 'atividade', 'atividades');
+          }}}
+        },
+        scales: {
+          y: {beginAtZero: true, max: 100, position: 'left',
+              title: {display: true, text: 'Aderência (%)'}, grid: {color: '#f3f4f6'}},
+          y2: {beginAtZero: true, position: 'right', ticks: {precision: 0},
+               title: {display: true, text: 'Ocorrências'}, grid: {display: false}},
+          x: {grid: {display: false}}
+        }
+      }
+    });
+  }
+
+  // ── Burn-down: o que entra (vermelho) contra o que sai (verde) ───────
+  // `monotone` no lugar da curva livre (tension .3): a curva livre passava
+  // do valor entre dois pontos — num dia de 0 seguido de um de 3, a linha
+  // descia abaixo de zero e subia acima de 3, desenhando pendência que não
+  // existiu. A monótona suaviza sem nunca ultrapassar os pontos.
+  var elBurn = document.getElementById('dopBurndown');
+  if (elBurn) {
+    new Chart(elBurn, {
+      type: 'line',
+      data: {
+        labels: burndown.labels,
+        datasets: [
+          {label: 'Novas pendências', data: burndown.criadas, borderColor: RED,
+           backgroundColor: 'rgba(239,68,68,.12)', fill: true,
+           cubicInterpolationMode: 'monotone',
+           pointRadius: 2, borderWidth: 2},
+          {label: 'Pendências baixadas', data: burndown.resolvidas, borderColor: GREEN,
+           backgroundColor: 'rgba(34,197,94,.12)', fill: true,
+           cubicInterpolationMode: 'monotone',
+           pointRadius: 2, borderWidth: 2}
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: {mode: 'index', intersect: false},
+        plugins: {legend: {position: 'bottom', labels: {boxWidth: 12, usePointStyle: true}}},
+        scales: {
+          y: {beginAtZero: true, ticks: {precision: 0}, grid: {color: '#f3f4f6'}},
+          x: {grid: {display: false}}
+        }
+      }
+    });
+  }
+}());
+</script>
+{% endblock %}

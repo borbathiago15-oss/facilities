@@ -1,0 +1,377 @@
+{% extends 'base.html' %}
+{% block title %}Relatório Mensal da Passagem de Turno — Trino Intelligence{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('diario_operacional.index', client_id=cliente.id) }}">Passagem de Turno</a></li>
+<li class="breadcrumb-item active">Relatório mensal</li>
+{% endblock %}
+
+{% macro faixa_txt(f) %}{% if f == 'ok' %}No alvo{% elif f == 'alerta' %}Atenção{% elif f == 'critico' %}Crítico{% else %}Sem base{% endif %}{% endmacro %}
+{% macro prioridade(v) %}{{ {'baixa':'Baixa','media':'Média','alta':'Alta'}.get((v or '')|lower, v or '—') }}{% endmacro %}
+{% macro pct(v) %}{% if v is none %}—{% else %}{{ '%.1f'|format(v)|replace('.', ',') }}%{% endif %}{% endmacro %}
+{# "1 turno(s)" é o sistema admitindo que não sabe contar. O documento vai
+   para a diretoria e para o cliente: o plural sai certo. #}
+{% macro plural(n, um, varios) %}{{ n }} {{ um if n == 1 else varios }}{% endmacro %}
+{% macro parada(dias) %}{% if not dias %}hoje{% else %}há {{ plural(dias, 'dia', 'dias') }}{% endif %}{% endmacro %}
+
+{% block content %}
+{#
+  Fechamento da competência, no padrão que vai para a Diretoria e para o
+  cliente. Os cinco blocos são os da especificação, nesta ordem: o número, a
+  rotina, a pendência, o desvio e o fato relevante.
+
+  A tela e o PDF (`?format=pdf`) saem do MESMO `fechamento_mensal` — o anexo
+  do e-mail não pode discordar do que a diretoria acabou de ver aqui.
+#}
+<style>
+  .rm-doc{max-width:1180px;margin:0 auto}
+  .rm-cabeca{border-bottom:3px solid var(--blue-900);padding-bottom:.9rem;margin-bottom:1.2rem;
+             display:flex;justify-content:space-between;align-items:flex-end;gap:1rem;flex-wrap:wrap}
+  .rm-cabeca h1{font-size:1.5rem;margin:0;color:var(--blue-900);font-weight:700}
+  .rm-cabeca .rm-sub{color:var(--gray-500);font-size:.85rem}
+  .rm-logo{height:42px}
+  .rm-bloco{margin-bottom:1.6rem}
+  .rm-bloco h2{font-size:1rem;text-transform:uppercase;letter-spacing:.05em;
+               color:var(--blue-900);font-weight:700;border-left:4px solid var(--blue-600);
+               padding-left:.55rem;margin-bottom:.75rem}
+  .rm-big{border:1px solid var(--gray-200);border-radius:12px;padding:.9rem 1rem;height:100%;
+          background:#fff}
+  .rm-big-label{font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;
+                color:var(--gray-500);font-weight:700}
+  .rm-big-value{font-size:1.9rem;font-weight:700;line-height:1.1;color:var(--gray-900)}
+  .rm-big-sub{font-size:.8rem;color:var(--gray-500)}
+  .rm-tag{display:inline-block;font-size:.72rem;font-weight:700;border-radius:999px;padding:.12rem .5rem}
+  .rm-tag.ok{background:var(--green-100);color:var(--green-700)}
+  .rm-tag.alerta{background:var(--yellow-100);color:var(--yellow-600)}
+  .rm-tag.critico{background:var(--red-100);color:var(--red-700)}
+  .rm-tag.neutro{background:var(--gray-100,#f3f4f6);color:var(--gray-500)}
+  .rm-vazio{padding:1.4rem;text-align:center;color:var(--gray-500);font-size:.88rem}
+  .rm-ref{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.76rem;
+          background:var(--gray-100);border-radius:5px;padding:.05rem .35rem;
+          color:var(--gray-700);margin-left:.3rem;white-space:nowrap}
+  .rm-resol{color:var(--green-700,#15803d);font-size:.82rem;margin-top:.15rem}
+  .rm-tentativa{color:var(--gray-600);font-size:.82rem;margin-top:.15rem;
+                border-left:2px solid var(--gray-300);padding-left:.4rem}
+  .rm-timeline{border-left:2px solid var(--gray-200);padding-left:1rem;margin-left:.4rem}
+  .rm-item{position:relative;padding-bottom:.9rem}
+  .rm-item::before{content:'';position:absolute;left:-1.32rem;top:.35rem;width:9px;height:9px;
+                   border-radius:50%;background:var(--blue-600)}
+  .rm-item-quando{font-size:.75rem;font-weight:700;color:var(--blue-800);text-transform:uppercase}
+  .rm-item-texto{font-size:.88rem;color:var(--gray-800)}
+  @media print{
+    .rm-noprint{display:none !important}
+    .rm-bloco{page-break-inside:avoid}
+    .rm-item,.rm-big,table tr{page-break-inside:avoid}
+  }
+</style>
+
+<div class="container-fluid py-3 diario-page rm-doc">
+
+  <div class="rm-noprint d-flex justify-content-between align-items-end mb-3 gap-2 flex-wrap">
+    <form class="row g-2 align-items-end" method="get">
+      <input type="hidden" name="client_id" value="{{ cliente.id }}">
+      {# O relatório da Expedição e o do Almoxarifado são documentos
+         diferentes. O seletor só aparece quando o contrato tem área. #}
+      {% if areas %}
+      <div class="col-auto">
+        <label class="form-label small text-muted mb-1">Área</label>
+        <select class="form-select" name="area_id" onchange="this.form.submit()">
+          <option value="{{ todas_as_areas }}"
+                  {% if area_sel == todas_as_areas %}selected{% endif %}>Todas as áreas</option>
+          {% for a in areas %}
+          <option value="{{ a.id }}" {% if area_sel == a.id %}selected{% endif %}>{{ a.nome }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
+      <div class="col-auto">
+        <label class="form-label small text-muted mb-1">Mês</label>
+        <select class="form-select" name="mes" onchange="this.form.submit()">
+          {% for n, nome in meses %}
+          <option value="{{ n }}" {% if n == mes %}selected{% endif %}>{{ nome }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-auto">
+        <label class="form-label small text-muted mb-1">Ano</label>
+        <select class="form-select" name="ano" onchange="this.form.submit()">
+          {% for a in anos %}
+          <option value="{{ a }}" {% if a == ano %}selected{% endif %}>{{ a }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </form>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-secondary"
+         href="{{ url_for('diario_operacional.index', client_id=cliente.id) }}">Voltar</a>
+      {# O PDF leva a ÁREA que está na tela. Sem ela, quem olhava o relatório
+         da Expedição baixava o do contrato inteiro — outro documento, com a
+         média de áreas que não se comparam. #}
+      <a class="btn btn-primary"
+         href="{{ url_for('diario_operacional.relatorio_mensal', client_id=cliente.id,
+                          mes=mes, ano=ano, format='pdf',
+                          area_id=(area_sel if area_sel and area_sel != todas_as_areas else none)) }}">
+        <i class="bi bi-file-earmark-pdf"></i> Baixar PDF</a>
+    </div>
+  </div>
+
+  {# ── Cabeçalho institucional ───────────────────────────────────────── #}
+  <div class="rm-cabeca">
+    <div>
+      <img src="{{ url_for('static', filename='img/logo_trino.png') }}" alt="Grupo Trino" class="rm-logo mb-2">
+      <h1>Passagem de Turno — Relatório Executivo Mensal</h1>
+      <div class="rm-sub">{{ cliente.name }}{% if rel.area %} · {{ rel.area }}{% endif %} ·
+        Competência {{ rel.competencia }}</div>
+    </div>
+    <div class="rm-sub text-end">
+      Emitido em {{ rel.emitido_em.strftime('%d/%m/%Y %H:%M') }}<br>
+      por {{ rel.emitido_por }}<br>
+      {# No mês em curso o período vai até hoje: "01 a 31" no dia 16 dizia que
+         a segunda quinzena estava apurada. #}
+      {% if rel.fim_apurado %}Período apurado: {{ rel.inicio.strftime('%d/%m/%Y') }} a {{ rel.fim_apurado.strftime('%d/%m/%Y') }}{% if rel.em_andamento %} (competência em andamento){% endif %}{% else %}Competência ainda não iniciada{% endif %}
+    </div>
+  </div>
+
+  {# ── Bloco 1: scorecard consolidado ────────────────────────────────── #}
+  <div class="rm-bloco">
+    <h2>1. Scorecard consolidado do mês</h2>
+    <div class="row g-3">
+      <div class="col-lg-3 col-md-6">
+        <div class="rm-big">
+          <div class="rm-big-label">Turnos concluídos</div>
+          <div class="rm-big-value">{{ rel.turnos.total }}</div>
+          <div class="rm-big-sub">
+            {% if rel.turnos.por_turno %}
+              {% for nome, qtd in rel.turnos.por_turno %}{{ nome }}: {{ qtd }}{% if not loop.last %} | {% endif %}{% endfor %}
+            {% else %}Nenhum turno encerrado na competência{% endif %}
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-3 col-md-6">
+        <div class="rm-big">
+          <div class="rm-big-label">Aderência global às rotinas</div>
+          <div class="rm-big-value">{{ pct(rel.aderencia.pct) }}
+            <span class="rm-tag {{ rel.aderencia.faixa }} align-middle">{{ faixa_txt(rel.aderencia.faixa) }}</span>
+          </div>
+          <div class="rm-big-sub">{{ rel.aderencia.cumpridas }} de {{ rel.aderencia.exigidas }}
+            atividades obrigatórias · meta {{ rel.aderencia.meta|int }}%</div>
+        </div>
+      </div>
+      <div class="col-lg-3 col-md-6">
+        <div class="rm-big">
+          <div class="rm-big-label">Eficácia na resolução de pendências</div>
+          <div class="rm-big-value">{{ pct(rel.pendencias.pct) }}</div>
+          <div class="rm-big-sub">{{ rel.pendencias.resolvidas }} resolvidas de
+            {{ rel.pendencias.abertas }} abertas no mês</div>
+        </div>
+      </div>
+      <div class="col-lg-3 col-md-6">
+        <div class="rm-big">
+          <div class="rm-big-label">Ocorrências e desvios</div>
+          <div class="rm-big-value">{{ rel.ocorrencias.total }}</div>
+          <div class="rm-big-sub">
+            {% if rel.ocorrencias.pareto %}
+              Mais frequente: {{ rel.ocorrencias.pareto[0].tipo }}
+              ({{ rel.ocorrencias.pareto[0].qtd }})
+            {% else %}Nenhum desvio registrado{% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ── Bloco 2: mapa de aderência ────────────────────────────────────── #}
+  <div class="rm-bloco">
+    <h2>2. Mapa de aderência às rotinas obrigatórias</h2>
+    <div class="card shadow-sm border-0">
+      <div class="table-responsive">
+        <table class="table align-middle mb-0 tab-cartao">
+          <thead><tr>
+            <th>Atividade</th><th class="text-end">Exigida no mês</th>
+            <th class="text-end">Cumprida no mês</th><th class="text-end">% Aderência</th>
+            <th class="text-end">Status</th>
+          </tr></thead>
+          <tbody>
+            {% for r in rel.rotinas %}
+            <tr>
+              <td data-rot="Atividade">{{ r.nome }}</td>
+              <td class="text-end" data-rot="Exigida">{{ r.exigida }}</td>
+              <td class="text-end" data-rot="Cumprida">{{ r.cumprida }}</td>
+              <td class="text-end fw-bold" data-rot="Aderência">{{ pct(r.pct) }}</td>
+              <td class="text-end" data-rot="Status"><span class="rm-tag {{ r.faixa }}">{{ faixa_txt(r.faixa) }}</span></td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5" class="rm-vazio">
+              Nenhuma atividade obrigatória exigida na competência.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  {# ── Bloco 3: gestão de pendências ─────────────────────────────────── #}
+  <div class="rm-bloco">
+    <h2>3. Gestão de pendências da operação</h2>
+    <div class="row g-3">
+      <div class="col-lg-6">
+        <div class="card shadow-sm border-0 h-100">
+          <div class="card-header bg-white fw-bold">
+            Resolvidas <span class="rm-tag ok">{{ rel.pendencias.resolvidas }}</span></div>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0 tab-cartao">
+              <thead><tr><th>Pendência</th><th>Prior.</th><th>Turno</th><th>Encerrada</th><th>Responsável</th></tr></thead>
+              <tbody>
+                {% for linha in rel.pendencias.lista_resolvidas %}
+                <tr>
+                  {# `cel-pilha`: no celular a célula vira cartão em flex, e
+                     cada filho (título, referência, resolução) virava uma
+                     coluna — o texto quebrava letra a letra. Empilhado, o
+                     rótulo vai em cima e o conteúdo usa a largura toda. #}
+                  <td class="small cel-pilha" data-rot="Pendência">{{ linha.p.titulo }}
+                    {% if linha.p.referencia %}<span class="rm-ref">{{ linha.p.referencia }}</span>{% endif %}
+                    {# O que foi feito. Sem isto a linha dizia apenas que a
+                       pendência sumiu da fila, o que não é a mesma coisa que
+                       dizer que ela foi resolvida. #}
+                    {% if linha.resolucao %}
+                    <div class="rm-resol">{{ linha.resolucao }}</div>
+                    {% endif %}
+                  </td>
+                  <td data-rot="Prioridade"><span class="rm-tag neutro">{{ prioridade(linha.p.prioridade) }}</span></td>
+                  <td class="small cel-pilha" data-rot="Turno">{{ linha.turno }}
+                    {% if linha.passagens %}<div class="text-muted">passou por {{ plural(linha.passagens, 'turno', 'turnos') }}</div>{% endif %}
+                  </td>
+                  <td class="small text-nowrap" data-rot="Encerrada">{{ linha.p.resolved_at|hora_local('%d/%m %H:%M') }}</td>
+                  <td class="small" data-rot="Resolvida por">{{ linha.resolvida_por }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="5" class="rm-vazio">Nenhuma pendência resolvida no mês.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-6">
+        <div class="card shadow-sm border-0 h-100">
+          <div class="card-header bg-white fw-bold">
+            Críticas / em aberto
+            <span class="rm-tag {{ 'critico' if rel.pendencias.lista_em_aberto else 'ok' }}">
+              {{ rel.pendencias.lista_em_aberto|length }}</span></div>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0 tab-cartao">
+              <thead><tr><th>Pendência</th><th>Prior.</th><th>Turno</th><th class="text-end">Parada</th></tr></thead>
+              <tbody>
+                {% for linha in rel.pendencias.lista_em_aberto %}
+                <tr>
+                  <td class="small cel-pilha" data-rot="Pendência">{{ linha.p.titulo }}
+                    {% if linha.p.referencia %}<span class="rm-ref">{{ linha.p.referencia }}</span>{% endif %}
+                    {% if linha.anterior %}<span class="rm-tag alerta">de competência anterior</span>{% endif %}
+                    {% if linha.p.descricao %}<div class="text-muted">{{ linha.p.descricao }}</div>{% endif %}
+                    {# A pergunta que uma pendência parada há dias sempre
+                       provoca é "o que já se tentou?". Antes o relatório não
+                       tinha resposta. #}
+                    {% if linha.ultima_tentativa %}
+                    <div class="rm-tentativa">Última tentativa: {{ linha.ultima_tentativa }}</div>
+                    {% endif %}
+                  </td>
+                  <td data-rot="Prioridade"><span class="rm-tag {{ 'critico' if linha.p.prioridade == 'alta' else 'neutro' }}">
+                    {{ prioridade(linha.p.prioridade) }}</span></td>
+                  <td class="small cel-pilha" data-rot="Turno">{{ linha.turno }}
+                    {% if linha.passagens %}<div class="text-muted">passou por {{ plural(linha.passagens, 'turno', 'turnos') }}</div>{% endif %}
+                  </td>
+                  {# "0 dia(s)" para a pendência aberta hoje lia como erro. #}
+                  <td class="small text-end text-nowrap" data-rot="Parada">{{ parada(linha.dias) }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="4" class="rm-vazio">Nenhuma pendência em aberto. Fila limpa.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ── Bloco 4: matriz de ocorrências ────────────────────────────────── #}
+  <div class="rm-bloco">
+    <h2>4. Matriz de ocorrências e não conformidades</h2>
+
+    {# Os pontos de atenção primeiro, e em destaque. O Pareto abaixo conta
+       TIPOS e por isso nivela: a avaria de palete e a suspensão de
+       colaborador entram na mesma barra se forem do mesmo tipo. Quem lê o
+       relatório na reunião precisa ver estes antes da estatística. #}
+    {% if rel.ocorrencias.atencao %}
+    <div class="card shadow-sm border-0 mb-3"
+         style="border-left:4px solid #b45309 !important;background:#fffbf5">
+      <div class="card-body">
+        <div class="fw-bold mb-2" style="color:#92400e">
+          Pontos de atenção da competência ({{ rel.ocorrencias.atencao|length }})
+        </div>
+        {% for linha in rel.ocorrencias.atencao %}
+        <div class="small py-1" style="border-top:1px solid #fde8cc">
+          {# O dia é o do TURNO, não o da digitação: o 3º Turno lança depois
+             da meia-noite, e "16/10 · 3º Turno" apontava um turno que não
+             era aquele. #}
+          <span class="text-muted">{{ linha.data.strftime('%d/%m') if linha.data else '—' }}
+            · {{ linha.turno }} ·</span>
+          <span class="fw-semibold">{{ linha.o.tipo }}</span>
+          {% if linha.o.referencia %}<span class="text-muted">· {{ linha.o.referencia }}</span>{% endif %}
+          <div>{{ linha.o.descricao }}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="card shadow-sm border-0">
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0 tab-cartao">
+          <thead><tr>
+            <th>Data / Turno</th><th>Tipo</th><th>Referência</th><th>Descrição</th>
+          </tr></thead>
+          <tbody>
+            {% for linha in rel.ocorrencias.lista %}
+            <tr>
+              <td class="small text-nowrap" data-rot="Data / Turno">{{ linha.data.strftime('%d/%m/%Y') if linha.data else '—' }}
+                · {{ linha.turno }}</td>
+              <td data-rot="Tipo">
+                <span class="badge {{ 'text-bg-warning' if linha.o.gravidade == 'critica' else 'text-bg-light border' }}">{{ linha.o.tipo }}</span></td>
+              <td class="small text-muted" data-rot="Referência">{{ linha.o.referencia or '—' }}</td>
+              <td class="small" data-rot="Descrição">{{ linha.o.descricao }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="4" class="rm-vazio">Nenhuma ocorrência registrada na competência.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  {# ── Bloco 5: diário de bordo ──────────────────────────────────────── #}
+  <div class="rm-bloco">
+    <h2>5. Diário de bordo — fatos relevantes dos turnos</h2>
+    {% if rel.bordo %}
+    <div class="rm-timeline">
+      {% for f in rel.bordo %}
+      <div class="rm-item">
+        <div class="rm-item-quando">{{ f.data.strftime('%d/%m/%Y') }} · {{ f.turno }}</div>
+        <div class="rm-item-texto">{{ f.texto }}</div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="card shadow-sm border-0"><div class="rm-vazio">
+      Nenhum fato relevante registrado pelos encarregados nesta competência.
+      Turnos que anotaram apenas "sem observações" não entram nesta linha do tempo.
+    </div></div>
+    {% endif %}
+  </div>
+
+  <div class="text-center text-muted small pt-2 border-top">
+    Grupo Trino · Trino Intelligence — documento confidencial de uso interno e do cliente.
+  </div>
+</div>
+{% endblock %}

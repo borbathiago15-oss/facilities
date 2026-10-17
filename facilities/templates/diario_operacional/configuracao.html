@@ -1,0 +1,244 @@
+{% extends 'base.html' %}
+{% block title %}Modelo de Passagem — Trino Intelligence{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('diario_operacional.index', client_id=client_id) }}">Passagem de Turno</a></li>
+<li class="breadcrumb-item active">Modelo de passagem</li>
+{% endblock %}
+
+{% block content %}
+{#
+  O cadastro do modelo de passagem, contrato a contrato — a mesma ideia da
+  régua do SLA Contratual: cada cliente cobra o que foi combinado com ele.
+
+  A tela anterior era meio cadastro: o seletor de contrato não fazia nada e só
+  o PRIMEIRO modelo de cada contrato podia ser editado (não havia lista nem
+  botão de novo). Aqui a lista manda, e o editor à direita mostra sempre o
+  modelo que está selecionado.
+#}
+<style>
+  .cf-lista .cf-item{display:block;width:100%;text-align:left;border:1px solid var(--gray-200);
+                     border-radius:10px;padding:.6rem .8rem;margin-bottom:.5rem;background:var(--surface)}
+  .cf-lista .cf-item.ativo-sel{border-color:var(--blue-600);box-shadow:0 0 0 2px var(--blue-100)}
+  .cf-nome{font-weight:600;color:var(--gray-900)}
+  /* Áreas: uma linha por área, e no celular cada uma vira um bloco em vez de
+     espremer nome, contagem e dois botões na mesma largura. */
+  .ar-lista{display:flex;flex-direction:column;gap:.4rem}
+  .ar-item{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;
+           border:1px solid var(--gray-200);border-radius:10px;
+           padding:.55rem .8rem;background:var(--surface)}
+  .ar-item.off{opacity:.55;background:var(--gray-50)}
+  .ar-nome{font-weight:600;color:var(--gray-900);flex:1 1 auto}
+  .ar-meta{font-size:.78rem;color:var(--gray-500)}
+  /* "renomear" e "desativar" andam juntos, num grupo só, colados à direita.
+     Soltos na linha, cada um quebrava para um lado no celular e ficavam
+     desalinhados da contagem de modelos. */
+  .ar-acoes{display:flex;align-items:center;gap:1rem;margin-left:auto}
+  @media (max-width:768px){
+    .ar-item{align-items:center;row-gap:.15rem}
+    .ar-nome{flex:1 0 100%}
+    /* Embaixo do nome: a contagem à esquerda, as duas ações à direita,
+       todos na MESMA linha de base — e com alvo de dedo nas ações. */
+    .ar-item .btn{min-height:44px;display:inline-flex;align-items:center}
+    /* O `.diario-page .btn-sm` dá 14px de recuo lateral a todo botão do
+       módulo; nos dois links isso empurrava o grupo para a linha de baixo
+       da contagem. Recuo curto: o alvo continua com 44px de altura. */
+    .diario-page .ar-acoes .btn-sm{padding:8px 6px !important}
+    .ar-acoes{gap:.5rem}
+  }
+  .cf-meta{font-size:.75rem;color:var(--gray-500)}
+  .cf-tag{display:inline-block;font-size:.68rem;font-weight:700;border-radius:999px;
+          padding:.08rem .45rem}
+  .cf-tag.on{background:var(--green-100);color:var(--green-700)}
+  .cf-tag.off{background:var(--gray-100,#f3f4f6);color:var(--gray-500)}
+  .config-row{align-items:center}
+  /* No celular a linha de 4 colunas do Bootstrap não cabe: o botão de
+     excluir saía 31px para fora do cartão. Aqui cada campo ocupa a linha
+     inteira e os botões viram uma faixa própria, com alvo de 44px. */
+  @media (max-width:768px){
+    .config-row > [class*="col-"]{flex:0 0 100%;max-width:100%}
+    .config-row > .col-2.d-flex{gap:.5rem !important}
+    .config-row > .col-2.d-flex .btn{min-height:44px}
+    .config-row{border:1px solid var(--gray-200);border-radius:10px;
+                padding:.6rem;margin-bottom:.75rem}
+    #cfg-perguntas .config-row .btn{min-height:44px}
+  }
+  .cf-aviso{font-size:.8rem;color:var(--gray-500)}
+</style>
+
+<div class="container-fluid py-3 diario-page" id="diario-config-app"
+     data-configs='{{ configs|tojson|safe }}'
+     data-client='{{ client_id or 0 }}'
+     data-editar='{{ editar or 0 }}'>
+
+  <div class="d-flex justify-content-between align-items-start mb-3 gap-2 flex-wrap">
+    <div>
+      <div class="text-uppercase small text-muted fw-semibold">ADMINISTRAÇÃO</div>
+      <h2 class="mb-0">Modelo de passagem de turno</h2>
+      <div class="text-muted">Cada contrato define o que o encarregado registra no fim do turno.</div>
+    </div>
+    <a class="btn btn-light"
+       href="{{ url_for('diario_operacional.index', client_id=client_id) }}">Voltar</a>
+  </div>
+
+  <form class="row g-2 align-items-end mb-3" method="get">
+    <div class="col-lg-5 col-md-7">
+      <label class="form-label small text-muted mb-1">Contrato</label>
+      <select class="form-select" name="client_id" onchange="this.form.submit()">
+        {% for c in clients %}
+        <option value="{{ c.id }}" {% if c.id == client_id %}selected{% endif %}>{{ c.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </form>
+
+  {% if not client_id %}
+  <div class="card shadow-sm border-0"><div class="p-4 text-center text-muted">
+    Nenhum contrato disponível.</div></div>
+  {% else %}
+  {# ── As áreas do contrato ─────────────────────────────────────────────
+     Existe para não ser preciso cadastrar um CLIENTE novo só para dividir a
+     operação — o que duplicaria contrato, centro de custo e carteira. E é
+     CADASTRO, não campo digitado no modelo: com vinte encarregados lançando,
+     "Expedição" e "expedicao" virariam duas áreas na mesma semana.
+     Desativar não apaga: a área some dos seletores e continua amparando as
+     passagens já lançadas por ela. #}
+  <div class="card shadow-sm border-0 mb-3" id="cfg-areas-card"
+       data-areas='{{ areas|tojson|safe }}' data-client='{{ client_id }}'>
+    <div class="card-header bg-white fw-bold d-flex justify-content-between align-items-center">
+      <span>Áreas deste contrato</span>
+      <button class="btn btn-sm btn-outline-primary" type="button" onclick="novaArea()">
+        <i class="bi bi-plus"></i> Nova área</button>
+    </div>
+    <div class="card-body">
+      <div class="ar-lista" id="cfg-areas"></div>
+      <div class="small text-muted mt-2">
+        Cada área tem o seu modelo de passagem. O encarregado é do contrato e
+        escolhe a área ao lançar.
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3">
+
+    <div class="col-lg-4">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-header bg-white fw-bold d-flex justify-content-between align-items-center">
+          <span>Modelos deste contrato</span>
+          <button class="btn btn-sm btn-outline-primary" onclick="novoModelo()">
+            <i class="bi bi-plus"></i> Novo</button>
+        </div>
+        <div class="card-body cf-lista" id="cfg-lista">
+          {% for c in configs %}
+          {% set n_perg = c.perguntas|length %}
+          {% set n_turnos = c.turnos|length %}
+          {% set n_usos = usos.get(c.id, 0) %}
+          {# `data-usos`: o aviso "este modelo já foi usado em N turnos" lê o
+             número daqui. Antes ele o pescava do TEXTO da linha com uma
+             expressão regular — e corrigir o plural do texto quebraria o
+             aviso sem ninguém perceber. #}
+          <button type="button" class="cf-item" data-id="{{ c.id }}" data-usos="{{ n_usos }}"
+                  onclick="abrirModelo({{ c.id }})">
+            <div class="d-flex justify-content-between align-items-start gap-2">
+              <span class="cf-nome">{{ c.nome }}</span>
+              <span class="cf-tag {{ 'on' if c.ativo else 'off' }}">
+                {{ 'Ativo' if c.ativo else 'Inativo' }}</span>
+            </div>
+            <div class="cf-meta">
+              {{ n_perg }} {{ 'pergunta' if n_perg == 1 else 'perguntas' }} ·
+              {{ n_turnos }} {{ 'turno' if n_turnos == 1 else 'turnos' }} ·
+              {{ n_usos }} {{ 'turno lançado' if n_usos == 1 else 'turnos lançados' }}
+            </div>
+          </button>
+          {% else %}
+          <div class="text-muted small py-3 text-center">
+            Nenhum modelo cadastrado. Clique em <strong>Novo</strong>.
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-8">
+      <div class="card shadow-sm border-0 mb-3">
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-7">
+              <label class="form-label">Nome do modelo</label>
+              <input id="cfg-name" class="form-control" placeholder="Ex.: Passagem da Expedição">
+            </div>
+            <div class="col-md-5">
+              <label class="form-label">Situação</label>
+              <select id="cfg-ativo" class="form-select">
+                <option value="true">Ativo — aparece para o encarregado</option>
+                <option value="false">Inativo — some da tela de passagem</option>
+              </select>
+            </div>
+            {# A área se SELECIONA entre as cadastradas acima. Digitar o nome
+               aqui é o que produziria "Expedição", "expedicao" e "EXPEDIÇÃO"
+               como três áreas distintas no painel. #}
+            <div class="col-md-7">
+              <label class="form-label">Área</label>
+              <select id="cfg-area" class="form-select"></select>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Descrição</label>
+              <input id="cfg-description" class="form-control"
+                     placeholder="Como este modelo será usado">
+            </div>
+          </div>
+          <div class="cf-aviso mt-2" id="cfg-aviso-uso"></div>
+        </div>
+      </div>
+
+      <div class="card shadow-sm border-0">
+        <div class="card-header bg-white fw-bold">Turnos</div>
+        <div class="card-body">
+          <div id="cfg-shifts"></div>
+          <button class="btn btn-sm btn-outline-primary" onclick="addCfgShift()">
+            Adicionar turno</button>
+        </div>
+      </div>
+
+      {# UMA lista, na ordem em que a pergunta aparece na tela do encarregado.
+         O que muda de uma para outra é o TIPO da resposta — e é só o
+         "Sim/Não obrigatória" que entra na conta da aderência, porque
+         "quantos pedidos separou" não é cumprido nem descumprido. #}
+      <div class="card shadow-sm border-0 mt-3">
+        <div class="card-header bg-white fw-bold d-flex justify-content-between align-items-center">
+          <span>Perguntas do turno</span>
+          <span class="small text-muted fw-normal">na ordem em que aparecem para o encarregado</span>
+        </div>
+        <div class="card-body">
+          <div id="cfg-perguntas"></div>
+          <button class="btn btn-sm btn-outline-primary" onclick="addCfgPergunta()">
+            Adicionar pergunta</button>
+          <div class="cf-aviso mt-2">
+            Só a pergunta <strong>Sim/Não</strong> marcada como obrigatória entra na
+            aderência às rotinas. Número e texto são registro, não cobrança.
+          </div>
+        </div>
+      </div>
+
+      <div class="card shadow-sm border-0 mt-3">
+        <div class="card-header bg-white fw-bold">Tipos de ocorrência</div>
+        <div class="card-body">
+          <div id="cfg-occurrences"></div>
+          <button class="btn btn-sm btn-outline-primary" onclick="addCfgOccurrence()">
+            Adicionar tipo</button>
+        </div>
+      </div>
+
+      <div class="mt-3 d-flex justify-content-between align-items-center">
+        <span class="cf-aviso" id="cfg-editando"></span>
+        <button class="btn btn-primary px-4" onclick="saveConfig()">Salvar modelo</button>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/diario_config.js') }}"></script>
+{% endblock %}
