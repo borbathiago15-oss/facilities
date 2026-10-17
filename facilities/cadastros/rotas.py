@@ -15,15 +15,15 @@ from werkzeug.exceptions import Forbidden
 
 from facilities.extensions import db
 from facilities.core.acesso import admin_required, clientes_visiveis, require_client
-from facilities.core.models import Client
+from facilities.core.models import PERFIS_DE_GESTAO, Client
 from facilities.cadastros import servico
 from facilities.cadastros.models import (ACOES, ENTIDADES, Contratante, Empresa, Estado)
 from facilities.cadastros.servico import CadastroInvalido
 
 bp = Blueprint('cadastros', __name__)
 
-PERFIS_QUE_ESTRUTURAM = ('master', 'pleno')
-PERFIS_QUE_CONSULTAM = ('master', 'pleno', 'visualizador')
+PERFIS_QUE_ESTRUTURAM = PERFIS_DE_GESTAO
+PERFIS_QUE_CONSULTAM = PERFIS_DE_GESTAO + ('visualizador',)
 
 
 def _perfil():

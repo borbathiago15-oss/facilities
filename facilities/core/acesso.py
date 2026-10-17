@@ -3,8 +3,11 @@
 As regras são as do Trino, de onde a Passagem de Turno veio:
 
 * O administrador (``master``) e quem tem ``all_clients`` veem todos os
-  contratos; qualquer outro perfil, só os vinculados — carteira vazia não vê
+  locais; qualquer outro perfil, só a carteira — carteira vazia não vê
   NADA (o padrão antigo "sem vínculo vê tudo" vazava a carteira alheia).
+* Desde a Fase 2 a carteira sobe pela cadeia (``core/hierarquia.py``): os
+  locais vinculados, mais os dos clientes do gerente, mais os de toda a
+  equipe abaixo.
 * Ler e alterar são perguntas diferentes: ``GET`` consulta ``can_view``, o
   resto consulta ``can_access``. O bloqueio fica na ROTA, não só no botão —
   esconder o botão não impede um POST montado à mão.
@@ -19,11 +22,10 @@ from facilities.core.models import Client
 
 
 def allowed_client_ids_or_none(user=None):
-    """``None`` = sem restrição; senão a lista de contratos permitidos."""
-    u = user or current_user
-    if u._effective_role() == 'master' or getattr(u, 'all_clients', False):
-        return None
-    return u.client_ids
+    """``None`` = sem restrição; senão a lista de locais permitidos."""
+    from facilities.core.hierarquia import carteira
+    ids = carteira(user or current_user)
+    return None if ids is None else sorted(ids)
 
 
 FORA_DOS_CONTRATOS = ('Este contrato não está entre os seus contratos. Se precisa '

@@ -22,7 +22,7 @@
 //
 // Trocar VERSAO força o navegador a instalar a versão nova e apagar a antiga.
 // v4: identidade nova — ícone e página "Sem conexão" guardados de novo.
-const VERSAO = 'facilities-app-v2';
+const VERSAO = 'facilities-app-v3';
 const TELAS = 'trino-telas';
 const ESTATICOS = 'trino-estaticos-v3';
 const OFFLINE = '/static/pwa/offline.html';
@@ -30,6 +30,8 @@ const GUARDAR = [OFFLINE, '/static/pwa/icone-192.png'];
 // As únicas telas que ganham cópia no aparelho.
 const TELAS_SEM_INTERNET = [
   /^\/passagem-de-turno\/turno\/?$/,   // nova passagem de turno
+  /^\/app\/?$/,                         // início do aplicativo de campo
+  /^\/app\/ler-qr\/?$/,                 // leitor de QR (não tem dado de ninguém)
 ];
 
 self.addEventListener('install', (evento) => {

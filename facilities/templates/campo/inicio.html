@@ -1,0 +1,62 @@
+{% extends 'campo/base_app.html' %}
+{% block title %}Meu posto{% endblock %}
+{% block content %}
+<h1 class="fc-titulo">Olá, {{ current_user.name.split(' ')[0] }}</h1>
+<p class="fc-sub">{{ tempo.fmt(tempo.agora(), '%d/%m/%Y') }} · {{ current_user.perfil_rotulo }}</p>
+
+<a class="btn btn-primary btn-lg w-100 fc-app-acao mb-3" href="{{ url_for('campo.ler_qr') }}">
+  <i class="bi bi-qr-code-scan"></i> Ler o QR do local
+</a>
+
+{% if not locais %}
+<div class="fc-cartao fc-vazio">Você ainda não tem local liberado. Peça ao seu supervisor ou à gestão.</div>
+{% else %}
+<section class="fc-cartao mb-3" aria-labelledby="tit-hoje">
+  <h2 class="h6 fw-bold" id="tit-hoje"><i class="bi bi-calendar-check"></i> Para hoje</h2>
+  {% for t in tarefas %}
+  <a class="fc-app-item" href="{{ url_for('diario_operacional.turno', client_id=t.client_id) }}">
+    <span class="fw-semibold">{{ t.titulo }}</span>
+    <span class="small text-muted">{{ t.turno }} · {{ t.data_turno.strftime('%d/%m') }}</span>
+  </a>
+  {% else %}
+  <p class="small text-muted mb-0">Nenhuma tarefa da gestão esperando você.</p>
+  {% endfor %}
+</section>
+
+<section class="fc-cartao mb-3" aria-labelledby="tit-pend">
+  <h2 class="h6 fw-bold" id="tit-pend"><i class="bi bi-hourglass-split"></i> Ficou pendente</h2>
+  {% for p in pendencias %}
+  <a class="fc-app-item" href="{{ url_for('diario_operacional.turno', client_id=p.client_id) }}#pendencia-{{ p.id }}">
+    <span class="fw-semibold">{{ p.titulo }}</span>
+    <span class="small text-muted">desde {{ p.created_at|hora_local('%d/%m') }}</span>
+  </a>
+  {% else %}
+  <p class="small text-muted mb-0">Nada pendente nos seus locais.</p>
+  {% endfor %}
+</section>
+
+{% if current_user.can_view('chamados') %}
+<section class="fc-cartao mb-3" aria-labelledby="tit-ch">
+  <h2 class="h6 fw-bold" id="tit-ch"><i class="bi bi-tools"></i> Chamados abertos</h2>
+  {% for ch in chamados %}
+  <a class="fc-app-item" href="{{ url_for('chamados.ver', chamado_id=ch.id) }}">
+    <span class="fw-semibold">{{ ch.titulo }}</span>
+    <span class="small text-muted">{% if ch.prazo %}prazo {{ ch.prazo|hora_local('%d/%m %H:%M') }}{% endif %}</span>
+  </a>
+  {% else %}
+  <p class="small text-muted mb-0">Nenhum chamado aberto.</p>
+  {% endfor %}
+</section>
+{% endif %}
+
+<section class="fc-cartao" aria-labelledby="tit-locais">
+  <h2 class="h6 fw-bold" id="tit-locais"><i class="bi bi-geo-alt"></i> Meus locais</h2>
+  {% for l in locais %}
+  <a class="fc-app-item" href="{{ url_for('diario_operacional.turno', client_id=l.id) }}">
+    <span class="fw-semibold">{{ l.name }}</span>
+    <span class="small text-muted">Fazer a passagem de turno</span>
+  </a>
+  {% endfor %}
+</section>
+{% endif %}
+{% endblock %}

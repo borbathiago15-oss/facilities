@@ -47,6 +47,17 @@ SEMENTES = [
     "FROM ambientes a, equipamentos e",
     "INSERT INTO cadastro_eventos (entidade,entidade_id,client_id,acao,depois_json,criado_em)"
     " SELECT 'ponto',p.id,p.client_id,'criado','{}',now() FROM pontos_inspecao p",
+    # Fase 2: cadeia, perfil cliente e segunda etapa.
+    "UPDATE users SET role='gerente', totp_segredo='JBSWY3DPEHPK3PXP', totp_ativo=true, "
+    "totp_ultimo_passo=59742556 WHERE email='gerente@ensaio'",
+    "INSERT INTO users (name,email,password_hash,role,is_active,is_deleted,all_clients,"
+    "must_change_password,failed_login_count,session_epoch,superior_id,totp_ativo) SELECT "
+    "'Supervisor','sup@ensaio','x','supervisor',true,false,false,false,0,0,id,false "
+    "FROM users WHERE email='gerente@ensaio'",
+    "INSERT INTO users (name,email,password_hash,role,is_active,is_deleted,all_clients,"
+    "must_change_password,failed_login_count,session_epoch,cliente_id,totp_ativo) SELECT "
+    "'Cliente GL','cli@ensaio','x','cliente',true,false,false,false,0,0,id,false "
+    "FROM contratantes",
 ]
 
 

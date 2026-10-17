@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+{# O aplicativo de campo: o mesmo sistema, com a cara de app de celular —
+   topo curto, botões grandes e a navegação embaixo, ao alcance do polegar. #}
+{% block manifesto %}{{ url_for('campo.manifesto') }}{% endblock %}
+{% block corpo_classe %}fc-app{% endblock %}
+{% block topo %}
+<header class="fc-app-topo">
+  <a class="fc-marca" href="{{ url_for('campo.inicio') }}">
+    <img src="{{ url_for('static', filename='pwa/icone-192.png') }}" alt="">
+    <span>Facilities <small>Campo</small></span>
+  </a>
+  <span class="fc-app-rede" id="fc-app-rede" role="status" hidden><i class="bi bi-wifi-off"></i> Sem sinal</span>
+  <div class="dropdown ms-auto">
+    <button class="fc-app-pessoa dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+      <i class="bi bi-person-circle"></i> {{ current_user.name.split(' ')[0] }}
+    </button>
+    <ul class="dropdown-menu dropdown-menu-end">
+      <li><span class="dropdown-item-text small text-muted">{{ current_user.name }}<br>{{ current_user.perfil_rotulo }}</span></li>
+      <li><hr class="dropdown-divider"></li>
+      <li><a class="dropdown-item" href="{{ url_for('core.inicio') }}"><i class="bi bi-display"></i> Abrir o site</a></li>
+      <li><a class="dropdown-item" href="{{ url_for('campo.instalar') }}"><i class="bi bi-phone"></i> Instalar no celular</a></li>
+      <li><a class="dropdown-item" href="{{ url_for('auth.trocar_senha') }}"><i class="bi bi-key"></i> Trocar senha</a></li>
+      <li><hr class="dropdown-divider"></li>
+      <li>
+        <form method="post" action="{{ url_for('auth.logout') }}" class="m-0">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="dropdown-item" type="submit"><i class="bi bi-arrow-left-right"></i> Sair / trocar de pessoa</button>
+        </form>
+      </li>
+    </ul>
+  </div>
+</header>
+{% endblock %}
+{% block rodape %}
+{% set ep = request.endpoint or '' %}
+<nav class="fc-app-nav" aria-label="Aplicativo de campo">
+  <a href="{{ url_for('campo.inicio') }}" {% if ep == 'campo.inicio' %}class="ativo" aria-current="page"{% endif %}><i class="bi bi-house"></i><span>Início</span></a>
+  <a href="{{ url_for('campo.ler_qr') }}" {% if ep == 'campo.ler_qr' %}class="ativo" aria-current="page"{% endif %}><i class="bi bi-qr-code-scan"></i><span>Ler QR</span></a>
+  {% if current_user.can_access('diario_operacional') %}
+  <a href="{{ url_for('diario_operacional.turno') }}"><i class="bi bi-journal-check"></i><span>Passagem</span></a>
+  {% endif %}
+  {% if current_user.can_view('chamados') %}
+  <a href="{{ url_for('chamados.index') }}"><i class="bi bi-tools"></i><span>Chamados</span></a>
+  {% endif %}
+</nav>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/campo.js') }}"></script>{% block scripts_app %}{% endblock %}{% endblock %}

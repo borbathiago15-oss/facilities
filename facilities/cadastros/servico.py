@@ -22,9 +22,8 @@ from facilities.core.models import Client, User
 from facilities.cadastros.models import (ENTIDADES, Ambiente, CadastroEvento, Contratante,
                                          Empresa, Equipamento, Estado, PontoInspecao, Setor)
 
-# Quem pode ser o gerente responsável por um cliente. Na Fase 2 entra o
-# perfil "gerente"; até lá, gestor ou administrador.
-PERFIS_DE_GERENTE = ('master', 'pleno')
+# Quem pode ser o gerente responsável por um cliente (D43): o perfil gerente.
+PERFIS_DE_GERENTE = ('gerente',)
 
 
 class CadastroInvalido(ValueError):
@@ -162,8 +161,8 @@ def _gerente_valido(gid):
         return None
     u = db.session.get(User, gid)
     if u is None or u.is_deleted or not u.is_active or u.role not in PERFIS_DE_GERENTE:
-        raise CadastroInvalido('O gerente responsável precisa ser um gestor ou '
-                               'administrador ativo.')
+        raise CadastroInvalido('O gerente responsável precisa ser uma pessoa ativa com '
+                               'o perfil Gerente.')
     return gid
 
 

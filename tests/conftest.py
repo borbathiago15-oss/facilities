@@ -128,6 +128,8 @@ def clean_transactional_data(app_module):
         # Os cadastros da estrutura: desliga os locais dos clientes e apaga
         # do filho para o pai. Os estados ficam (são a lista fixa), desativados.
         Client.query.update({'contratante_id': None, 'estado_id': None})
+        # A cadeia e o perfil cliente (Fase 2) também apontam para cadastros.
+        app_module.User.query.update({'cliente_id': None, 'superior_id': None})
         for model in cadastros_models.MODELOS_EM_ORDEM_DE_LIMPEZA:
             model.query.delete()
         cadastros_models.Estado.query.update({'is_active': False})

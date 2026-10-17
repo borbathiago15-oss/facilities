@@ -81,7 +81,7 @@
        href="{{ url_for('diario_operacional.relatorio_mensal', client_id=client_id) }}">
       <i class="bi bi-file-earmark-pdf"></i> Relatório mensal</a>
     {% endif %}
-    {% if current_user._effective_role() in ('master','pleno') %}
+    {% if current_user.e_gestao() %}
     <button class="btn btn-outline-primary btn-sm" data-bs-toggle="modal"
             data-bs-target="#modalPendencia">
       <i class="bi bi-flag"></i> Deixar pendência</button>
@@ -472,7 +472,7 @@
   {% endif %}
 </div>
 
-{% if current_user._effective_role() in ('master','pleno') %}
+{% if current_user.e_gestao() %}
 <div class="modal fade" id="modalPendencia" tabindex="-1">
   <div class="modal-dialog"><div class="modal-content">
     <div class="modal-header">

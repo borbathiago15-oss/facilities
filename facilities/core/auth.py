@@ -5,19 +5,26 @@
 * A resposta é a MESMA — mensagem, status e tempo — para e-mail inexistente,
   senha errada e conta bloqueada: não diz a quem tenta quais e-mails existem.
 * Trocar a senha (ou o administrador desativar a pessoa) sobe a "época" da
-  sessão, e o cookie antigo deixa de valer em todo aparelho.
+  sessão, e o cookie antigo deixa de valer em todo aparelho. SAIR também
+  (Fase 2): antes o "Sair" só apagava o cookie deste navegador, e uma cópia
+  dele (ou o "Manter conectado" de 14 dias) continuava abrindo o sistema.
+* Segunda etapa (Fase 2): quem ativou o código do aplicativo autenticador
+  passa pela senha E pelo código. Entre as duas etapas a pessoa NÃO está
+  logada — só o id fica guardado na sessão, por 5 minutos e 5 tentativas.
+* O perfil cliente ainda não entra (liberação na Fase 9).
 """
 import functools
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 from flask_limiter.util import get_remote_address
 from flask_login import current_user, login_required, login_user, logout_user
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from facilities.extensions import db, limiter
-from facilities.core.models import User
+from facilities.core import totp
+from facilities.core.models import PERFIS_SEM_LOGIN, User
 
 bp = Blueprint('auth', __name__)
 
@@ -27,6 +34,11 @@ SENHA_MINIMA = 8
 
 # Uma mensagem só para e-mail inexistente, senha errada e conta bloqueada. Ela
 # já conta do bloqueio a quem errou de verdade — sem dizer se o e-mail existe.
+MSG_CLIENTE_SEM_ACESSO = ('O acesso de clientes ao Trino Facilities ainda não foi '
+                          'liberado. Fale com o seu gerente na Trino.')
+MINUTOS_PARA_O_CODIGO = 5
+TENTATIVAS_DO_CODIGO = 5
+
 MSG_LOGIN_RECUSADO = (f'E-mail ou senha incorretos. Depois de {TENTATIVAS_ANTES_DO_BLOQUEIO} '
                       f'tentativas erradas, o acesso fica bloqueado por '
                       f'{MINUTOS_DE_BLOQUEIO} minutos.')
@@ -106,22 +118,145 @@ def login():
                 db.session.commit()
             flash(MSG_LOGIN_RECUSADO, 'danger')
             return render_template('core/login.html', email=email), 401
+        if u.role in PERFIS_SEM_LOGIN:
+            flash(MSG_CLIENTE_SEM_ACESSO, 'warning')
+            return render_template('core/login.html', email=email), 403
         u.failed_login_count = 0
         u.lockout_until = None
-        u.last_login_at = agora
         db.session.commit()
-        login_user(u, remember=bool(request.form.get('lembrar')))
-        if u.must_change_password:
-            return redirect(url_for('auth.trocar_senha'))
-        return redirect(_destino_seguro(request.args.get('next')) or url_for('core.inicio'))
+        if u.totp_ativo and u.totp_segredo:
+            session.pop('_2fa', None)
+            session['_2fa'] = {'uid': u.id, 'epoca': u.session_epoch or 0,
+                               'lembrar': bool(request.form.get('lembrar')),
+                               'next': _destino_seguro(request.args.get('next')),
+                               'ate': (agora + timedelta(minutes=MINUTOS_PARA_O_CODIGO)).isoformat(),
+                               'erros': 0}
+            return redirect(url_for('auth.codigo'))
+        return _concluir_login(u, bool(request.form.get('lembrar')),
+                               _destino_seguro(request.args.get('next')))
     return render_template('core/login.html', email='')
+
+
+def _concluir_login(u, lembrar, destino):
+    """Entra. Sem destino pedido, cada perfil cai na sua porta: o pessoal do
+    posto no aplicativo de campo, a gestão no site (Fase 3)."""
+    from facilities.campo.rotas import destino_depois_do_login
+    u.last_login_at = datetime.utcnow()
+    db.session.commit()
+    login_user(u, remember=lembrar)
+    if u.must_change_password:
+        return redirect(url_for('auth.trocar_senha'))
+    return redirect(destino or destino_depois_do_login(u))
+
+
+def _pendente():
+    """O login que passou pela senha e espera o código (ou None)."""
+    p = session.get('_2fa')
+    if not isinstance(p, dict):
+        return None, None
+    try:
+        vencido = datetime.fromisoformat(p['ate']) < datetime.utcnow()
+    except (KeyError, TypeError, ValueError):
+        vencido = True
+    u = db.session.get(User, p.get('uid') or 0)
+    if (vencido or u is None or not u.is_active or u.is_deleted or not u.totp_ativo
+            or (u.session_epoch or 0) != p.get('epoca')):
+        session.pop('_2fa', None)
+        return None, None
+    return p, u
+
+
+@bp.route('/login/codigo', methods=['GET', 'POST'])
+@limiter.limit('10 per minute', methods=['POST'])
+def codigo():
+    if current_user.is_authenticated:
+        return redirect(url_for('core.inicio'))
+    p, u = _pendente()
+    if u is None:
+        flash('Entre de novo com o e-mail e a senha.', 'warning')
+        return redirect(url_for('auth.login'))
+    if request.method == 'POST':
+        aceito = totp.verificar(u.totp_segredo, request.form.get('codigo'),
+                                ultimo_passo=u.totp_ultimo_passo)
+        if aceito is None:
+            p['erros'] = p.get('erros', 0) + 1
+            if p['erros'] >= TENTATIVAS_DO_CODIGO:
+                session.pop('_2fa', None)
+                flash('Código errado muitas vezes. Entre de novo com o e-mail e a senha.',
+                      'danger')
+                return redirect(url_for('auth.login'))
+            session['_2fa'] = p
+            flash('Código incorreto ou já usado. Confira o aplicativo e digite o código '
+                  'que aparece agora.', 'danger')
+            return render_template('core/login_codigo.html'), 401
+        u.totp_ultimo_passo = aceito
+        session.pop('_2fa', None)
+        return _concluir_login(u, p.get('lembrar'), p.get('next'))
+    return render_template('core/login_codigo.html')
 
 
 @bp.route('/logout', methods=['POST'])
 @login_required
 def logout():
+    # A época sobe: o cookie desta sessão (e qualquer cópia dele, e o
+    # "Manter conectado") deixa de valer. Vale em todos os aparelhos.
+    u = current_user._get_current_object()
+    u.session_epoch = (u.session_epoch or 0) + 1
+    db.session.commit()
     logout_user()
+    session.clear()
     return redirect(url_for('auth.login'))
+
+
+# ── Segunda etapa: ativar e desativar (pela própria pessoa) ──────────────
+
+@bp.route('/conta/seguranca', methods=['GET'])
+@login_required
+def seguranca():
+    novo = None
+    if not current_user.totp_ativo:
+        segredo = session.get('_totp_novo') or totp.novo_segredo()
+        session['_totp_novo'] = segredo
+        endereco = totp.uri(segredo, current_user.email)
+        novo = {'segredo': segredo, 'qr': totp.qr_svg(endereco)}
+    return render_template('core/seguranca.html', novo=novo)
+
+
+@bp.route('/conta/seguranca/ativar', methods=['POST'])
+@login_required
+def ativar_codigo():
+    segredo = session.get('_totp_novo')
+    if not segredo or current_user.totp_ativo:
+        return redirect(url_for('auth.seguranca'))
+    aceito = totp.verificar(segredo, request.form.get('codigo'))
+    if aceito is None:
+        flash('O código não confere. Confira se o aplicativo leu o QR desta tela e digite '
+              'o código que aparece agora.', 'danger')
+        return redirect(url_for('auth.seguranca'))
+    u = current_user._get_current_object()
+    u.totp_segredo = segredo
+    u.totp_ativo = True
+    u.totp_ultimo_passo = aceito
+    session.pop('_totp_novo', None)
+    db.session.commit()
+    flash('Segunda etapa ativada. A partir de agora, o login pede a senha e o código do '
+          'aplicativo.', 'success')
+    return redirect(url_for('auth.seguranca'))
+
+
+@bp.route('/conta/seguranca/desativar', methods=['POST'])
+@login_required
+def desativar_codigo():
+    u = current_user._get_current_object()
+    if not u.check_password(request.form.get('senha') or ''):
+        flash('A senha não confere.', 'danger')
+        return redirect(url_for('auth.seguranca'))
+    u.totp_ativo = False
+    u.totp_segredo = None
+    u.totp_ultimo_passo = None
+    db.session.commit()
+    flash('Segunda etapa desativada.', 'success')
+    return redirect(url_for('auth.seguranca'))
 
 
 @bp.route('/trocar-senha', methods=['GET', 'POST'])

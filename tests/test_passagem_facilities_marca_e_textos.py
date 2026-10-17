@@ -178,9 +178,11 @@ def _rotulo_de(html, nome):
 def test_o_cabecalho_da_nova_passagem_diz_o_perfil(app_module, mestre, contrato, pessoas):
     html = mestre.get(f'/passagem-de-turno/turno?client_id={contrato["cid"]}').get_data(as_text=True)
     assert _rotulo_de(html, 'Administrador') == 'Administrador'
-    for nome, role, rotulo in [('Ana Encarregada', 'encarregado', 'Encarregado'),
+    # Fase 2: os rótulos da cadeia (o antigo "Gestor" é o Coordenador; o
+    # encarregado é também o ASG).
+    for nome, role, rotulo in [('Ana Encarregada', 'encarregado', 'Encarregado / ASG'),
                                ('Téo Técnico', 'tecnico', 'Técnico de manutenção'),
-                               ('Gil Gestor', 'pleno', 'Gestor')]:
+                               ('Gil Gestor', 'pleno', 'Coordenador')]:
         _uid, c = pessoas(nome, role, [contrato['cid']])
         html = c.get(f'/passagem-de-turno/turno?client_id={contrato["cid"]}').get_data(as_text=True)
         assert _rotulo_de(html, nome) == rotulo

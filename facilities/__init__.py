@@ -35,7 +35,8 @@ log = logging.getLogger(__name__)
 # Endpoints que quem precisa trocar a senha ainda pode abrir.
 _LIVRES_NA_TROCA = {'auth.trocar_senha', 'auth.logout', 'static', 'core.healthz',
                     'app_instalavel.service_worker', 'app_instalavel.manifesto',
-                    'app_instalavel.versao', 'app_instalavel.sessao'}
+                    'app_instalavel.versao', 'app_instalavel.sessao',
+                    'campo.manifesto', 'campo.instalar'}
 
 
 _SIM = frozenset({'1', 'true', 'yes', 'on', 'sim'})
@@ -208,7 +209,9 @@ def _rotas(app):
     from facilities.passagem.rotas import bp as passagem_bp
     from facilities.chamados.rotas import bp as chamados_bp
     from facilities.cadastros.rotas import bp as cadastros_bp
-    for bp in (core_bp, auth_bp, admin_bp, app_bp, passagem_bp, chamados_bp, cadastros_bp):
+    from facilities.campo.rotas import bp as campo_bp
+    for bp in (core_bp, auth_bp, admin_bp, app_bp, passagem_bp, chamados_bp, cadastros_bp,
+               campo_bp):
         app.register_blueprint(bp)
 
 

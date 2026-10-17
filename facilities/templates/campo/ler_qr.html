@@ -1,0 +1,25 @@
+{% extends 'campo/base_app.html' %}
+{% block title %}Ler QR{% endblock %}
+{% block content %}
+<h1 class="fc-titulo">Ler o QR do local</h1>
+<p class="fc-sub">Aponte a câmera para a etiqueta do Trino Facilities.</p>
+<div class="fc-leitor" id="fc-leitor" data-origem="{{ request.host_url.rstrip('/') }}">
+  <video id="fc-leitor-video" playsinline muted></video>
+  <canvas id="fc-leitor-canvas" hidden></canvas>
+  <div class="fc-leitor-mira" aria-hidden="true"></div>
+</div>
+<p class="mt-3 mb-2" id="fc-leitor-msg" role="status">Abrindo a câmera…</p>
+<button class="btn btn-outline-primary w-100 fc-app-acao mb-2" id="fc-leitor-tentar" type="button" hidden><i class="bi bi-camera"></i> Tentar de novo</button>
+<details class="fc-cartao mt-2">
+  <summary class="fw-semibold">A câmera não abre? Digite o código</summary>
+  <form class="mt-2 d-flex gap-2" id="fc-leitor-form">
+    <label class="visually-hidden" for="fc-leitor-codigo">Código da etiqueta</label>
+    <input class="form-control" id="fc-leitor-codigo" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="O código embaixo do QR">
+    <button class="btn btn-primary" type="submit">Abrir</button>
+  </form>
+</details>
+{% endblock %}
+{% block scripts_app %}
+<script src="{{ url_for('static', filename='vendor/jsqr/jsQR.js') }}"></script>
+<script src="{{ url_for('static', filename='js/leitor-qr.js') }}"></script>
+{% endblock %}

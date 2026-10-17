@@ -176,7 +176,7 @@ def test_os_27_estados_vem_carregados(ctx):
 def test_gerente_do_cliente_tem_de_ser_gestor_ativo(ctx):
     s = _s()
     enc = fabrica.pessoa(ctx, 'enc.gerente@trino.com', 'encarregado')
-    ges = fabrica.pessoa(ctx, 'ges.gerente@trino.com', 'pleno')
+    ges = fabrica.pessoa(ctx, 'ges.gerente@trino.com', 'gerente')
     emp = s.salvar_empresa(None, {'nome': 'Trino Serviços'}, None)
     with pytest.raises(s.CadastroInvalido, match='gerente'):
         s.salvar_contratante(None, {'nome': 'GL', 'empresa_id': emp.id,
