@@ -5,16 +5,18 @@ O que se prova aqui, uma regra por bloco:
 * **Rascunho não conta.** Pendência e ocorrência de turno ainda aberto ficam
   fora da taxa de resolução, do cartão de críticas e vencidas, da evolução
   diária, do índice, do Pareto, da lista do painel, dos pontos de atenção
-  (painel e Torre) e do relatório mensal — e passam a contar sozinhas quando
-  o turno encerra. A pendência aberta pela gestão, sem turno, conta sempre.
+  e do relatório mensal — e passam a contar sozinhas quando o turno
+  encerra. A pendência aberta pela gestão, sem turno, conta sempre.
 * **Ocorrência é do dia do turno.** O 3º Turno digita depois da meia-noite;
   a ocorrência dele fica no dia (e no mês) do turno, e o cartão, o gráfico
-  entre turnos, o Pareto e o bloco 4 do relatório contam a mesma coisa.
+  entre turnos, o Pareto, a coluna "Quando" do painel ("15/09 · 3º Turno")
+  e o bloco 4 do relatório contam a mesma coisa.
 * **Período apurado.** No mês em curso o relatório diz até hoje, e diz que a
   competência está em andamento — na tela e na capa do PDF.
 * **Pareto.** Empate com a última categoria vital também é vital.
-* **Torre.** A fonte se chama Passagem de Turno, "ver o turno" abre a
-  passagem e o detalhe do P1 diz "aberta há 3 dias", sem "·" solto.
+
+Os testes da Torre de Comando (que não existe no Facilities) saíram no
+porte; as asserções de PASSAGEM que moravam neles voltaram para cá.
 """
 import io
 import json
@@ -195,6 +197,58 @@ def test_relatorio_mensal_ignora_o_rascunho(app_module, operacao):
         assert len(rel['ocorrencias']['lista']) == 1
 
 
+# As três de baixo eram asserções de PASSAGEM dentro dos testes da Torre de
+# Comando, apagados no porte: sem elas, a regra ficava sem teste nenhum.
+
+def test_critica_do_rascunho_nao_acende_o_cartao(app_module, operacao):
+    """A pendência de prioridade alta de um turno em rascunho ainda não foi
+    entregue a ninguém: o cartão "Pendências críticas e vencidas" espera o
+    encerramento — e acende sozinho quando ele vem."""
+    hoje = tempo.hoje()
+    with app_module.app.app_context():
+        t = _turno(app_module, operacao, hoje, status='aberto')
+        _pendencia(app_module, operacao, 'Elevador social parado', turno_id=t.id,
+                   prioridade='alta')
+        app_module.db.session.commit()
+
+        assert an.criticas_e_vencidas(operacao['cid']) == []
+        assert an.painel(operacao['cid'], periodo='hoje', hoje=hoje)['n_criticas'] == 0
+
+        _encerrar(app_module, t)
+        assert len(an.criticas_e_vencidas(operacao['cid'])) == 1
+        assert an.painel(operacao['cid'], periodo='hoje', hoje=hoje)['n_criticas'] == 1
+
+
+def test_pendencia_da_gestao_sem_turno_conta_sempre(app_module, operacao):
+    """Sem turno de origem não há rascunho a esperar: a pendência que a
+    gestão abriu pelo painel entra na taxa e no cartão desde o primeiro
+    minuto."""
+    hoje = tempo.hoje()
+    with app_module.app.app_context():
+        _pendencia(app_module, operacao, 'Cobrar o conserto do portão da garagem',
+                   prioridade='alta')
+        app_module.db.session.commit()
+
+        assert an.resolucao_de_pendencias(operacao['cid'], hoje, hoje)['abertas'] == 1
+        assert len(an.criticas_e_vencidas(operacao['cid'])) == 1
+        assert an.painel(operacao['cid'], periodo='hoje', hoje=hoje)['n_criticas'] == 1
+
+
+def test_ponto_de_atencao_do_rascunho_nao_sobe(app_module, operacao):
+    hoje = tempo.hoje()
+    with app_module.app.app_context():
+        t = _turno(app_module, operacao, hoje, status='aberto')
+        _ocorrencia(app_module, operacao, 'Acidente ou incidente', turno_id=t.id,
+                    gravidade=OCORRENCIA_CRITICA,
+                    descricao='Colaborador escorregou no piso molhado')
+        app_module.db.session.commit()
+
+        assert an.pontos_de_atencao(operacao['cid']) == []
+
+        _encerrar(app_module, t)
+        assert len(an.pontos_de_atencao(operacao['cid'])) == 1
+
+
 # ── 2. Ocorrência no dia do turno ────────────────────────────────────────
 
 def test_ocorrencia_do_3o_turno_fica_no_dia_do_turno(app_module, operacao):
@@ -212,6 +266,28 @@ def test_ocorrencia_do_3o_turno_fica_no_dia_do_turno(app_module, operacao):
         # O recorte por turno usa a mesma régua.
         assert len(an.ocorrencias_da_janela(operacao['cid'], dia, dia,
                                             turno='3º Turno')) == 1
+
+
+def test_o_painel_diz_o_dia_e_o_nome_do_turno_da_ocorrencia(app_module, operacao,
+                                                             mestre):
+    """Coluna "Quando" do painel: "15/09 · 3º Turno" — o dia do TURNO (não o
+    da digitação, 01h30 de 16/09) e o nome dele. Vinha de um teste da Torre
+    apagado no porte; sem ele, tirar o turno da coluna ou trocar o dia pela
+    data de digitação passava sem nenhum teste falhar."""
+    dia = date(2026, 9, 15)
+    with app_module.app.app_context():
+        t = _turno(app_module, operacao, dia, '3º Turno')
+        _ocorrencia(app_module, operacao, 'Avaria', turno_id=t.id,
+                    criada=_utc(dia + timedelta(days=1), 1, 30),
+                    descricao='Vazamento na casa de bombas')
+        app_module.db.session.commit()
+    seguinte = dia + timedelta(days=1)
+    html = mestre.get(f"/passagem-de-turno/?client_id={operacao['cid']}&periodo=custom"
+                      f"&de={dia.isoformat()}&ate={seguinte.isoformat()}"
+                      ).get_data(as_text=True)
+    assert 'Vazamento na casa de bombas' in html
+    assert '15/09 · 3º Turno' in html
+    assert '16/09 · 3º Turno' not in html
 
 
 def test_ocorrencia_da_virada_do_mes_fica_no_mes_do_turno(app_module, operacao):
@@ -435,8 +511,3 @@ def test_sem_empate_o_corte_continua_o_mesmo():
     assert [(linha['tipo'], linha['vital']) for linha in linhas] == [
         ('Atraso', True), ('Avaria', True), ('Outros', False)]
     assert an.pareto([]) == []
-
-
-# ── 5. Torre de Comando ──────────────────────────────────────────────────
-
-

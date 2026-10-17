@@ -27,24 +27,31 @@
 <header class="fc-topo">
   <div class="fc-topo-in">
     <a class="fc-marca" href="{{ url_for('core.inicio') }}">
-      <img src="{{ url_for('static', filename='img/logo_trino.png') }}" alt="">
+      <img src="{{ url_for('static', filename='pwa/icone-192.png') }}" alt="">
       <span>Facilities <small>Grupo Trino</small></span>
     </a>
     {% set ep = request.endpoint or '' %}
+    {# No celular o menu desce para uma segunda linha, com TODOS os módulos à
+       vista (antes era uma faixa que rolava de lado, sem aviso, e o módulo
+       aberto ficava fora da tela) — ver .fc-nav no app.css. #}
     <nav class="fc-nav" aria-label="Módulos">
       {% if current_user.can_view('diario_operacional') %}
       <a href="{{ url_for('diario_operacional.index') }}"
-         class="{% if ep.startswith('diario_operacional.') %}ativo{% endif %}">Passagem de Turno</a>
+         class="{% if ep.startswith('diario_operacional.') %}ativo{% endif %}"
+         {% if ep.startswith('diario_operacional.') %}aria-current="page"{% endif %}><span class="fc-rot-longo">Passagem de Turno</span><span class="fc-rot-curto">Passagem</span></a>
       {% endif %}
       {% if current_user.can_view('chamados') %}
       <a href="{{ url_for('chamados.index') }}"
-         class="{% if ep.startswith('chamados.') %}ativo{% endif %}">Chamados</a>
+         class="{% if ep.startswith('chamados.') %}ativo{% endif %}"
+         {% if ep.startswith('chamados.') %}aria-current="page"{% endif %}>Chamados</a>
       {% endif %}
       {% if current_user._effective_role() == 'master' %}
       <a href="{{ url_for('admin.contratos') }}"
-         class="{% if ep == 'admin.contratos' %}ativo{% endif %}">Contratos</a>
+         class="{% if ep == 'admin.contratos' %}ativo{% endif %}"
+         {% if ep == 'admin.contratos' %}aria-current="page"{% endif %}>Contratos</a>
       <a href="{{ url_for('admin.usuarios') }}"
-         class="{% if ep == 'admin.usuarios' %}ativo{% endif %}">Pessoas</a>
+         class="{% if ep == 'admin.usuarios' %}ativo{% endif %}"
+         {% if ep == 'admin.usuarios' %}aria-current="page"{% endif %}>Pessoas</a>
       {% endif %}
     </nav>
     <div class="fc-direita">
@@ -84,6 +91,9 @@
     </div>
     {% endfor %}
   {% endwith %}
+  {# Recado de uma tela que acabou de se recarregar por JavaScript (ex.:
+     "Passagem encerrada", "Modelo salvo") — ver o script "fc-aviso" abaixo. #}
+  <div id="fc-aviso-js"></div>
   {% block content %}{% endblock %}
 </main>
 
@@ -108,7 +118,12 @@ window.esc = function (s) {
     const method = (init.method ||
       (typeof input === 'object' && input && input.method) || 'GET').toUpperCase();
     const url = typeof input === 'string' ? input : (input && input.url) || '';
-    const sameOrigin = !/^https?:\/\//i.test(url) || url.startsWith(location.origin);
+    /* Origem de verdade, pelo navegador: '//outro.site/x' e
+       'https://app.com.outro.io' começam "parecidos" mas são outro site, e o
+       token não pode ir junto. */
+    let sameOrigin = false;
+    try { sameOrigin = new URL(url, location.href).origin === location.origin; }
+    catch (e) { sameOrigin = false; }
     if (csrf && sameOrigin && !SAFE.includes(method)) {
       const headers = new Headers(init.headers ||
         (typeof input === 'object' && input && input.headers) || {});
@@ -123,6 +138,62 @@ window.esc = function (s) {
 <script src="{{ url_for('static', filename='js/foto-leve.js') }}"></script>
 <script src="{{ url_for('static', filename='js/app-instalavel.js') }}"></script>
 <script src="{{ url_for('static', filename='js/tsel.js') }}"></script>
+<script>
+/* Ajuda dos ícones (?): o Bootstrap só mostra tooltip criado por JS. No
+   celular não há "passar o mouse": o toque abre a ajuda, e tocar em outro
+   lugar fecha. O ícone também entra na ordem do teclado (Tab). */
+(function () {
+  const icones = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+  if (!icones.length || !window.bootstrap) return;
+  const soToque = !!(window.matchMedia && matchMedia('(hover: none)').matches);
+  icones.forEach(function (el) {
+    if (!el.hasAttribute('tabindex') && !el.matches('a, button, input, select, textarea')) {
+      el.tabIndex = 0;
+    }
+    bootstrap.Tooltip.getOrCreateInstance(el, soToque ? { trigger: 'click' } : {});
+  });
+  if (soToque) {
+    document.addEventListener('click', function (ev) {
+      icones.forEach(function (el) {
+        const dica = bootstrap.Tooltip.getInstance(el);
+        if (dica && !el.contains(ev.target)) dica.hide();
+      });
+    }, true);
+  }
+})();
+/* fc-aviso: recado de uma vez só, deixado por uma tela que se recarrega por
+   JavaScript (o flash do servidor não alcança esse caso). Quem quer avisar:
+     sessionStorage.setItem('fc-aviso', JSON.stringify({texto: '...', tipo: 'success'}));
+   e troca de página. Aqui ele aparece no topo do conteúdo, com o X para
+   fechar, e é apagado — não volta ao recarregar. */
+(function () {
+  let bruto = null;
+  try {
+    bruto = sessionStorage.getItem('fc-aviso');
+    sessionStorage.removeItem('fc-aviso');
+  } catch (e) { return; }
+  if (!bruto) return;
+  let aviso = null;
+  try { aviso = JSON.parse(bruto); } catch (e) { return; }
+  const texto = aviso && String(aviso.texto || '').trim();
+  const lugar = document.getElementById('fc-aviso-js');
+  if (!texto || !lugar) return;
+  const TIPOS = ['success', 'danger', 'warning', 'info'];
+  const tipo = aviso.tipo === 'error' ? 'danger'
+    : (TIPOS.includes(aviso.tipo) ? aviso.tipo : 'success');
+  const caixa = document.createElement('div');
+  caixa.className = 'alert alert-' + tipo + ' alert-dismissible fade show';
+  caixa.setAttribute('role', tipo === 'danger' ? 'alert' : 'status');
+  caixa.textContent = texto;            /* texto puro: nada vira HTML */
+  const fechar = document.createElement('button');
+  fechar.type = 'button';
+  fechar.className = 'btn-close';
+  fechar.setAttribute('data-bs-dismiss', 'alert');
+  fechar.setAttribute('aria-label', 'Fechar');
+  caixa.appendChild(fechar);
+  lugar.appendChild(caixa);
+})();
+</script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

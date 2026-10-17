@@ -26,8 +26,18 @@ def allowed_client_ids_or_none(user=None):
     return u.client_ids
 
 
+FORA_DOS_CONTRATOS = ('Este contrato não está entre os seus contratos. Se precisa '
+                      'dele, peça ao administrador.')
+
+
 def require_client(client_id):
-    """Garante que o usuário pode agir sobre o contrato (``Forbidden`` se não)."""
+    """Garante que o usuário pode agir sobre o contrato (``Forbidden`` se não).
+
+    O ``Forbidden`` leva a mensagem em português; o tratador de erros
+    (``core.erros``) a entrega em JSON a quem chamou por JavaScript — a fila
+    sem internet marca o envio como recusado e segue — e numa página com o
+    menu a quem navegou.
+    """
     permitidos = allowed_client_ids_or_none()
     if permitidos is None:
         return
@@ -37,7 +47,7 @@ def require_client(client_id):
         cid = None
     if cid and cid in permitidos:
         return
-    raise Forbidden()
+    raise Forbidden(FORA_DOS_CONTRATOS)
 
 
 def clientes_visiveis(extra_id=None):

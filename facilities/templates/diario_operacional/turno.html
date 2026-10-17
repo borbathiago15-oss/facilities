@@ -190,8 +190,11 @@
   {# ── Já preenchido: quem lança e onde ─────────────────────────────── #}
   <div class="dt-cab">
     <div class="dt-cab-grid">
+      {# O rótulo é o PERFIL de quem lança: o técnico, o gestor e o
+         administrador também passam turno, e o cabeçalho dizia
+         "Encarregado" para todos. #}
       <div>
-        <div class="dt-cab-rot">Encarregado</div>
+        <div class="dt-cab-rot">{{ current_user.perfil_rotulo }}</div>
         <div class="dt-cab-val">{{ current_user.name }}</div>
       </div>
       <div>

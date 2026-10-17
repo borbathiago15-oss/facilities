@@ -40,25 +40,54 @@
   }
 
   var BTN_X = '<div class="col-2"><button type="button" class="btn btn-outline-danger w-100" ' +
+              'aria-label="Remover este item" title="Remover este item" ' +
               'onclick="this.closest(\'.config-row\').remove()">×</button></div>';
 
   function addCfgShift(valor) {
     var d = linha('cfg-shifts',
-      '<div class="col-10"><input class="form-control cfg-shift" placeholder="Ex.: T1"></div>' + BTN_X);
+      '<div class="col-10"><input class="form-control cfg-shift" placeholder="Ex.: Diurno"></div>' + BTN_X);
     if (valor) { d.querySelector('.cfg-shift').value = valor; }
+  }
+
+  // Os tipos de resposta que a tela do encarregado sabe desenhar — os mesmos
+  // de `TIPOS_DE_PERGUNTA` em passagem/rotas.py. Faltava a "Escolha": o
+  // seletor ficava em branco para o semáforo da "Situação geral do turno", e
+  // salvar o modelo sem mexer em nada o transformava em Sim/Não obrigatória,
+  // sem as opções.
+  var TIPOS = [['sim_nao', 'Sim / Não'], ['numero', 'Número'], ['texto', 'Texto'],
+               ['texto_longo', 'Texto longo'], ['escolha', 'Escolha (opções)']];
+
+  function opcoesDoTipo(atual) {
+    var lista = TIPOS.slice();
+    // Tipo que esta tela não conhece (de uma versão mais nova): ganha a sua
+    // opção, para o seletor nunca ficar em branco — em branco, salvar
+    // mudaria a pergunta sem ninguém ter pedido.
+    if (atual && !TIPOS.some(function (t) { return t[0] === atual; })) {
+      lista.push([atual, atual]);
+    }
+    return lista.map(function (t) {
+      return '<option value="' + esc(t[0]) + '">' + esc(t[1]) + '</option>';
+    }).join('');
+  }
+
+  // A caixa das opções só aparece na pergunta de escolha.
+  function mostrarOpcoes(linhaP) {
+    var caixa = linhaP.querySelector('.cfg-p-opcoes-caixa');
+    if (caixa) { caixa.hidden = linhaP.querySelector('.cfg-p-tipo').value !== 'escolha'; }
   }
 
   // Uma pergunta por linha, com o tipo da RESPOSTA e as setas de ordem. A
   // ordem importa: é a sequência em que o encarregado vê as perguntas na
   // tela, e ela vai gravada dentro do próprio JSON do modelo.
-  function addCfgPergunta(nome, tipo, obrigatorio) {
+  //
+  // `codigo` é o da pergunta que já existe no modelo: guardado na linha para
+  // que salvar sem renomear devolva o MESMO código — é por ele que as
+  // respostas dos turnos já lançados se ligam à pergunta.
+  function addCfgPergunta(nome, tipo, obrigatorio, opcoes, codigo) {
     var d = linha('cfg-perguntas',
-      '<div class="col-5"><input class="form-control cfg-p-nome" placeholder="Ex.: O 5S da área foi feito?"></div>' +
-      '<div class="col-3"><select class="form-select cfg-p-tipo">' +
-        '<option value="sim_nao">Sim / Não</option>' +
-        '<option value="numero">Número</option>' +
-        '<option value="texto">Texto</option>' +
-        '<option value="texto_longo">Texto longo</option></select></div>' +
+      '<div class="col-5"><input class="form-control cfg-p-nome" placeholder="Ex.: Sanitários limpos e abastecidos?"></div>' +
+      '<div class="col-3"><select class="form-select cfg-p-tipo">' + opcoesDoTipo(tipo) +
+        '</select></div>' +
       '<div class="col-2"><select class="form-select cfg-p-obrig">' +
         '<option value="true">Obrigatória</option>' +
         '<option value="false">Opcional</option></select></div>' +
@@ -69,10 +98,22 @@
           'title="Descer" onclick="moverPergunta(this,1)">↓</button>' +
         '<button type="button" class="btn btn-outline-danger flex-fill" ' +
           'onclick="this.closest(\'.config-row\').remove()">×</button>' +
+      '</div>' +
+      '<div class="col-12 cfg-p-opcoes-caixa" hidden>' +
+        '<textarea class="form-control cfg-p-opcoes" rows="3" ' +
+          'placeholder="Uma opção por linha. Ex.:&#10;🟢 Normal&#10;🟡 Atenção&#10;🔴 Crítico"></textarea>' +
+        '<div class="form-text">As opções que o encarregado vai tocar, uma por linha.</div>' +
       '</div>');
-    if (nome) { d.querySelector('.cfg-p-nome').value = nome; }
+    if (nome) {
+      d.querySelector('.cfg-p-nome').value = nome;
+      d.dataset.nome = nome;
+    }
+    if (codigo) { d.dataset.codigo = codigo; }
     d.querySelector('.cfg-p-tipo').value = tipo || 'sim_nao';
     d.querySelector('.cfg-p-obrig').value = String(obrigatorio !== false);
+    d.querySelector('.cfg-p-opcoes').value = (opcoes || []).join('\n');
+    d.querySelector('.cfg-p-tipo').addEventListener('change', function () { mostrarOpcoes(d); });
+    mostrarOpcoes(d);
   }
 
   function moverPergunta(botao, passo) {
@@ -85,7 +126,7 @@
 
   function addCfgOccurrence(valor) {
     var d = linha('cfg-occurrences',
-      '<div class="col-10"><input class="form-control cfg-occ" placeholder="Ex.: Devolução"></div>' + BTN_X);
+      '<div class="col-10"><input class="form-control cfg-occ" placeholder="Ex.: Vazamento"></div>' + BTN_X);
     if (valor) { d.querySelector('.cfg-occ').value = valor; }
   }
 
@@ -119,7 +160,7 @@
     preencherAreas();
     (m.turnos || []).forEach(function (x) { addCfgShift(x.nome || x); });
     (m.perguntas || []).forEach(function (x) {
-      addCfgPergunta(x.nome, x.tipo, x.obrigatorio);
+      addCfgPergunta(x.nome, x.tipo, x.obrigatorio, x.opcoes, x.codigo);
     });
     (m.tipos_ocorrencia || []).forEach(function (x) { addCfgOccurrence(x.nome || x); });
     document.getElementById('cfg-editando').textContent = 'Editando: ' + (m.nome || '');
@@ -176,13 +217,35 @@
     // e é por isso que se percorre a linha inteira em vez de cada classe
     // separadamente: percorrer por classe perderia a intercalação entre
     // sim/não e número.
+    //
+    // Salvar sem mexer em nada tem de devolver o modelo IGUAL: o tipo, as
+    // opções da escolha, a obrigatoriedade e o código de cada pergunta. O
+    // código só é recalculado quando a pergunta é renomeada (ou é nova).
+    var semOpcoes = null;
     var perguntas = [].slice.call(document.querySelectorAll('#cfg-perguntas .config-row'))
       .map(function (linha) {
         var nomeP = linha.querySelector('.cfg-p-nome').value.trim();
-        return {nome: nomeP, codigo: codigoDe(nomeP),
-                tipo: linha.querySelector('.cfg-p-tipo').value,
-                obrigatorio: linha.querySelector('.cfg-p-obrig').value === 'true'};
+        var tipo = linha.querySelector('.cfg-p-tipo').value;
+        var codigo = (linha.dataset.codigo && linha.dataset.nome === nomeP)
+          ? linha.dataset.codigo : codigoDe(nomeP);
+        var p = {nome: nomeP, codigo: codigo, tipo: tipo,
+                 obrigatorio: linha.querySelector('.cfg-p-obrig').value === 'true'};
+        if (tipo === 'escolha') {
+          p.opcoes = linha.querySelector('.cfg-p-opcoes').value.split('\n')
+            .map(function (o) { return o.trim(); })
+            .filter(function (o) { return o; });
+          if (nomeP && !p.opcoes.length && !semOpcoes) { semOpcoes = nomeP; }
+        }
+        return p;
       }).filter(function (x) { return x.nome; });
+
+    // Escolha sem opção não tem o que o encarregado tocar (o servidor a
+    // guardaria como texto): melhor dizer agora do que mudar o tipo calado.
+    if (semOpcoes) {
+      alert('A pergunta "' + semOpcoes + '" é de escolha, mas está sem opções. ' +
+            'Escreva as opções, uma por linha, ou troque o tipo da resposta.');
+      return;
+    }
 
     var ocorrencias = [].slice.call(document.querySelectorAll('.cfg-occ'))
       .map(function (v) { return {nome: v.value.trim()}; })
@@ -218,11 +281,25 @@
       headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrf()},
       body: JSON.stringify(corpo)
     }).then(function (r) {
-      return r.json().then(function (x) { return {ok: r.ok, x: x}; });
+      return r.json().then(function (x) { return {ok: r.ok, x: x}; },
+                           function () { return {ok: false, x: {}}; });
     }).then(function (res) {
-      if (!res.ok) { alert(res.x.error || 'Erro ao salvar.'); return; }
+      if (!res.ok) {
+        alert(res.x.error || 'O modelo não foi salvo. Recarregue a página e tente de novo.');
+        return;
+      }
+      // A tela recarrega no topo, e quem salvou não sabia se tinha dado
+      // certo: o recado fica para a próxima página (base.html, "fc-aviso").
+      try {
+        sessionStorage.setItem('fc-aviso', JSON.stringify({
+          texto: 'Modelo "' + (res.x.nome || nome) + '" salvo. As mudanças valem ' +
+                 'para as próximas passagens; as já encerradas não mudam.',
+          tipo: 'success'}));
+      } catch (e) { /* sem sessionStorage (aba privada): salva sem o recado */ }
       window.location = '/passagem-de-turno/configuracao?client_id=' + CLIENTE +
                         '&editar=' + res.x.id;
+    }, function () {
+      alert('Sem conexão: o modelo não foi salvo. Tente de novo quando o sinal voltar.');
     });
   }
 
@@ -289,7 +366,7 @@
   }
 
   window.novaArea = function () {
-    var nome = prompt('Nome da área (ex.: Expedição, Almoxarifado, CD):');
+    var nome = prompt('Nome da área (ex.: Limpeza, Portaria, Manutenção predial):');
     if (nome === null) { return; }
     nome = nome.trim();
     if (!nome) { return; }

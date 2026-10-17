@@ -67,8 +67,12 @@
         <label class="form-check-label small" for="ativo{{ u.id }}">Ativo (desmarque para bloquear o acesso)</label></div>
       <button class="btn btn-primary btn-sm fw-bold mt-2" type="submit">Salvar</button>
     </form>
+    {# O nome vai num data-, nunca dentro do JavaScript do onsubmit: lá o |e
+       não protege (o navegador desfaz o &#39; antes de rodar o JS, e um nome
+       como x'+alert(1)+' virava código). #}
     <form method="post" action="{{ url_for('admin.nova_senha', uid=u.id) }}" class="mt-2 mb-2"
-          onsubmit="return confirm('Gerar uma senha temporária nova para {{ u.name|e }}? A atual deixa de valer.')">
+          data-nome="{{ u.name }}"
+          onsubmit="return confirm('Gerar uma senha temporária nova para ' + this.dataset.nome + '? A atual deixa de valer.')">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button class="btn btn-outline-secondary btn-sm" type="submit"><i class="bi bi-key"></i> Gerar senha temporária</button>
     </form>

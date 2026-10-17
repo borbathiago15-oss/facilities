@@ -129,6 +129,25 @@ html, body { background: var(--gray-50); color: var(--gray-900); }
 body { font-family: var(--bs-font-sans-serif); font-size: 15px; min-height: 100vh; }
 a { text-decoration: none; }
 
+/* ── Botões da marca ─────────────────────────────────────── */
+/* O --bs-primary acima não chega aos botões: o Bootstrap 5.3 escreve o azul
+   dentro da própria classe .btn-primary. Sem isto o botão principal saía
+   azul, fora da marca. */
+.btn-primary {
+  --bs-btn-bg: var(--marca); --bs-btn-border-color: var(--marca);
+  --bs-btn-hover-bg: var(--marca-escuro); --bs-btn-hover-border-color: var(--marca-escuro);
+  --bs-btn-active-bg: var(--marca-escuro); --bs-btn-active-border-color: var(--marca-escuro);
+  --bs-btn-disabled-bg: var(--marca); --bs-btn-disabled-border-color: var(--marca);
+  --bs-btn-focus-shadow-rgb: 157, 32, 44;
+}
+.btn-outline-primary {
+  --bs-btn-color: var(--marca); --bs-btn-border-color: var(--marca);
+  --bs-btn-hover-bg: var(--marca); --bs-btn-hover-border-color: var(--marca);
+  --bs-btn-active-bg: var(--marca-escuro); --bs-btn-active-border-color: var(--marca-escuro);
+  --bs-btn-disabled-color: var(--marca); --bs-btn-disabled-border-color: var(--marca);
+  --bs-btn-focus-shadow-rgb: 157, 32, 44;
+}
+
 /* ── Moldura ─────────────────────────────────────────────── */
 .fc-topo { background: var(--fundo); color: #fff; position: sticky; top: 0; z-index: 1030; }
 .fc-topo::after { content: ''; display: block; height: 3px; background: var(--faixa-da-marca); }
@@ -136,12 +155,15 @@ a { text-decoration: none; }
   padding: 0 16px; max-width: 1280px; margin: 0 auto; }
 .fc-marca { display: flex; align-items: center; gap: 10px; color: #fff; font-weight: 800;
   letter-spacing: .2px; white-space: nowrap; }
-.fc-marca img { height: 26px; width: auto; }
+/* O símbolo do grupo (o mesmo ícone do app instalado), sem nome escrito: o
+   logo antigo da pasta img dizia "Trino Intelligence", outro sistema. */
+.fc-marca img { height: 28px; width: 28px; border-radius: 7px; }
 .fc-marca small { color: var(--prata); font-weight: 600; }
 .fc-nav { display: flex; gap: 4px; margin-left: 12px; overflow-x: auto; scrollbar-width: none; }
 .fc-nav a { color: var(--prata); padding: 8px 12px; border-radius: var(--radius-sm);
   font-weight: 600; font-size: 14px; white-space: nowrap; }
 .fc-nav a:hover, .fc-nav a.ativo { color: #fff; background: var(--fundo-cartao); }
+.fc-rot-curto { display: none; }
 .fc-direita { margin-left: auto; display: flex; align-items: center; gap: 6px; }
 .fc-sino { position: relative; color: #fff; font-size: 20px; padding: 6px 8px; }
 .fc-sino .n { position: absolute; top: 0; right: 0; background: var(--marca); color: #fff;
@@ -172,6 +194,11 @@ a { text-decoration: none; }
 .fc-aviso p { margin: 2px 0 0; color: var(--gray-600); font-size: 14px; }
 .fc-aviso time { color: var(--gray-500); font-size: 12px; white-space: nowrap; }
 
+/* ── Página de erro (core/erro.html) ─────────────────────── */
+.fc-erro { max-width: 640px; margin: 24px auto 0; }
+.fc-erro-codigo { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--gray-500); margin: 0 0 4px; }
+
 /* ── Login ───────────────────────────────────────────────── */
 .fc-login-fundo { min-height: 100vh; background: var(--fundo); display: flex; align-items: center;
   justify-content: center; padding: 16px; }
@@ -180,7 +207,7 @@ a { text-decoration: none; }
 .fc-login-topo { background: var(--fundo-cartao); color: #fff; padding: 22px; text-align: center; }
 .fc-login-topo::after { content: ''; display: block; height: 3px; margin: 18px -22px -22px;
   background: var(--faixa-da-marca); }
-.fc-login-topo img { height: 34px; }
+.fc-login-topo img { height: 56px; width: 56px; border-radius: 14px; }
 .fc-login-topo h1 { font-size: 20px; font-weight: 800; margin: 10px 0 0; }
 .fc-login-corpo { padding: 22px; }
 
@@ -194,8 +221,27 @@ a { text-decoration: none; }
 
 @media (max-width: 720px) {
   .fc-marca small { display: none; }
-  .fc-nav { margin-left: 0; }
   .fc-conteudo { padding: 14px 12px 40px; }
+  /* Menu no celular: os módulos descem para uma segunda linha, debaixo da
+     marca, em colunas iguais — TODOS à vista e o aberto destacado. Antes era
+     uma faixa que rolava de lado sem barra nem aviso: a 390px só aparecia
+     "Passagem d", e em Chamados/Contratos/Pessoas o item ativo ficava fora
+     da tela. */
+  .fc-topo-in { flex-wrap: wrap; height: auto; min-height: var(--topbar-h);
+    padding: 6px 12px; row-gap: 4px; column-gap: 10px; }
+  .fc-nav { order: 3; flex: 1 0 100%; margin: 0; overflow: visible;
+    display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px; }
+  .fc-nav a { display: flex; align-items: center; justify-content: center; min-height: 40px;
+    padding: 6px 4px; font-size: 13px; text-align: center;
+    overflow: hidden; text-overflow: ellipsis; }
+  .fc-nav a.ativo { box-shadow: inset 0 -2px 0 var(--marca); }
+  .fc-rot-longo { display: none; }
+  .fc-rot-curto { display: inline; }
+  /* O selo da fila fica logo abaixo do topo, que agora tem duas linhas. */
+  .fila-selo { top: calc(104px + env(safe-area-inset-top, 0px)); }
+}
+@media (max-width: 340px) {
+  .fc-nav a { font-size: 12px; padding: 6px 2px; }
 }
 
 
@@ -232,6 +278,23 @@ a { text-decoration: none; }
   .tab-cartao tr:has(td[colspan]) { border: 0; padding: 0; }
   .tab-cartao td.cel-pilha { display: block; }
   .tab-cartao td.cel-pilha::before { display: block; margin-bottom: .1rem; }
+  /* Lista vazia ("Nenhum turno registrado no período."): a regra da célula
+     acima tirava o respiro, o centro e o cinza, e a frase colava na borda. */
+  .tab-cartao td.dop-vazio, .tab-cartao td.rm-vazio, .tab-cartao td.fc-vazio {
+    padding: 1.6rem 1rem !important; text-align: center !important;
+  }
+  /* Editor do modelo: o "×" de remover turno/tipo de ocorrência virava uma
+     faixa vermelha da largura da tela, debaixo de cada nome. Fica na mesma
+     linha do campo, do tamanho de um dedo (44px). */
+  .diario-page .config-row:has(> .col-2 > .btn-outline-danger:only-child) > .col-10 {
+    flex: 1 1 0; max-width: none; width: auto;
+  }
+  .diario-page .config-row > .col-2:has(> .btn-outline-danger:only-child) {
+    flex: 0 0 auto; max-width: none; width: auto;
+  }
+  .diario-page .config-row > .col-2 > .btn-outline-danger:only-child {
+    width: 44px !important; min-height: 44px; padding: 0; font-size: 1.25rem; line-height: 1;
+  }
   .dt-linha-remover { text-align: right; }
   .dt-linha-remover .btn {
     width: auto !important; border: 0; background: none;
@@ -249,6 +312,9 @@ a { text-decoration: none; }
   }
 }
 .dt-remover-txt { display: none; }
+/* O cinza da lista vazia perdia para a cor de célula do Bootstrap
+   (.table > :not(caption) > * > *, mais específica que o <style> da tela). */
+.table td.dop-vazio, .table td.rm-vazio, .table td.fc-vazio { color: var(--gray-500); }
 .pg-topo {
   display: flex; justify-content: space-between; align-items: flex-start;
   gap: 12px; flex-wrap: wrap; margin-bottom: 14px;
@@ -383,6 +449,10 @@ body.dark .page-title, body.dark .pg-titulo, body.dark .pg-num-v, body.dark .pg-
 
 /* ── Chamados ─────────────────────────────────────────────── */
 .ch-numeros { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-bottom: 14px; }
+/* "Abrir chamado" que desce para baixo do título (celular) encostava nos
+   números: o respiro vai no próprio botão, que no computador fica ao lado do
+   título e não muda nada. */
+.d-flex:has(+ .ch-numeros) > .btn { margin-bottom: 12px; }
 .ch-num { background: var(--surface); border: 1px solid var(--linha); border-radius: var(--radius-lg);
   padding: 12px 14px; color: inherit; display: block; }
 .ch-num b { display: block; font-size: 24px; font-weight: 800; line-height: 1.1; }
@@ -395,6 +465,15 @@ body.dark .page-title, body.dark .pg-titulo, body.dark .pg-num-v, body.dark .pg-
 .ch-abas a { padding: 8px 12px; color: var(--gray-600); font-weight: 600; font-size: 14px; white-space: nowrap;
   border-bottom: 2px solid transparent; margin-bottom: -1px; }
 .ch-abas a.ativo { color: var(--marca); border-bottom-color: var(--marca); }
+/* No celular as cinco abas não cabem numa linha: em vez de uma faixa que rola
+   de lado sem aviso ("Todos" e a aba aberta fora da tela), viram etiquetas
+   que quebram linha — todas à vista. */
+@media (max-width: 720px) {
+  .ch-abas { flex-wrap: wrap; overflow: visible; gap: 6px; border-bottom: 0; }
+  .ch-abas a { border: 1px solid var(--linha); border-radius: 999px; margin-bottom: 0;
+    padding: 6px 12px; background: var(--surface); }
+  .ch-abas a.ativo { background: var(--blue-50); border-color: var(--marca); }
+}
 .ch-lista { display: grid; gap: 8px; }
 .ch-item { display: block; color: inherit; background: var(--surface); border: 1px solid var(--linha);
   border-left: 4px solid var(--gray-300); border-radius: var(--radius-sm); padding: 10px 12px; }

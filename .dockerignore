@@ -1,0 +1,21 @@
+# O que NÃO entra na imagem (`COPY . .` no Dockerfile). O Docker não lê o
+# .gitignore: sem esta lista, a imagem levava o .env com segredos, o SQLite e
+# os uploads de desenvolvimento (instance/), a .venv inteira e o .git.
+# As migrações (migrations/) TÊM de entrar: o entrypoint roda `flask db upgrade`.
+.git
+.github
+.env
+.env.*
+instance
+.venv
+venv
+tests
+__pycache__
+**/__pycache__
+*.pyc
+.pytest_cache
+*.db
+*.sqlite
+*.sqlite3
+docs
+.claude

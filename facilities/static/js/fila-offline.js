@@ -504,13 +504,10 @@
     return Promise.all(feito);
   }
 
-  document.addEventListener('click', function (ev) {
-    var link = ev.target.closest ? ev.target.closest('a[href]') : null;
-    if (!link) { return; }
-    var destino = new URL(link.href, location.href);
-    if (destino.origin !== location.origin || destino.pathname !== '/logout') { return; }
-    ev.preventDefault();
-    todos().then(function (itens) { return meus(itens).length; }, function () { return 0; })
+  // Avisa dos envios guardados e, se a pessoa confirma, apaga as telas
+  // guardadas. → Promise<boolean>: sair ou ficar.
+  function conferirSaida() {
+    return todos().then(function (itens) { return meus(itens).length; }, function () { return 0; })
       .then(function (n) {
         if (n && !confirm(
             'Há ' + n + (n > 1 ? ' envios guardados' : ' envio guardado') +
@@ -521,7 +518,38 @@
         }
         return apagarTelasGuardadas().then(function () { return true; });
       })
-      .then(function (sair) { if (sair) { location.href = destino.href; } });
+      // Falha ao conferir (banco do aparelho bloqueado) não prende ninguém
+      // dentro do sistema: sai, e a tela de login apaga as telas guardadas.
+      .catch(function () { return true; });
+  }
+
+  function ehLogout(endereco) {
+    var destino;
+    try { destino = new URL(endereco || '', location.href); } catch (e) { return false; }
+    return destino.origin === location.origin && /\/logout$/.test(destino.pathname);
+  }
+
+  // O link GET /logout, como era no Trino.
+  document.addEventListener('click', function (ev) {
+    var link = ev.target.closest ? ev.target.closest('a[href]') : null;
+    if (!link || !ehLogout(link.href)) { return; }
+    ev.preventDefault();
+    conferirSaida().then(function (sair) { if (sair) { location.href = link.href; } });
+  }, true);
+
+  // O "Sair" do Facilities é um FORMULÁRIO (POST /logout, com o token CSRF),
+  // não um link — e o clique no botão passava direto pelo interceptador de
+  // cima: sem o aviso dos envios guardados e sem apagar as telas guardadas
+  // (num celular compartilhado, a passagem do contrato ficava no aparelho).
+  // `submit` pega o botão, o Enter e qualquer outro jeito de enviar. O
+  // `submit()` nativo do fim não dispara o evento de novo: não há laço.
+  document.addEventListener('submit', function (ev) {
+    var form = ev.target;
+    if (!form || form.tagName !== 'FORM' || !ehLogout(form.getAttribute('action'))) { return; }
+    ev.preventDefault();
+    conferirSaida().then(function (sair) {
+      if (sair) { HTMLFormElement.prototype.submit.call(form); }
+    });
   }, true);
 
   // ── API para as telas ─────────────────────────────────────────────────

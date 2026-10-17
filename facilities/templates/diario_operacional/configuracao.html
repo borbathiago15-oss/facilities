@@ -52,6 +52,10 @@
   .cf-tag.on{background:var(--green-100);color:var(--green-700)}
   .cf-tag.off{background:var(--gray-100,#f3f4f6);color:var(--gray-500)}
   .config-row{align-items:center}
+  /* As opções da pergunta de escolha: uma faixa inteira abaixo da linha,
+     só visível quando o tipo é "Escolha". */
+  .cfg-p-opcoes-caixa textarea{font-size:.9rem}
+  .cfg-p-opcoes-caixa .form-text{margin-top:.15rem}
   /* No celular a linha de 4 colunas do Bootstrap não cabe: o botão de
      excluir saía 31px para fora do cartão. Aqui cada campo ocupa a linha
      inteira e os botões viram uma faixa própria, com alvo de 44px. */
@@ -182,7 +186,7 @@
           <div class="row g-3">
             <div class="col-md-7">
               <label class="form-label">Nome do modelo</label>
-              <input id="cfg-name" class="form-control" placeholder="Ex.: Passagem da Expedição">
+              <input id="cfg-name" class="form-control" placeholder="Ex.: Limpeza — rotina do turno">
             </div>
             <div class="col-md-5">
               <label class="form-label">Situação</label>
@@ -232,7 +236,9 @@
             Adicionar pergunta</button>
           <div class="cf-aviso mt-2">
             Só a pergunta <strong>Sim/Não</strong> marcada como obrigatória entra na
-            aderência às rotinas. Número e texto são registro, não cobrança.
+            aderência às rotinas. Número, texto e escolha são registro, não cobrança.
+            Na <strong>Escolha</strong>, escreva as opções que o encarregado vai
+            tocar, uma por linha (ex.: 🟢 Normal, 🟡 Atenção, 🔴 Crítico).
           </div>
         </div>
       </div>

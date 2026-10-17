@@ -35,6 +35,9 @@ jobs:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/facilities_testes
       SECRET_KEY: ci
       SESSION_COOKIE_SECURE: '0'
+      # Com Postgres a fábrica recusa subir sem destino de anexos declarado
+      # (facilities/object_storage.py): aqui o disco do runner basta.
+      STORAGE_BACKEND: local
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

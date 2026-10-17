@@ -1,7 +1,7 @@
 """O núcleo: login próprio, troca de senha, sessões, cadastros e app instalável.
 
-* senha errada cinco vezes bloqueia a conta; a mensagem não diz se o e-mail
-  existe;
+* senha errada cinco vezes bloqueia a conta; a resposta (mensagem e status)
+  não diz se o e-mail existe nem se a conta está bloqueada;
 * quem precisa trocar a senha não abre nada antes de trocar;
 * trocar a senha (ou ser desativado) derruba as sessões abertas;
 * cadastros são do administrador; o gestor não cadastra;
@@ -53,10 +53,16 @@ def test_cinco_erros_bloqueiam_a_conta(app_module):
         _pessoa(app_module, 'bloqueio@trino.com')
     for _ in range(5):
         _entrar(app_module, 'bloqueio@trino.com', 'errada')
-    # Agora nem a senha certa entra.
+    # Agora nem a senha certa entra — e a recusa é a MESMA de um e-mail que
+    # não existe (antes era 429 "Conta bloqueada", que confirmava a conta).
     _, r = _entrar(app_module, 'bloqueio@trino.com')
-    assert r.status_code == 429
-    assert 'bloqueada' in r.get_data(as_text=True)
+    assert r.status_code == 401
+    assert 'E-mail ou senha incorretos.' in r.get_data(as_text=True)
+    with app_module.app.app_context():
+        from datetime import datetime
+        from app import User
+        u = User.query.filter_by(email='bloqueio@trino.com').one()
+        assert u.lockout_until and u.lockout_until > datetime.utcnow()
 
 
 def test_quem_precisa_trocar_a_senha_nao_abre_nada_antes(app_module):
@@ -197,3 +203,30 @@ def test_avisos_abrem_e_marcam_como_lidos(app_module, auth_client):
     with app_module.app.app_context():
         from facilities.core.models import Notification
         assert Notification.query.get(nid).status == 'read'
+
+
+def test_responsavel_do_contrato_tem_de_ser_gestor_ativo(app_module, auth_client):
+    """A lista da tela só traz gestores, mas um POST montado à mão aceitava
+    qualquer pessoa — e ela passava a receber os avisos de gestor."""
+    with app_module.app.app_context():
+        enc_id = _pessoa(app_module, 'enc.responsavel@trino.com', 'encarregado')
+        gestor_id = _pessoa(app_module, 'gestor.responsavel@trino.com', 'pleno')
+    r = auth_client.post('/admin/contratos', data={
+        'name': 'Contrato com encarregado responsável', 'responsible_user_id': str(enc_id)},
+        follow_redirects=True)
+    assert 'precisa ser um gestor ou administrador ativo' in r.get_data(as_text=True)
+    auth_client.post('/admin/contratos', data={
+        'name': 'Contrato com gestor responsável', 'responsible_user_id': str(gestor_id)})
+    with app_module.app.app_context():
+        from app import Client
+        assert Client.query.filter_by(name='Contrato com encarregado responsável').first() is None
+        c = Client.query.filter_by(name='Contrato com gestor responsável').one()
+        assert c.responsible_user_id == gestor_id
+        cid = c.id
+    r = auth_client.post(f'/admin/contratos/{cid}', data={
+        'name': 'Contrato com gestor responsável', 'is_active': '1',
+        'responsible_user_id': str(enc_id)}, follow_redirects=True)
+    assert 'precisa ser um gestor ou administrador ativo' in r.get_data(as_text=True)
+    with app_module.app.app_context():
+        from app import Client
+        assert Client.query.get(cid).responsible_user_id == gestor_id

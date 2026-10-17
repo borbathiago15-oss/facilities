@@ -16,5 +16,8 @@ db = SQLAlchemy()
 login_manager = LoginManager()
 migrate = Migrate()
 csrf = CSRFProtect()
-# Sem limite global: só as rotas marcadas (o login) são limitadas.
+# Sem limite global: só as rotas marcadas (o login) são limitadas. O IP é o
+# ``remote_addr`` — atrás de proxy ele só é o do cliente com ``PROXY_HOPS``
+# (ProxyFix, na fábrica); o login ainda soma o e-mail à chave
+# (``core.auth._chave_do_login``) para um IP só não travar todo mundo.
 limiter = Limiter(key_func=get_remote_address, default_limits=[])

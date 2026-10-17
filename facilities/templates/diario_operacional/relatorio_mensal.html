@@ -29,7 +29,10 @@
              display:flex;justify-content:space-between;align-items:flex-end;gap:1rem;flex-wrap:wrap}
   .rm-cabeca h1{font-size:1.5rem;margin:0;color:var(--blue-900);font-weight:700}
   .rm-cabeca .rm-sub{color:var(--gray-500);font-size:.85rem}
-  .rm-logo{height:42px}
+  /* A marca é texto: o logo com nome escrito que veio do Trino era o de
+     outro sistema da casa — e o relatório vai para o cliente. */
+  .rm-marca{font-size:.74rem;font-weight:800;letter-spacing:.12em;text-transform:uppercase;
+            color:var(--gray-500);margin-bottom:.35rem}
   .rm-bloco{margin-bottom:1.6rem}
   .rm-bloco h2{font-size:1rem;text-transform:uppercase;letter-spacing:.05em;
                color:var(--blue-900);font-weight:700;border-left:4px solid var(--blue-600);
@@ -118,7 +121,7 @@
   {# ── Cabeçalho institucional ───────────────────────────────────────── #}
   <div class="rm-cabeca">
     <div>
-      <img src="{{ url_for('static', filename='img/logo_trino.png') }}" alt="Grupo Trino" class="rm-logo mb-2">
+      <div class="rm-marca">Grupo Trino · Facilities</div>
       <h1>Passagem de Turno — Relatório Executivo Mensal</h1>
       <div class="rm-sub">{{ cliente.name }}{% if rel.area %} · {{ rel.area }}{% endif %} ·
         Competência {{ rel.competencia }}</div>
@@ -371,7 +374,7 @@
   </div>
 
   <div class="text-center text-muted small pt-2 border-top">
-    Grupo Trino · Trino Intelligence — documento confidencial de uso interno e do cliente.
+    Grupo Trino · {{ NOME_DO_SISTEMA }} — documento confidencial de uso interno e do cliente.
   </div>
 </div>
 {% endblock %}

@@ -141,7 +141,14 @@ def upgrade():
         batch_op.create_index(batch_op.f('ix_chamados_aberto_em'), ['aberto_em'], unique=False)
         batch_op.create_index(batch_op.f('ix_chamados_area_id'), ['area_id'], unique=False)
         batch_op.create_index(batch_op.f('ix_chamados_client_id'), ['client_id'], unique=False)
-        batch_op.create_index('ix_chamados_origem', ['origem', 'origem_id'], unique=False)
+        # Uma ocorrência vira UM chamado vivo, garantido pelo banco (dois
+        # cliques simultâneos abriam duas OS). Parcial: o manual (origem_id
+        # NULL) e o cancelado ficam fora. O texto é o mesmo de
+        # ``chamados.models.CONDICAO_ORIGEM_VIVA``.
+        batch_op.create_index(
+            'uq_chamados_origem_viva', ['origem', 'origem_id'], unique=True,
+            postgresql_where=sa.text("origem_id IS NOT NULL AND status <> 'cancelado'"),
+            sqlite_where=sa.text("origem_id IS NOT NULL AND status <> 'cancelado'"))
         batch_op.create_index(batch_op.f('ix_chamados_responsavel_id'), ['responsavel_id'], unique=False)
         batch_op.create_index(batch_op.f('ix_chamados_status'), ['status'], unique=False)
 
@@ -441,7 +448,7 @@ def downgrade():
     with op.batch_alter_table('chamados', schema=None) as batch_op:
         batch_op.drop_index(batch_op.f('ix_chamados_status'))
         batch_op.drop_index(batch_op.f('ix_chamados_responsavel_id'))
-        batch_op.drop_index('ix_chamados_origem')
+        batch_op.drop_index('uq_chamados_origem_viva')
         batch_op.drop_index(batch_op.f('ix_chamados_client_id'))
         batch_op.drop_index(batch_op.f('ix_chamados_area_id'))
         batch_op.drop_index(batch_op.f('ix_chamados_aberto_em'))

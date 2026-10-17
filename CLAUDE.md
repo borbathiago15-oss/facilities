@@ -2,7 +2,7 @@
 
 ## O que é
 Sistema de facilities do Grupo Trino (passagem de turno + chamados), separado
-do Trino Intelligence. Repositório: borbathiago15-oss/trino-facilities.
+do Trino Intelligence. Repositório: borbathiago15-oss/facilities (privado).
 
 ## Regras permanentes
 - **NÃO ARRISCAR PERDER DADOS.** Coluna/tabela nova → migração Alembic em

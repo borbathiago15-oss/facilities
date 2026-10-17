@@ -67,7 +67,7 @@
   #}
   <div class="pg-topo">
     <div>
-      <div class="pg-olho">TRINO INTELLIGENCE</div>
+      <div class="pg-olho">{{ NOME_DO_SISTEMA|upper }}</div>
       <h1 class="pg-titulo">Passagem de Turno</h1>
       <div class="pg-sub">O turno, as pendências e as ocorrências num histórico só.</div>
     </div>
@@ -185,7 +185,8 @@
 
   {% if not client_id %}
   <div class="card shadow-sm border-0"><div class="dop-vazio">
-    Nenhum contrato disponível na sua carteira.</div></div>
+    Você ainda não tem nenhum contrato liberado. Peça ao administrador para
+    vincular os seus contratos ao seu cadastro.</div></div>
   {% else %}
 
   <div class="dop-gov mb-3">
@@ -355,6 +356,10 @@
   </div>
 
   {# ── O que fazer agora ─────────────────────────────────────────────── #}
+  {# A coluna de ação aparece para quem abre chamado — e também para quem só
+     CONSULTA os chamados (a diretoria), quando alguma ocorrência da lista já
+     virou OS: o link "Ver OS" é leitura, não ação. #}
+  {% set com_acao = pode_chamado or (pode_ver_chamado and chamados_das_ocorrencias) %}
   <div class="row g-3">
     <div class="col-xl-7">
       <div class="card shadow-sm border-0 h-100">
@@ -362,7 +367,7 @@
         <div class="table-responsive">
           <table class="table align-middle mb-0 tab-cartao">
             <thead><tr><th>Quando</th><th>Tipo</th><th>Referência</th>
-              <th>Descrição</th>{% if pode_chamado %}<th class="text-end">Ação</th>{% endif %}</tr></thead>
+              <th>Descrição</th>{% if com_acao %}<th class="text-end">Ação</th>{% endif %}</tr></thead>
             <tbody>
               {% for o in dados.ocorrencias %}
               <tr>
@@ -373,16 +378,29 @@
                         {% if o.gravidade == 'critica' %}title="Ponto de atenção"{% endif %}>{{ o.tipo }}</span></td>
                 <td class="small text-muted" data-rot="Referência">{{ o.referencia or '—' }}</td>
                 <td class="small" data-rot="Descrição">{{ o.descricao }}</td>
-                {% if pode_chamado %}
+                {% if com_acao %}
                 <td class="text-end" data-rot="">
+                  {# Ocorrência que já virou chamado mostra a OS e a situação
+                     dela, no lugar do botão: o gestor relê esta lista todo
+                     dia e precisa saber, sem clicar, o que já está com a
+                     manutenção. Chamado cancelado não conta — a ocorrência
+                     volta a poder virar chamado. #}
+                  {% set ch = chamados_das_ocorrencias.get(o.id) %}
+                  {% if ch %}
+                  <a class="btn btn-sm btn-outline-secondary text-nowrap dop-os"
+                     href="/chamados/{{ ch.id }}">
+                    <i class="bi bi-box-arrow-up-right"></i> Ver {{ ch.numero }}
+                    <span class="small text-muted">({{ ch.status_rotulo }})</span></a>
+                  {% elif pode_chamado %}
                   <button class="btn btn-sm btn-outline-primary text-nowrap"
                           onclick="dopAbrirChamado({{ o.id }}, this)">
                     <i class="bi bi-tools"></i> Abrir chamado</button>
+                  {% endif %}
                 </td>
                 {% endif %}
               </tr>
               {% else %}
-              <tr><td colspan="{{ 5 if pode_chamado else 4 }}" class="dop-vazio">
+              <tr><td colspan="{{ 5 if com_acao else 4 }}" class="dop-vazio">
                 Nenhuma ocorrência no período.</td></tr>
               {% endfor %}
             </tbody>
@@ -524,7 +542,7 @@
       <div class="tsel mt-2">
         <label for="tt-titulo">O que precisa ser feito</label>
         <input type="text" class="form-control" id="tt-titulo" maxlength="300"
-               placeholder="Ex.: Conferir a temperatura da câmara após a manutenção">
+               placeholder="Ex.: Conferir a bomba da caixa d’água depois do reparo">
       </div>
       <div class="tsel mt-2">
         <label for="tt-desc">Detalhe <span class="fw-normal text-muted">(opcional)</span></label>
@@ -668,19 +686,30 @@
 
   // Ocorrência → chamado de manutenção. O botão é desabilitado no clique:
   // a rota é idempotente, mas o retorno visual evita a dúvida de "clicou?".
+  // Resposta que não é JSON (sem sinal, sessão vencida) também devolve o
+  // botão e diz o que houve: antes a promessa quebrava em silêncio e o botão
+  // ficava travado, sem mensagem nenhuma.
   window.dopAbrirChamado = function (id, botao) {
     if (botao) { botao.disabled = true; }
+    function falhou(msg) {
+      if (botao) { botao.disabled = false; }
+      alert(msg);
+    }
     fetch('/passagem-de-turno/api/ocorrencias/' + id + '/chamado', {
       method: 'POST', headers: {'X-CSRFToken': CSRF()}
     }).then(function (r) {
-      return r.json().then(function (x) { return {ok: r.ok, x: x}; });
+      return r.json().then(function (x) { return {ok: r.ok, x: x}; },
+                           function () { return {ok: false, x: {}}; });
     }).then(function (res) {
       if (!res.ok) {
-        if (botao) { botao.disabled = false; }
-        alert(res.x.error || 'Não foi possível abrir o chamado.');
+        falhou(res.x.error || 'Não foi possível abrir o chamado. Recarregue a ' +
+               'página e tente de novo.');
         return;
       }
       window.location = res.x.url;
+    }, function () {
+      falhou('Sem conexão: o chamado não foi aberto. Tente de novo quando o ' +
+             'sinal voltar.');
     });
   };
 

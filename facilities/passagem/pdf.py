@@ -19,7 +19,6 @@ Não há autorização nem consulta aqui. Entra o dicionário de
 arquivo — é o que garante que o anexo do e-mail não discorde da tela.
 """
 import io
-import os
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT
@@ -51,9 +50,11 @@ COR_FAIXA = {'ok': VERDE, 'alerta': AMBAR, 'critico': VERMELHO,
 TEXTO_FAIXA = {'ok': '● No alvo', 'alerta': '◐ Atenção',
                'critico': '○ Crítico', 'neutro': '– Sem base'}
 
-LOGO = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                    'static', 'img', 'logo_trino.png')
-
+# A marca da capa é TEXTO. O logo com nome escrito que veio do Trino
+# Intelligence dizia o nome DELE (foi retirado do projeto), e este documento
+# vai para o cliente com o nome do Facilities. Texto também não depende de
+# arquivo nenhum existir na imagem.
+MARCA_DA_CAPA = 'GRUPO TRINO · FACILITIES'
 
 
 def _plural(n, um, varios):
@@ -81,6 +82,8 @@ def _estilos():
         return ParagraphStyle(nome, parent=pai, **kw)
 
     return {
+        'capa_marca': e('capa_marca', fontSize=12, leading=16, textColor=NAVY,
+                        fontName='Helvetica-Bold'),
         'capa_olho': e('capa_olho', fontSize=10, leading=14, textColor=MARCA,
                        fontName='Helvetica-Bold'),
         'capa_tit': e('capa_tit', fontSize=26, leading=30, textColor=NAVY,
@@ -156,15 +159,9 @@ def _cartao(rotulo, valor, nota, est, largura, cor=NAVY):
 
 
 def _capa(rel, est, largura, altura):
-    fluxo = [Spacer(1, altura * 0.20)]
-    if os.path.exists(LOGO):
-        from reportlab.platypus import Image
-        try:
-            fluxo.append(Image(LOGO, width=44 * mm, height=13 * mm,
-                               kind='proportional'))
-            fluxo.append(Spacer(1, 9 * mm))
-        except Exception:
-            pass
+    fluxo = [Spacer(1, altura * 0.20),
+             Paragraph(MARCA_DA_CAPA, est['capa_marca']),
+             Spacer(1, 9 * mm)]
     fluxo += [
         # O nome do módulo, não o do pacote: "Diário Operacional" é como ele
         # nasceu, e o documento vai para o cliente com o nome que a tela usa.

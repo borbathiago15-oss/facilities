@@ -14,8 +14,17 @@ Quem pode o quê (sempre dentro da carteira de contratos da pessoa):
 * confirmar ("ficou bom") ou reabrir ("não ficou") — quem pediu, o gestor e
   o administrador;
 * a diretoria lê tudo e não altera nada.
+
+Pedido repetido não estraga nada: o celular do posto repete POST quando a
+rede oscila, e o duplo clique é o normal de quem está de luva. Por isso a
+ação trava o chamado antes de conferir o estado (``chamado_para_alterar``),
+o reenvio da mesma ação vira "já feito" (``_reenvio``) e abrir o mesmo
+chamado duas vezes devolve o primeiro (``abrir_sem_duplicar``).
 """
+from collections import namedtuple
 from datetime import datetime, timedelta
+
+from sqlalchemy.exc import IntegrityError
 
 from facilities.extensions import db
 from facilities.core.acesso import allowed_client_ids_or_none
@@ -27,6 +36,37 @@ from facilities.chamados.models import (
 
 TIPO_AVISO = 'chamado'
 TITULO_MAX = 200
+
+# A mesma ação, da mesma pessoa, com o mesmo texto, dentro desta janela, é o
+# MESMO pedido chegando duas vezes (duplo clique, rede que repete o POST).
+JANELA_REENVIO = timedelta(minutes=2)
+
+# Que passo da trilha cada ação grava — é por ele que se reconhece o reenvio.
+EVENTO_DA_ACAO = {
+    'comentar': 'comentario', 'iniciar': 'iniciado', 'aguardar': 'aguardando',
+    'retomar': 'retomado', 'resolver': 'resolvido', 'confirmar': 'fechado',
+    'reabrir': 'reaberto', 'cancelar': 'cancelado',
+}
+# Ações em que o texto é o conteúdo: dois comentários DIFERENTES seguidos são
+# dois comentários; o mesmo texto de novo, em segundos, é o duplo clique.
+ACOES_COM_TEXTO = ('comentar', 'aguardar', 'resolver', 'reabrir', 'cancelar')
+
+# O que a tela diz depois de cada ação — no celular, o cartão de ações fica
+# abaixo do cabeçalho, e sem a frase a pessoa não sabe se o toque valeu.
+CONFIRMACAO = {
+    'comentar': 'Comentário registrado.',
+    'iniciar': 'Atendimento iniciado.',
+    'aguardar': 'Chamado posto em espera.',
+    'retomar': 'Atendimento retomado.',
+    'resolver': 'Chamado marcado como resolvido.',
+    'confirmar': 'Chamado fechado. Obrigado por confirmar.',
+    'reabrir': 'Chamado reaberto.',
+    'cancelar': 'Chamado cancelado.',
+}
+
+# O que ``executar`` devolve à rota: a frase da tela, se algo foi gravado
+# (pedido repetido e "nada mudou" não gravam — e não recebem anexo) e o tom.
+Feito = namedtuple('Feito', 'mensagem gravou categoria')
 
 
 class RecusaChamado(Exception):
@@ -116,22 +156,51 @@ def tecnicos_do_contrato(client_id):
 
 
 def gestores_do_contrato(client_id):
-    """O gestor responsável e os gestores vinculados — nunca "todos os
-    administradores": aviso que chega a quem não cuida do contrato ensina a
-    ignorar aviso."""
-    ids = {u.id for u in pessoas_do_contrato(client_id, ('pleno',))}
+    """O gestor responsável e os gestores VINCULADOS ao contrato — nunca
+    "todos os administradores", nem o gestor que só tem "todos os contratos"
+    (o regional, a diretoria): aviso que chega a quem não cuida do contrato
+    ensina a ignorar aviso. É a mesma conta da Passagem de Turno.
+
+    O responsável cadastrado no contrato só entra se AINDA é gestor (ou
+    administrador), está ativo e tem o contrato na carteira: a tela de
+    contratos aceita qualquer gestor, e quem mudou de papel, saiu da empresa
+    ou perdeu o contrato receberia título e local de um chamado que não
+    consegue abrir (o link dá 403).
+    """
+    ids = {u.id for u in _ativos(User.query.filter(User.role == 'pleno',
+                                                   User.clients.any(id=client_id)))}
     c = db.session.get(Client, client_id)
-    if c is not None and c.responsible_user_id:
-        ids.add(c.responsible_user_id)
+    resp = db.session.get(User, c.responsible_user_id) \
+        if c is not None and c.responsible_user_id else None
+    if (resp is not None and resp.is_active and not resp.is_deleted
+            and e_gestor(resp) and _na_carteira(resp, client_id)):
+        ids.add(resp.id)
     return ids
 
 
 def _avisar(user_ids, ch, titulo, mensagem, exceto=None):
-    for uid in {u for u in user_ids if u and u != exceto}:
-        db.session.add(Notification(user_id=uid, notification_type=TIPO_AVISO,
+    """Grava o aviso (sino) para cada pessoa — e devolve quem foi avisado.
+
+    Só recebe quem ABRE o chamado hoje: ativo, com o módulo e com o contrato
+    na carteira (``pode_ver``). O solicitante que foi transferido de
+    contrato, o técnico desligado, o gestor que perdeu o contrato: todos
+    continuariam lendo comentário e título de um contrato que já não é deles.
+    A conferência fica AQUI, e não em cada chamador, para nenhum aviso novo
+    esquecê-la.
+    """
+    ids = {u for u in user_ids if u and u != exceto}
+    if not ids:
+        return set()
+    avisados = set()
+    for u in _ativos(User.query.filter(User.id.in_(ids))):
+        if not pode_ver(u, ch):
+            continue
+        db.session.add(Notification(user_id=u.id, notification_type=TIPO_AVISO,
                                     title=f'{ch.numero} · {titulo}'[:150],
                                     message=mensagem, link=f'/chamados/{ch.id}',
                                     status='unread'))
+        avisados.add(u.id)
+    return avisados
 
 
 def _evento(ch, tipo, por, texto=None):
@@ -143,6 +212,18 @@ def _evento(ch, tipo, por, texto=None):
 
 def prazo_para(prioridade, a_partir=None):
     return (a_partir or datetime.utcnow()) + PRAZO_POR_PRIORIDADE[prioridade]
+
+
+def _travar_contrato(client_id):
+    """Põe em fila quem abre chamado no MESMO contrato, até o commit.
+
+    É o que deixa a conferência "já abri este?" valer com dois pedidos ao
+    mesmo tempo: o segundo só olha depois que o primeiro gravou. ``NO KEY``
+    não segura quem só grava registro filho do contrato (passagem, ocorrência,
+    pendência). No SQLite (testes) a cláusula é ignorada.
+    """
+    db.session.execute(db.select(Client.id).where(Client.id == client_id)
+                       .with_for_update(key_share=True))
 
 
 def abrir(user, client_id, titulo, descricao='', local='', categoria='outro',
@@ -159,7 +240,7 @@ def abrir(user, client_id, titulo, descricao='', local='', categoria='outro',
     if not user.can_access(MODULO_CHAMADOS):
         raise RecusaChamado('Seu perfil pode consultar, mas não abrir chamado.', 403)
     if not _na_carteira(user, client_id):
-        raise RecusaChamado('Este contrato não está na sua carteira.', 403)
+        raise RecusaChamado('Este contrato não está entre os seus contratos.', 403)
     contrato = db.session.get(Client, client_id)
     if contrato is None or not contrato.is_active or contrato.is_deleted:
         raise RecusaChamado('Contrato inexistente ou inativo.')
@@ -195,23 +276,87 @@ def abrir(user, client_id, titulo, descricao='', local='', categoria='outro',
     return ch
 
 
+def abrir_sem_duplicar(user, client_id, titulo, **campos):
+    """A porta da tela "Abrir chamado": ``abrir`` à prova de duplo envio.
+
+    O mesmo chamado (mesma pessoa, mesmo contrato, mesmo título) aberto de
+    novo dentro de ``JANELA_REENVIO`` é o formulário enviado duas vezes —
+    devolve o primeiro, sem segunda OS e sem segundo aviso aos gestores.
+    → ``(chamado, criado)``. O commit é de quem chama.
+    """
+    try:
+        cid = int(client_id)
+    except (TypeError, ValueError):
+        cid = None
+    texto = (titulo or '').strip()[:TITULO_MAX]
+    if cid is not None and texto and user.can_access(MODULO_CHAMADOS) \
+            and _na_carteira(user, cid):
+        _travar_contrato(cid)
+        igual = (Chamado.query
+                 .filter(Chamado.client_id == cid, Chamado.solicitante_id == user.id,
+                         Chamado.origem == ORIGEM_MANUAL, Chamado.titulo == texto,
+                         Chamado.status != CANCELADO,
+                         Chamado.aberto_em >= datetime.utcnow() - JANELA_REENVIO)
+                 .order_by(Chamado.id.desc()).first())
+        if igual is not None:
+            return igual, False
+    return abrir(user, client_id, titulo, **campos), True
+
+
+def _chamado_vivo_da_ocorrencia(ocorrencia_id):
+    return (Chamado.query
+            .filter(Chamado.origem == ORIGEM_OCORRENCIA, Chamado.origem_id == ocorrencia_id,
+                    Chamado.status != CANCELADO)
+            .order_by(Chamado.id.desc()).first())
+
+
+def chamados_das_ocorrencias(ocorrencia_ids):
+    """``{ocorrencia_id: chamado}`` das ocorrências que JÁ viraram chamado.
+
+    Para o painel da Passagem trocar "Abrir chamado" por "Ver OS-00012": o
+    gestor relê a lista todo dia e precisa saber, sem clicar, o que já está
+    com a manutenção. Chamado cancelado não conta — a ocorrência volta a
+    poder virar chamado (a mesma regra de ``abrir_de_ocorrencia``).
+    """
+    ids = {i for i in (ocorrencia_ids or []) if i}
+    if not ids:
+        return {}
+    return {ch.origem_id: ch for ch in
+            Chamado.query.filter(Chamado.origem == ORIGEM_OCORRENCIA,
+                                 Chamado.origem_id.in_(ids),
+                                 Chamado.status != CANCELADO)
+            .order_by(Chamado.id)}
+
+
 def abrir_de_ocorrencia(user, ocorrencia):
     """A ocorrência da passagem vira chamado — uma vez só.
 
     Idempotente por (origem, origem_id): o botão fica numa lista que o gestor
-    relê todo dia, e o segundo clique devolve o chamado do primeiro.
+    relê todo dia, e o segundo clique devolve o chamado do primeiro. Vale
+    também para dois cliques AO MESMO TEMPO (duas abas, a gestora e o
+    encarregado): a consulta sozinha deixava os dois passarem, e quem segura
+    é o índice único ``uq_chamados_origem_viva`` — o segundo INSERT esbarra
+    nele e recebe o chamado do primeiro.
+
+    Chamado CANCELADO não prende a ocorrência: "vamos esperar a reforma" não
+    pode deixá-la para sempre apontando para uma OS morta.
+
+    Ocorrência de passagem ainda em rascunho é recusada: só o turno ENCERRADO
+    é registro entregue (é o que o painel mostra); o rascunho ainda é do
+    encarregado.
     → ``(chamado, criado)``
     """
+    from facilities.passagem.analitico import TURNO_ENCERRADO
     from facilities.passagem.models import DiarioConfiguracao, DiarioTurno, OCORRENCIA_CRITICA
-    existente = (Chamado.query.filter_by(origem=ORIGEM_OCORRENCIA, origem_id=ocorrencia.id)
-                 .order_by(Chamado.id.desc()).first())
+    existente = _chamado_vivo_da_ocorrencia(ocorrencia.id)
     if existente is not None:
         return existente, False
-    area_id = None
-    if ocorrencia.turno_id:
-        t = db.session.get(DiarioTurno, ocorrencia.turno_id)
-        cfg = db.session.get(DiarioConfiguracao, t.configuracao_id) if t else None
-        area_id = cfg.area_id if cfg is not None else None
+    t = db.session.get(DiarioTurno, ocorrencia.turno_id) if ocorrencia.turno_id else None
+    if t is not None and t.status != TURNO_ENCERRADO:
+        raise RecusaChamado('Esta ocorrência é de uma passagem de turno que ainda não foi '
+                            'encerrada. Encerre a passagem e depois abra o chamado.', 409)
+    cfg = db.session.get(DiarioConfiguracao, t.configuracao_id) if t else None
+    area_id = cfg.area_id if cfg is not None else None
     tipo = (ocorrencia.tipo or 'Ocorrência').strip()
     descricao = (ocorrencia.descricao or '').strip()
     titulo = f'{tipo}: {descricao}' if descricao else tipo
@@ -220,9 +365,18 @@ def abrir_de_ocorrencia(user, ocorrencia):
     if ocorrencia.referencia:
         texto = f'{texto}\n\nReferência: {ocorrencia.referencia}'.strip()
     texto = f'{texto}\n\nAberto a partir da ocorrência registrada na passagem de turno.'.strip()
-    ch = abrir(user, ocorrencia.client_id, titulo, descricao=texto,
-               categoria='outro', prioridade=prioridade, area_id=area_id,
-               origem=ORIGEM_OCORRENCIA, origem_id=ocorrencia.id)
+    try:
+        # SAVEPOINT: se o índice recusar, desfaz só este chamado (evento e
+        # avisos juntos), e o resto do pedido de quem chamou continua de pé.
+        with db.session.begin_nested():
+            ch = abrir(user, ocorrencia.client_id, titulo, descricao=texto,
+                       categoria='outro', prioridade=prioridade, area_id=area_id,
+                       origem=ORIGEM_OCORRENCIA, origem_id=ocorrencia.id)
+    except IntegrityError:
+        existente = _chamado_vivo_da_ocorrencia(ocorrencia.id)
+        if existente is None:
+            raise
+        return existente, False
     return ch, True
 
 
@@ -233,12 +387,57 @@ def _exigir(cond, mensagem, status=403):
         raise RecusaChamado(mensagem, status)
 
 
+def chamado_para_alterar(chamado_id):
+    """O chamado TRAVADO até o commit (``SELECT … FOR NO KEY UPDATE``).
+
+    Duas pessoas agindo no mesmo chamado ao mesmo tempo — o duplo clique em
+    "Marcar como resolvido", a gestora cancelando enquanto o encarregado
+    comenta — fazem fila aqui: o segundo pedido só lê o chamado depois que o
+    primeiro gravou, e ``executar`` confere a ação contra o estado NOVO. Sem
+    a trava, os dois liam "em atendimento" e os dois gravavam (e um
+    "resolver" atrasado ressuscitava chamado cancelado). ``populate_existing``
+    relê mesmo que o chamado já esteja na sessão. No SQLite (testes) a
+    cláusula é ignorada — lá as escritas já são em fila.
+    """
+    return db.session.get(Chamado, chamado_id, with_for_update={'key_share': True},
+                          populate_existing=True)
+
+
+def _reenvio(user, ch, acao, texto):
+    """O mesmo pedido chegando de novo (duplo clique, rede que repete o POST,
+    "voltar" e reenviar)?
+
+    É reenvio quando o ÚLTIMO passo da trilha é esta mesma ação, desta mesma
+    pessoa, com o mesmo texto, há menos de ``JANELA_REENVIO``. Aí nada se
+    grava — nem segundo evento, nem segundo aviso, nem segunda foto — e a
+    tela confirma como se fosse o primeiro: para quem tocou, foi.
+    """
+    tipo = EVENTO_DA_ACAO.get(acao)
+    if tipo is None or ch.id is None:
+        return False
+    ultimo = (ChamadoEvento.query.filter_by(chamado_id=ch.id)
+              .order_by(ChamadoEvento.id.desc()).first())
+    if ultimo is None or ultimo.tipo != tipo or ultimo.created_by != user.id:
+        return False
+    if datetime.utcnow() - ultimo.created_at > JANELA_REENVIO:
+        return False
+    return acao not in ACOES_COM_TEXTO or (ultimo.texto or '') == texto
+
+
 def executar(user, ch, acao, form):
-    """Aplica uma ação da tela ao chamado. O commit é de quem chama."""
+    """Aplica uma ação da tela ao chamado. O commit é de quem chama.
+
+    Quem chama deve ter carregado o chamado com ``chamado_para_alterar``: a
+    conferência abaixo só vale contra o estado de AGORA. → ``Feito``.
+    """
     texto = (form.get('texto') or '').strip()
+    if _reenvio(user, ch, acao, texto):
+        return Feito(CONFIRMACAO[acao], False, 'success')
     _exigir(acao in acoes_disponiveis(user, ch),
-            'Esta ação não está disponível para você neste momento do chamado.')
+            'Esta ação não está disponível para você neste momento do chamado '
+            f'(situação atual: {ch.status_rotulo.lower()}).')
     agora = datetime.utcnow()
+    mensagem = CONFIRMACAO.get(acao)
 
     if acao == 'comentar':
         _exigir(texto, 'Escreva o comentário.', 400)
@@ -253,26 +452,48 @@ def executar(user, ch, acao, form):
             raise RecusaChamado('Escolha quem vai atender.', 400)
         candidatos = {u.id: u for u in tecnicos_do_contrato(ch.client_id)}
         _exigir(rid in candidatos, 'Essa pessoa não atende este contrato.', 400)
+        nome = candidatos[rid].name
+        if rid == ch.responsavel_id:
+            # A lista "Trocar responsável" já abre com o atual escolhido:
+            # salvar sem mexer gravava "Responsável: Caio (antes: Caio)" e um
+            # segundo "atribuído a você".
+            return Feito(f'{nome} já é o responsável por este chamado.', False, 'info')
         anterior = ch.responsavel
         ch.responsavel_id = rid
-        nome = candidatos[rid].name
         _evento(ch, 'atribuido', user,
                 f'Responsável: {nome}' + (f' (antes: {anterior.name})' if anterior else ''))
-        _avisar([rid], ch, f'Chamado atribuído a você: {ch.titulo}',
-                f'Prioridade {ch.prioridade_rotulo.lower()} · prazo {_prazo_txt(ch)}.',
-                exceto=user.id)
+        avisados = _avisar([rid], ch, f'Chamado atribuído a você: {ch.titulo}',
+                           f'Prioridade {ch.prioridade_rotulo.lower()} · prazo {_prazo_txt(ch)}.',
+                           exceto=user.id)
+        if anterior is not None:
+            # Quem perdeu o chamado precisa saber — senão continua achando
+            # que é dele e vai ao local à toa.
+            _avisar([anterior.id], ch, f'Chamado passou para {nome}: {ch.titulo}',
+                    'Você não é mais o responsável por este chamado.', exceto=user.id)
+        mensagem = (f'Chamado atribuído a {nome}, que já recebeu o aviso.' if rid in avisados
+                    else f'Chamado atribuído a {nome}.')
 
     elif acao == 'prioridade':
         nova = form.get('prioridade')
         _exigir(nova in PRIORIDADES, 'Prioridade inválida.', 400)
-        if nova != ch.prioridade:
-            # O prazo acompanha a prioridade, contado da ABERTURA: subir para
-            # urgente um chamado de três dias o põe atrasado na hora — e é
-            # verdade, ele está.
-            ch.prioridade = nova
-            ch.prazo = prazo_para(nova, ch.aberto_em)
-            _evento(ch, 'prioridade', user,
-                    f'Prioridade {PRIORIDADES[nova].lower()}' + (f' — {texto}' if texto else ''))
+        if nova == ch.prioridade:
+            return Feito('A prioridade já era essa; nada mudou.', False, 'info')
+        # O prazo acompanha a prioridade, contado da ABERTURA: subir para
+        # urgente um chamado de três dias o põe atrasado na hora — e é
+        # verdade, ele está.
+        ch.prioridade = nova
+        ch.prazo = prazo_para(nova, ch.aberto_em)
+        _evento(ch, 'prioridade', user,
+                f'Prioridade {PRIORIDADES[nova].lower()}' + (f' — {texto}' if texto else ''))
+        # Quem atende precisa saber que a régua mudou: o urgente que ninguém
+        # avisou fica na fila do "média" até estourar.
+        atrasado = ' — já está atrasado' if ch.atrasado(agora) else ''
+        # Quem pediu também: o prazo que lhe foi prometido mudou.
+        _avisar([ch.responsavel_id, ch.solicitante_id], ch, f'Prioridade mudou: {ch.titulo}',
+                f'Agora {PRIORIDADES[nova].lower()} · prazo {_prazo_txt(ch)}{atrasado}.'
+                + (f' Motivo: {texto[:200]}' if texto else ''), exceto=user.id)
+        mensagem = (f'Prioridade alterada para {PRIORIDADES[nova].lower()}. '
+                    f'Novo prazo: {_prazo_txt(ch)}.')
 
     elif acao == 'iniciar':
         if ch.responsavel_id is None:
@@ -301,14 +522,18 @@ def executar(user, ch, acao, form):
         if ch.responsavel_id is None:
             ch.responsavel_id = user.id
         _evento(ch, 'resolvido', user, texto)
-        _avisar([ch.solicitante_id], ch, f'Chamado resolvido: {ch.titulo}',
-                'Confira no local e confirme — ou reabra se não ficou bom.',
-                exceto=user.id)
+        if _avisar([ch.solicitante_id], ch, f'Chamado resolvido: {ch.titulo}',
+                   'Confira no local e confirme — ou reabra se não ficou bom.',
+                   exceto=user.id):
+            mensagem = 'Chamado marcado como resolvido. Quem pediu foi avisado para conferir.'
 
     elif acao == 'confirmar':
         ch.status = FECHADO
         ch.fechado_em = agora
         _evento(ch, 'fechado', user, texto or 'Solução confirmada.')
+        # O técnico fica sabendo que o serviço foi aceito — e que não volta.
+        _avisar([ch.responsavel_id], ch, f'Chamado fechado: {ch.titulo}',
+                f'{user.name} confirmou que ficou bom.', exceto=user.id)
 
     elif acao == 'reabrir':
         _exigir(texto, 'Diga o que ainda não ficou bom.', 400)
@@ -328,6 +553,7 @@ def executar(user, ch, acao, form):
 
     else:  # pragma: no cover - acoes_disponiveis já barra
         raise RecusaChamado('Ação desconhecida.', 400)
+    return Feito(mensagem, True, 'success')
 
 
 def _prazo_txt(ch):

@@ -29,27 +29,61 @@ passagem, atribui chamados), **Encarregado** (passagem e abrir chamados),
 python -m venv .venv && . .venv/bin/activate
 pip install -r requirements-dev.txt
 export SECRET_KEY=desenvolvimento SESSION_COOKIE_SECURE=0
+flask --app facilities db upgrade         # cria/atualiza o schema (SQLite em instance/)
 flask --app facilities criar-admin        # mostra uma senha temporária
 flask --app facilities run                # http://127.0.0.1:5000
 ```
 
-Sem `DATABASE_URL`, usa SQLite em `instance/facilities.db` (o schema é criado
-sozinho). Primeiros passos na tela: cadastre um contrato, as pessoas, e em
+Sem `DATABASE_URL`, usa SQLite em `instance/facilities.db`. O schema vem das
+migrações também aqui — o boot não cria tabela nenhuma —, então rode
+`flask --app facilities db upgrade` antes do primeiro uso e depois de cada
+`git pull` que trouxer migração nova. Coluna nova no modelo: gere a migração
+(`flask --app facilities db migrate -m "..."`) sobre um banco que esteja em
+dia com `db upgrade`, e prove ida, volta e ida num Postgres antes do PR.
+
+Primeiros passos na tela: cadastre um contrato, as pessoas, e em
 **Passagem de Turno → Configurar** use "Começar com um modelo pronto".
 
 ## Testes
 
 ```bash
-pytest -q                                                    # SQLite
+pytest -q                                                        # SQLite
 TEST_DATABASE_URL=postgresql://.../facilities_testes pytest -q   # Postgres (zera o banco!)
 ```
+
+A suíte em Postgres APAGA todas as tabelas do banco no começo. Por isso ela
+se recusa a rodar se o nome do banco não tiver "test" (`facilities_testes`,
+`facilities_test`...) — nunca aponte para o banco de produção.
 
 ## Produção
 
 - Banco **Postgres**; o schema vem só das migrações (`flask db upgrade`, que o
   `docker-entrypoint.sh` roda antes do gunicorn). O boot não faz DDL.
-- Variáveis: `DATABASE_URL`, `SECRET_KEY` (obrigatória), e para anexos no
-  Cloudflare R2: `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`,
-  `R2_BUCKET` (sem elas, os anexos vão para o disco local — só para teste).
+- O app **recusa subir** com configuração que perde dado ou derruba sessão:
+
+  | Variável | Obrigatória? | O que acontece sem ela |
+  |---|---|---|
+  | `DATABASE_URL` | sim (a imagem Docker exige, via `EXIGIR_DATABASE_URL=1`) | não sobe — sem ela o app usaria um SQLite dentro do contêiner, que some a cada reinício |
+  | `SECRET_KEY` | sim, fora do SQLite de desenvolvimento | não sobe — sem ela cada processo do gunicorn sortearia a sua, e o login e as sessões falhariam ao acaso |
+  | `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` | sim, para anexos no Cloudflare R2 | não sobe, dizendo qual falta — a menos que `STORAGE_BACKEND=local` esteja escrito (anexos no disco do servidor: só com volume persistente) |
+
+- `SESSION_COOKIE_SECURE` (padrão ligado) vale para o cookie de sessão e para
+  o "Manter conectado". Aceita `1/true/yes/on` e `0/false/no/off`; qualquer
+  outro valor para o boot (antes `true` desligava o Secure sem avisar). O
+  mesmo vale para `RATELIMIT_ENABLED`.
+- **Atrás de proxy** (Cloudflare, balanceador do PaaS), defina `PROXY_HOPS`
+  com o número de proxies de confiança na frente do app (em geral `1`). Sem
+  isso o IP de todo mundo é o do proxy. Não defina sem proxy: aí qualquer um
+  forjaria o próprio IP pelo cabeçalho `X-Forwarded-For`.
+- O limite de tentativas de login é por IP + e-mail (20 por minuto), além do
+  bloqueio da conta após 5 senhas erradas. O contador padrão (`memory://`) é
+  por processo: com `WEB_CONCURRENCY=2` o limite real dobra. Para um contador
+  único entre os processos, `RATELIMIT_STORAGE_URI=redis://host:6379/0` (pede
+  o pacote `redis` instalado).
+- Cabeçalhos: HSTS (quando o acesso é https ou o cookie é Secure),
+  Permissions-Policy (câmera só do próprio sistema), nosniff, X-Frame-Options.
+  Sem Content-Security-Policy por enquanto: as telas têm scripts inline, e
+  uma CSP útil pede nonce em cada um.
 - `GET /healthz` responde 200 sem login e sem banco (liveness).
-- Imagem: `docker build -t trino-facilities .` (fuso `America/Sao_Paulo`).
+- Imagem: `docker build -t facilities .` (fuso `America/Sao_Paulo`). O
+  `.dockerignore` deixa de fora `.env`, `instance/`, `.venv`, `.git` e os testes.

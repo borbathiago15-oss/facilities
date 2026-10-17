@@ -3,6 +3,7 @@ from flask import Blueprint, jsonify, redirect, render_template, request, url_fo
 from flask_login import current_user, login_required
 
 from facilities.extensions import db
+from facilities.core.auth import _destino_seguro
 from facilities.core.models import MODULO_CHAMADOS, MODULO_PASSAGEM, Notification
 
 bp = Blueprint('core', __name__)
@@ -59,11 +60,16 @@ def avisos():
 @bp.post('/avisos/<int:aviso_id>/abrir')
 @login_required
 def abrir_aviso(aviso_id):
-    """Marca como lido e leva ao link do aviso."""
+    """Marca como lido e leva ao link do aviso — só se for caminho interno.
+
+    A conferência é a mesma do ``next=`` do login: ``//host`` e ``/\\host``
+    começam com "/" mas o navegador os lê como outro site. Hoje todo link de
+    aviso é montado pelo servidor; a trava fica para o dia em que não for.
+    """
     a = Notification.query.filter_by(id=aviso_id, user_id=current_user.id).first_or_404()
     a.status = 'read'
     db.session.commit()
-    return redirect(a.link if (a.link or '').startswith('/') else url_for('core.avisos'))
+    return redirect(_destino_seguro(a.link) or url_for('core.avisos'))
 
 
 @bp.post('/avisos/ler-todos')

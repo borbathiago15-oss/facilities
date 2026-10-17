@@ -8,24 +8,53 @@ import os
 import tempfile
 
 import pytest
+from sqlalchemy.engine import make_url
 
 os.environ.setdefault('SECRET_KEY', 'test-secret-key')
 os.environ.setdefault('ADMIN_PASSWORD', 'test-admin-pass')
 os.environ['SESSION_COOKIE_SECURE'] = '0'
 os.environ['RATELIMIT_ENABLED'] = '0'
+# Anexos de teste no disco temporário, SEMPRE: com as R2_* no ambiente de
+# quem roda, a suíte gravaria no bucket de verdade; e com Postgres a fábrica
+# exige o destino dos anexos declarado.
+os.environ['STORAGE_BACKEND'] = 'local'
+os.environ.pop('PROXY_HOPS', None)
+os.environ.pop('EXIGIR_DATABASE_URL', None)
 TEST_ADMIN_PASSWORD = os.environ['ADMIN_PASSWORD']
 ADMIN_EMAIL = 'admin@grupotrino.com.br'
 CONTRATOS_SEMEADOS = ('Shopping Centro', 'Hospital Norte', 'Condomínio Sul')
 
 
+def recusar_banco_que_nao_e_de_teste(url):
+    """Para a suíte se o banco de TEST_DATABASE_URL não for claramente de teste.
+
+    A fixture abaixo faz ``downgrade base`` — o downgrade da migração inicial
+    apaga TODAS as tabelas. Com a URL da produção copiada por engano (o
+    próprio CI usa a mesma para DATABASE_URL e TEST_DATABASE_URL), a suíte
+    zerava a produção sem perguntar. Exige "test" no nome do banco
+    (``facilities_testes``, ``facilities_test``...).
+    """
+    try:
+        nome = make_url(url).database or ''
+    except Exception:
+        pytest.exit(f'TEST_DATABASE_URL não é uma URL de banco válida: {url!r}.',
+                    returncode=4)
+    if 'test' not in nome.lower():
+        pytest.exit(f'TEST_DATABASE_URL aponta para o banco {nome!r}, cujo nome não '
+                    'tem "test". A suíte APAGA todas as tabelas do banco de teste; '
+                    'use um banco só para isso (ex.: facilities_testes).',
+                    returncode=4)
+
+
 @pytest.fixture(scope='session')
 def app_module():
     # TEST_DATABASE_URL=postgresql://... roda a suíte contra um Postgres de
-    # verdade (o banco da produção), com o schema vindo das MIGRAÇÕES — não do
-    # create_all. O banco é zerado no começo: use um banco só de teste.
+    # verdade (o MESMO tipo de banco da produção — nunca o banco dela), com o
+    # schema vindo das MIGRAÇÕES. O banco é zerado no começo: só banco de teste.
     pg = os.environ.get('TEST_DATABASE_URL', '').strip()
     path = None
     if pg:
+        recusar_banco_que_nao_e_de_teste(pg)
         os.environ['DATABASE_URL'] = pg
     else:
         fd, path = tempfile.mkstemp(suffix='.db')
@@ -45,6 +74,10 @@ def app_module():
             db.session.remove()
             downgrade(directory=pasta, revision='base')
             upgrade(directory=pasta)
+        else:
+            # O boot não faz DDL em banco nenhum: no SQLite temporário o
+            # schema sai direto dos modelos.
+            db.create_all()
         for nome in CONTRATOS_SEMEADOS:
             if not app_mod.Client.query.filter_by(name=nome).first():
                 db.session.add(app_mod.Client(name=nome, cost_center='CC-' + nome[:3].upper(),

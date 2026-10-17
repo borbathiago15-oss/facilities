@@ -36,6 +36,8 @@
                     font-size:1.8rem;color:var(--red-700)}
   .vt-prova .vt-nome-arq{font-size:.68rem;padding:.3rem .4rem;color:var(--gray-600);
                          word-break:break-word;line-height:1.25}
+  .vt-prova .vt-quem-anexou{font-size:.66rem;padding:0 .4rem .3rem;color:var(--gray-500);
+                            line-height:1.2}
   .vt-vazio{color:var(--gray-500);font-size:.88rem}
   .vt-ref{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.75rem;
           background:var(--gray-100);border-radius:5px;padding:.05rem .35rem;
@@ -118,6 +120,10 @@
     {% endif %}
   </div>
 
+  {# A foto que NÃO foi o autor quem prendeu (a gestão também anexa) diz de
+     quem é: sem isto, ela se lia como parte do que o autor assinou. #}
+  {% macro anexado_por(a) %}{% if a.uploaded_by in quem_anexou %}<div class="vt-quem-anexou">anexado por {{ quem_anexou[a.uploaded_by] }}</div>{% endif %}{% endmacro %}
+
   {# As provas presas a uma pergunta — rotina ou campo. Uma macro só para os
      dois lugares: a miniatura não pode ter dois desenhos na mesma tela. #}
   {% macro provas(lista) %}
@@ -133,6 +139,7 @@
         <div class="vt-pdf"><i class="bi bi-file-earmark-pdf"></i></div>
         {% endif %}
         <div class="vt-nome-arq">{{ a.nome }}</div>
+        {{ anexado_por(a) }}
       </a>
       {% endfor %}
     </div>
@@ -198,6 +205,7 @@
                alt="{{ a.nome }}" loading="lazy">
           {% else %}<div class="vt-pdf"><i class="bi bi-file-earmark-pdf"></i></div>{% endif %}
           <div class="vt-nome-arq">{{ a.nome }}</div>
+          {{ anexado_por(a) }}
         </a>
         {% endfor %}
       </div>

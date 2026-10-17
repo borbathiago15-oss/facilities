@@ -1,11 +1,19 @@
 """Trino Facilities — fábrica do app.
 
-    flask --app facilities run          # desenvolvimento (SQLite em instance/)
+    flask --app facilities db upgrade   # o schema (SQLite em instance/, no dev)
     flask --app facilities criar-admin  # o primeiro administrador
+    flask --app facilities run          # desenvolvimento
 
-Produção (Postgres): o schema vem SÓ das migrações (``flask db upgrade``); o
-boot não faz DDL. ``create_all`` roda apenas em SQLite — desenvolvimento e
-testes —, a mesma regra do Trino Intelligence.
+O schema vem SÓ das migrações (``flask db upgrade``), também no SQLite de
+desenvolvimento: o boot não faz DDL em banco nenhum. (Antes o boot rodava
+``create_all`` no SQLite; o ``flask db upgrade`` seguinte morria com "table
+users already exists" e o autogenerate deixava de enxergar coluna nova — o
+dev ficava sem migração. Os testes criam o schema por conta própria, em
+``tests/conftest.py``.)
+
+Fora do SQLite de desenvolvimento a fábrica RECUSA subir com configuração
+que perde dado ou derruba sessão em silêncio: sem ``SECRET_KEY``, ou com os
+anexos caindo no disco do contêiner sem ninguém ter pedido isso.
 """
 import logging
 import os
@@ -15,6 +23,8 @@ from datetime import timedelta
 import click
 from flask import Flask, jsonify, redirect, request, url_for
 from flask_login import current_user
+from sqlalchemy.engine import make_url
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from facilities import tempo
 from facilities.extensions import csrf, db, limiter, login_manager, migrate
@@ -28,9 +38,66 @@ _LIVRES_NA_TROCA = {'auth.trocar_senha', 'auth.logout', 'static', 'core.healthz'
                     'app_instalavel.versao', 'app_instalavel.sessao'}
 
 
+_SIM = frozenset({'1', 'true', 'yes', 'on', 'sim'})
+_NAO = frozenset({'0', 'false', 'no', 'off', 'nao', 'não'})
+
+
+def _flag(nome, padrao):
+    """Liga/desliga lido do ambiente — e valor que não se entende PARA o boot.
+
+    A leitura antiga (``== '1'``) falhava ABERTA: ``SESSION_COOKIE_SECURE=true``
+    virava False e o cookie de sessão saía sem Secure, o contrário do que a
+    pessoa quis. Agora 1/true/yes/on liga, 0/false/no/off desliga, vazio fica
+    no padrão, e qualquer outra coisa é erro de configuração, dito no boot.
+    """
+    bruto = os.environ.get(nome)
+    if bruto is None or not bruto.strip():
+        return padrao
+    valor = bruto.strip().lower()
+    if valor in _SIM:
+        return True
+    if valor in _NAO:
+        return False
+    raise RuntimeError(f'{nome}={bruto!r} não é um valor reconhecido. '
+                       'Use 1 (ligado) ou 0 (desligado).')
+
+
+def _saltos_de_proxy():
+    """Quantos proxies de confiança há na frente do app (``PROXY_HOPS``).
+
+    Atrás de proxy (Cloudflare, balanceador do PaaS) o ``remote_addr`` é o IP
+    do PROXY: o limite de login por IP vira um balde só para todo mundo.
+    Com ``PROXY_HOPS=N`` o ProxyFix confia nos N últimos saltos de
+    X-Forwarded-For/-Proto. Padrão 0: sem proxy declarado, ninguém forja o
+    próprio IP mandando o cabeçalho.
+    """
+    bruto = (os.environ.get('PROXY_HOPS') or '').strip()
+    if not bruto:
+        return 0
+    try:
+        saltos = int(bruto)
+    except ValueError:
+        saltos = -1
+    if saltos < 0:
+        raise RuntimeError(f'PROXY_HOPS={bruto!r} inválido: use o número de proxies '
+                           'de confiança na frente do app (0 = nenhum).')
+    return saltos
+
+
+def _atras_de_proxy(app, saltos):
+    if saltos:
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=saltos, x_proto=saltos)
+
+
 def _url_do_banco(app):
     url = os.environ.get('DATABASE_URL', '').strip()
     if not url:
+        if _flag('EXIGIR_DATABASE_URL', False):
+            # A imagem de produção liga isto (Dockerfile): sem DATABASE_URL o
+            # app subiria num SQLite dentro do contêiner, que some a cada
+            # reinício — com todos os dados lançados.
+            raise RuntimeError('DATABASE_URL não definida. Nesta imagem ela é '
+                               'obrigatória: aponte para o Postgres de produção.')
         os.makedirs(app.instance_path, exist_ok=True)
         return 'sqlite:///' + os.path.join(app.instance_path, 'facilities.db')
     # Heroku/Supabase às vezes entregam o esquema antigo.
@@ -39,15 +106,38 @@ def _url_do_banco(app):
     return url
 
 
+def _eh_sqlite(uri):
+    return make_url(uri).get_backend_name() == 'sqlite'
+
+
+def _garantir_segredo(app, sqlite):
+    """``SECRET_KEY`` faltando: recusa subir fora do SQLite de desenvolvimento.
+
+    Sem ela cada worker do gunicorn sorteava a SUA chave: o cookie assinado
+    por um era recusado pelo outro, e o login dava erro de CSRF e as sessões
+    caíam ao acaso (reproduzido com 2 workers). No SQLite de desenvolvimento
+    (um processo só) a chave aleatória continua valendo, com aviso no log.
+    """
+    if app.config.get('SECRET_KEY'):
+        return
+    # A imagem de produção (EXIGIR_DATABASE_URL) nunca aceita chave sorteada,
+    # nem se alguém apontar o DATABASE_URL para um SQLite.
+    if not sqlite or _flag('EXIGIR_DATABASE_URL', False):
+        raise RuntimeError(
+            'SECRET_KEY não definida. Fora do SQLite de desenvolvimento ela é '
+            'obrigatória: sem ela cada processo do servidor sorteia a sua, e o '
+            'login e as sessões falham ao acaso. Defina SECRET_KEY (o mesmo valor '
+            'em todos os processos).')
+    app.config['SECRET_KEY'] = secrets.token_hex(32)
+    log.warning('SECRET_KEY não definida: usando uma aleatória (as sessões '
+                'caem a cada reinício). Defina SECRET_KEY em produção.')
+
+
 def create_app(config=None):
     app = Flask(__name__, instance_relative_config=True)
-    segredo = os.environ.get('SECRET_KEY')
-    if not segredo:
-        segredo = secrets.token_hex(32)
-        log.warning('SECRET_KEY não definida: usando uma aleatória (as sessões '
-                    'caem a cada reinício). Defina SECRET_KEY em produção.')
+    cookie_seguro = _flag('SESSION_COOKIE_SECURE', True)
     app.config.update(
-        SECRET_KEY=segredo,
+        SECRET_KEY=(os.environ.get('SECRET_KEY') or '').strip() or None,
         SQLALCHEMY_DATABASE_URI=_url_do_banco(app),
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         SQLALCHEMY_ENGINE_OPTIONS={'pool_pre_ping': True},
@@ -57,14 +147,29 @@ def create_app(config=None):
         WTF_CSRF_TIME_LIMIT=None,
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE='Lax',
-        SESSION_COOKIE_SECURE=os.environ.get('SESSION_COOKIE_SECURE', '1') == '1',
+        SESSION_COOKIE_SECURE=cookie_seguro,
+        # O "Manter conectado" é uma credencial de 14 dias sozinho (abre o
+        # sistema sem o cookie de sessão): as mesmas travas do cookie de sessão.
         REMEMBER_COOKIE_DURATION=timedelta(days=14),
         REMEMBER_COOKIE_HTTPONLY=True,
-        RATELIMIT_ENABLED=os.environ.get('RATELIMIT_ENABLED', '1') == '1',
+        REMEMBER_COOKIE_SECURE=cookie_seguro,
+        REMEMBER_COOKIE_SAMESITE='Lax',
+        RATELIMIT_ENABLED=_flag('RATELIMIT_ENABLED', True),
+        # memory:// conta POR PROCESSO: com N workers o limite real é N vezes
+        # maior. Para valer igual em todos, aponte para um Redis
+        # (redis://host:6379) — ver README.
         RATELIMIT_STORAGE_URI=os.environ.get('RATELIMIT_STORAGE_URI', 'memory://'),
     )
     if config:
         app.config.update(config)
+        if 'REMEMBER_COOKIE_SECURE' not in config:
+            app.config['REMEMBER_COOKIE_SECURE'] = app.config['SESSION_COOKIE_SECURE']
+
+    sqlite = _eh_sqlite(app.config['SQLALCHEMY_DATABASE_URI'])
+    _garantir_segredo(app, sqlite)
+    # Antes das extensões: configuração recusada não toca em nada.
+    storage = get_storage(app.config['UPLOAD_FOLDER'], local_implicito=sqlite)
+    _atras_de_proxy(app, _saltos_de_proxy())
 
     db.init_app(app)
     migrate.init_app(app, db)
@@ -75,17 +180,15 @@ def create_app(config=None):
     login_manager.login_message = 'Entre para continuar.'
     login_manager.login_message_category = 'warning'
 
-    app.extensions['facilities_storage'] = get_storage(app.config['UPLOAD_FOLDER'])
+    app.extensions['facilities_storage'] = storage
 
     _modelos(app)
     _rotas(app)
     _sessao(app)
     _jinja(app)
     _comandos(app)
-
-    with app.app_context():
-        if db.engine.url.get_backend_name() == 'sqlite':
-            db.create_all()
+    from facilities.core.erros import registrar as registrar_erros
+    registrar_erros(app)
     return app
 
 
@@ -142,6 +245,22 @@ def _sessao(app):
         resp.headers.setdefault('X-Content-Type-Options', 'nosniff')
         resp.headers.setdefault('X-Frame-Options', 'SAMEORIGIN')
         resp.headers.setdefault('Referrer-Policy', 'same-origin')
+        # Câmera só para o próprio sistema (foto da passagem e do chamado);
+        # microfone e localização, para ninguém.
+        resp.headers.setdefault('Permissions-Policy',
+                                'camera=(self), microphone=(), geolocation=()')
+        # HSTS: depois do primeiro acesso em https o navegador não tenta mais
+        # http — onde o cookie "Manter conectado" iria em texto claro. Vai
+        # também quando o https termina no proxy (cookie Secure ligado); o
+        # navegador ignora o cabeçalho recebido por http, então não prende o
+        # desenvolvimento local.
+        if request.is_secure or app.config.get('SESSION_COOKIE_SECURE'):
+            resp.headers.setdefault('Strict-Transport-Security', 'max-age=31536000')
+        # Sem Content-Security-Policy por enquanto, de propósito: o base.html e
+        # as telas da Passagem têm <script> e onclick= inline, e uma CSP que os
+        # aceite ('unsafe-inline') não protege nada. A CSP útil pede nonce em
+        # cada script — trabalho próprio. O enquadramento já é coberto pelo
+        # X-Frame-Options acima.
         return resp
 
 

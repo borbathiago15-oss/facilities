@@ -250,7 +250,8 @@
       if (campos) {
         campos.innerHTML = '<div class="alert alert-warning">' +
           'Esta área ainda não tem um modelo de passagem cadastrado. ' +
-          'Peça ao Master para cadastrar em <strong>Configurar</strong>.</div>';
+          'Peça ao gestor do contrato ou ao administrador para cadastrar ' +
+          'o modelo.</div>';
       }
       return;
     }
@@ -673,7 +674,7 @@
   function salvarTurno(finalizar) {
     if (!configAtual) {
       alert('Este contrato ainda não tem um modelo de passagem cadastrado. ' +
-            'Peça ao Master para cadastrar em Configurar.');
+            'Peça ao gestor do contrato ou ao administrador para cadastrar o modelo.');
       return;
     }
     // A hora do TOQUE em "Encerrar", pelo relógio do aparelho. Sem sinal, o
@@ -701,6 +702,29 @@
     var botoes = document.querySelectorAll('#diario-salvar button');
     botoes.forEach(function (b) { b.disabled = true; });
     fotosProntas().then(function () { continuarSalvar(finalizar, botoes, tocadoEm); });
+  }
+
+  // O recado que o painel mostra no topo depois do envio (base.html lê o
+  // "fc-aviso" do sessionStorage). No celular o painel é longo, e a única
+  // prova de que o encerramento entrou era a lista "Últimos turnos", lá
+  // embaixo: o encarregado ficava sem saber se tinha dado certo.
+  function avisarNaProximaTela(finalizar, corpo, resposta) {
+    var turno = corpo.turno || 'turno';
+    var dia = (corpo.data_turno || '').split('-');
+    var quando = dia.length === 3 ? ' de ' + dia[2] + '/' + dia[1] : '';
+    var texto;
+    if (finalizar) {
+      var n = Number((resposta && resposta.pendencias_deixadas) || 0);
+      texto = 'Passagem do ' + turno + quando + ' encerrada.' +
+        (n ? ' ' + (n === 1 ? '1 pendência ficou' : n + ' pendências ficaram') +
+             ' para o próximo turno.' : '');
+    } else {
+      texto = 'Rascunho do ' + turno + quando + ' salvo. Ele só conta quando ' +
+              'você encerrar a passagem.';
+    }
+    try {
+      sessionStorage.setItem('fc-aviso', JSON.stringify({texto: texto, tipo: 'success'}));
+    } catch (e) { /* sem sessionStorage (aba privada): segue sem o recado */ }
   }
 
   function continuarSalvar(finalizar, botoes, tocadoEm) {
@@ -782,6 +806,7 @@
           return guardarNoAparelho(corpo, semRede.map(function (e) { return e.grupo; }),
                                    res.x.id);
         }
+        avisarNaProximaTela(finalizar, corpo, res.x);
         window.location = '/passagem-de-turno/?client_id=' + corpo.client_id;
       });
     });

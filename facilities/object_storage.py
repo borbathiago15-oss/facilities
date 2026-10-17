@@ -8,7 +8,9 @@ backends:
 - ``LocalStorage`` — disco local. Fallback para desenvolvimento/testes.
 
 A seleção é por ambiente (``STORAGE_BACKEND=local|r2``); sem configuração de R2,
-cai no local automaticamente. As chaves (``key``) são caminhos lógicos como
+cai no local automaticamente — mas só onde quem chama permite (o Facilities
+permite no SQLite de desenvolvimento; com Postgres, o disco local só com
+``STORAGE_BACKEND=local`` escrito). As chaves (``key``) são caminhos lógicos como
 ``op_images/op1_123.png`` — no local viram arquivos sob a pasta base; no R2,
 objetos sob o prefixo configurado.
 """
@@ -102,12 +104,18 @@ class R2Storage:
 _R2_VARS = ('R2_ENDPOINT', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_BUCKET')
 
 
-def get_storage(local_base_dir):
+def get_storage(local_base_dir, local_implicito=True):
     """Retorna o backend conforme o ambiente.
 
     - ``STORAGE_BACKEND=r2`` (ou não definido, mas com todas as R2_* presentes)
       → R2Storage.
-    - caso contrário → LocalStorage(``local_base_dir``).
+    - ``STORAGE_BACKEND=local`` → LocalStorage(``local_base_dir``).
+    - nada definido → LocalStorage, se ``local_implicito``; senão ERRO.
+
+    ``local_implicito=False`` é o modo produção: faltando uma R2_* (ou com o
+    nome dela escrito errado), antes caía no disco do contêiner sem uma linha
+    de log — as fotos sumiam no próximo reinício e o anexo dava 404. Agora o
+    boot para e diz o que falta.
     """
     backend = os.environ.get('STORAGE_BACKEND', '').strip().lower()
     r2_ready = all(os.environ.get(v) for v in _R2_VARS)
@@ -119,4 +127,13 @@ def get_storage(local_base_dir):
             os.environ['R2_ENDPOINT'], os.environ['R2_ACCESS_KEY_ID'],
             os.environ['R2_SECRET_ACCESS_KEY'], os.environ['R2_BUCKET'],
             prefix=os.environ.get('R2_PREFIX', ''))
+    if backend not in ('', 'local'):
+        raise StorageError(f'STORAGE_BACKEND={backend!r} desconhecido: use r2 ou local.')
+    if backend == '' and not local_implicito:
+        faltam = [v for v in _R2_VARS if not os.environ.get(v)]
+        raise StorageError(
+            'Anexos sem destino: faltam ' + ', '.join(faltam) + '. Sem elas os '
+            'arquivos iriam para o disco local do servidor, que se perde a cada '
+            'reinício. Defina as variáveis do R2 — ou STORAGE_BACKEND=local, se '
+            'o disco local for mesmo o destino (com volume persistente).')
     return LocalStorage(local_base_dir)

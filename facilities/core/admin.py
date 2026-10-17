@@ -74,8 +74,8 @@ def criar_usuario():
     u.must_change_password = True
     db.session.add(u)
     db.session.commit()
-    flash(f'{u.name} cadastrado. Senha temporária: {senha} — passe a ele; '
-          f'no primeiro acesso o sistema pede uma senha nova.', 'success')
+    flash(f'Cadastro de {u.name} criado. Senha temporária: {senha} — entregue '
+          f'pessoalmente; no primeiro acesso o sistema pede uma senha nova.', 'success')
     return redirect(url_for('admin.usuarios'))
 
 
@@ -99,7 +99,7 @@ def editar_usuario(uid):
     if era_ativo and not u.is_active:
         u.session_epoch = (u.session_epoch or 0) + 1   # derruba as sessões abertas
     db.session.commit()
-    flash(f'{u.name} atualizado.', 'success')
+    flash(f'Cadastro de {u.name} atualizado.', 'success')
     return redirect(url_for('admin.usuarios'))
 
 
@@ -141,14 +141,28 @@ def _aplicar_contrato(c, form):
     c.responsible_user_id = int(rid) if str(rid or '').isdigit() else None
 
 
+def _responsavel_invalido(c):
+    """O responsável tem de ser gestor ou administrador ATIVO — a lista da
+    tela já é só essa, mas um POST montado à mão aceitava qualquer id (e o
+    encarregado escolhido passava a receber os avisos de gestor)."""
+    if c.responsible_user_id is None:
+        return None
+    u = db.session.get(User, c.responsible_user_id)
+    if (u is None or u.is_deleted or not u.is_active
+            or u.role not in ('master', 'pleno')):
+        return 'O responsável precisa ser um gestor ou administrador ativo.'
+    return None
+
+
 @bp.post('/contratos')
 @login_required
 @admin_required
 def criar_contrato():
     c = Client(is_active=True)
     _aplicar_contrato(c, request.form)
-    if not c.name:
-        flash('Informe o nome do contrato.', 'danger')
+    erro = 'Informe o nome do contrato.' if not c.name else _responsavel_invalido(c)
+    if erro:
+        flash(erro, 'danger')
         return redirect(url_for('admin.contratos'))
     db.session.add(c)
     db.session.commit()
@@ -164,9 +178,10 @@ def editar_contrato(cid):
     c = db.get_or_404(Client, cid)
     _aplicar_contrato(c, request.form)
     c.is_active = bool(request.form.get('is_active'))
-    if not c.name:
+    erro = 'Informe o nome do contrato.' if not c.name else _responsavel_invalido(c)
+    if erro:
         db.session.rollback()
-        flash('Informe o nome do contrato.', 'danger')
+        flash(erro, 'danger')
         return redirect(url_for('admin.contratos'))
     db.session.commit()
     flash(f'Contrato {c.name} atualizado.', 'success')

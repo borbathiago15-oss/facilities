@@ -109,13 +109,34 @@ def perguntas_do_modelo(atividades, campos):
     return [p for p in juntas if p['nome']]
 
 
-def separar_perguntas(perguntas):
+# Os tipos de resposta que a tela do encarregado sabe desenhar. ``sim_nao`` é
+# a rotina (vai para ``atividades_json`` e conta na aderência); o resto só
+# registra (``campos_json``).
+TIPOS_DE_PERGUNTA = ('sim_nao', 'numero', 'texto', 'texto_longo', 'escolha')
+
+
+class PerguntaInvalida(ValueError):
+    """Pergunta com um tipo de resposta que ninguém sabe desenhar → 400."""
+
+
+def separar_perguntas(perguntas, anteriores=None):
     """O caminho de volta: a lista única → as duas do banco, com a ordem.
 
     Guardar a ordem dentro de cada item é o que permite intercalar rotina e
     campo na tela sem uma coluna nova (e sem migração para uma mudança que é
     de apresentação).
+
+    **Tipo vazio ou desconhecido não vira Sim/Não.** Era o que acontecia: o
+    editor não oferecia "escolha", o seletor de tipo ficava em branco, e
+    salvar o modelo sem mexer em nada transformava o semáforo da "Situação
+    geral do turno" numa rotina Sim/Não obrigatória — sem as opções, e
+    passando a pesar na aderência. Agora, com ``anteriores`` (as perguntas
+    que o modelo já tinha, por código), a pergunta que já existia guarda o
+    tipo e as opções dela; a pergunta nova com tipo inválido é recusada
+    (``PerguntaInvalida``). Só a pergunta SEM a chave ``tipo`` continua
+    sendo Sim/Não — é o formato antigo, de quem nunca mandou tipo.
     """
+    anteriores = anteriores or {}
     atividades, campos = [], []
     for i, p in enumerate(perguntas or []):
         if not isinstance(p, dict):
@@ -123,19 +144,34 @@ def separar_perguntas(perguntas):
         nome = (p.get('nome') or '').strip()
         if not nome:
             continue
-        item = {'nome': nome, 'codigo': p.get('codigo') or nome, 'ordem': i}
-        if (p.get('tipo') or 'sim_nao') == 'sim_nao':
+        codigo = p.get('codigo') or nome
+        item = {'nome': nome, 'codigo': codigo, 'ordem': i}
+        antes = anteriores.get(codigo)
+        tipo = p.get('tipo', 'sim_nao')
+        tipo = tipo.strip() if isinstance(tipo, str) else ''
+        if tipo not in TIPOS_DE_PERGUNTA:
+            if antes is None:
+                raise PerguntaInvalida(
+                    f'A pergunta "{nome}" está sem um tipo de resposta válido. '
+                    f'Escolha Sim / Não, Número, Texto, Texto longo ou Escolha.')
+            tipo = antes['tipo']
+        if tipo == 'sim_nao':
             item['obrigatorio'] = p.get('obrigatorio') is not False
             atividades.append(item)
         else:
-            item['tipo'] = p.get('tipo')
+            item['tipo'] = tipo
             item['obrigatorio'] = p.get('obrigatorio') is True
             if item['tipo'] == 'escolha':
                 # O semáforo do recado de WhatsApp — 🟢 NORMAL, 🟡 ATENÇÃO,
                 # 🔴 CRÍTICO — só vira dado se as opções forem do MODELO.
                 # Escolha sem opção não é escolha: vira texto, para a tela
-                # não desenhar um seletor vazio.
-                opcoes = [str(o).strip() for o in (p.get('opcoes') or [])
+                # não desenhar um seletor vazio. Quem não manda ``opcoes``
+                # (a tela antiga, ainda guardada no navegador) não as apaga.
+                brutas = (p['opcoes'] if 'opcoes' in p
+                          else (antes or {}).get('opcoes'))
+                if isinstance(brutas, str):
+                    brutas = brutas.splitlines()
+                opcoes = [str(o).strip() for o in (brutas or [])
                           if str(o).strip()]
                 if opcoes:
                     item['opcoes'] = opcoes
@@ -253,6 +289,16 @@ def index():
                    'area': nomes_de_area.get(por_cfg.get(t.configuracao_id)) or ''}
                   for t in lancados]
 
+    # As ocorrências da lista que JÁ viraram chamado: a linha troca "Abrir
+    # chamado" por "Ver OS-00012 (Em atendimento)". O gestor relê a lista
+    # todo dia e precisa saber, sem clicar, o que já está com a manutenção —
+    # o botão igual em toda linha levava, no segundo clique, a uma OS que
+    # ele nem sabia que existia. Uma consulta para a lista inteira.
+    pode_ver_chamado = current_user.can_view('chamados')
+    chamados_abertos = {}
+    if dados and dados['ocorrencias'] and pode_ver_chamado:
+        chamados_abertos = _chamados_das_ocorrencias([o.id for o in dados['ocorrencias']])
+
     hoje = tempo.hoje()
     # Os modelos ativos, com os turnos de cada um: é o que a gestão escolhe
     # ao atribuir tarefa a um turno. Vai como dado e não como HTML porque a
@@ -276,7 +322,19 @@ def index():
         # `module_required`, que exige poder gravar no módulo.
         pode_gravar=current_user.can_access(MODULO),
         pode_chamado=(current_user.can_access('chamados')
-                      and current_user.can_access(MODULO)))
+                      and current_user.can_access(MODULO)),
+        pode_ver_chamado=pode_ver_chamado,
+        chamados_das_ocorrencias=chamados_abertos)
+
+
+def _chamados_das_ocorrencias(ids):
+    """``{ocorrencia_id: chamado}`` — a mesma porta dos chamados.
+
+    A regra (chamado cancelado não conta, e a ocorrência volta a poder virar
+    chamado) é de ``chamados.servico``; aqui só se pergunta a ele.
+    """
+    from facilities.chamados import servico as chamados
+    return chamados.chamados_das_ocorrencias(ids)
 
 
 @bp.get('/configuracao')
@@ -472,7 +530,10 @@ def criar_configuracao():
     data = request.get_json(silent=True) or {}
     client_id = data.get('client_id')
     _client_allowed(client_id)
-    atividades, campos = _atividades_e_campos(data)
+    try:
+        atividades, campos = _atividades_e_campos(data)
+    except PerguntaInvalida as ex:
+        return jsonify({'error': str(ex)}), 400
     cfg = DiarioConfiguracao(
         client_id=int(client_id),
         area_id=_area_do_contrato(client_id, data.get('area_id')),
@@ -500,12 +561,22 @@ def atualizar_configuracao(config_id):
     cfg = DiarioConfiguracao.query.get_or_404(config_id)
     _client_allowed(cfg.client_id)
     data = request.get_json(silent=True) or {}
+    if 'perguntas' in data:
+        # As perguntas que o modelo JÁ tem, por código: a que chegar sem
+        # tipo (ou com um tipo que a tela não conhecia) guarda o dela — e a
+        # escolha guarda as opções — em vez de virar Sim/Não obrigatória.
+        anteriores = {q['codigo']: q for q in perguntas_do_modelo(
+            _json(cfg.atividades_json, []), _json(cfg.campos_json, []))}
+        try:
+            atividades, campos = separar_perguntas(data.get('perguntas') or [],
+                                                   anteriores)
+        except PerguntaInvalida as ex:
+            return jsonify({'error': str(ex)}), 400
     cfg.nome = (data.get('nome') or cfg.nome).strip()
     if 'area_id' in data:
         cfg.area_id = _area_do_contrato(cfg.client_id, data.get('area_id'))
     cfg.descricao = (data.get('descricao') or '').strip()
     if 'perguntas' in data:
-        atividades, campos = separar_perguntas(data.get('perguntas') or [])
         cfg.atividades_json = json.dumps(atividades, ensure_ascii=False)
         cfg.campos_json = json.dumps(campos, ensure_ascii=False)
     for attr, key in [('turnos_json', 'turnos'), ('campos_json', 'campos'),
@@ -946,10 +1017,15 @@ def salvar_turno():
                     f'{t.turno} de {t.data_turno.strftime("%d/%m")} encerrado com '
                     f'{altas} pendência{"s" if altas > 1 else ""} de prioridade alta',
                     'Abra a passagem para ver o que ficou para o seu turno.',
-                    _link_do_turno(client_id))
+                    _link_do_turno(client_id), client_id)
         _avisar_pendencias_paradas(client_id)
     db.session.commit()
-    return jsonify(_turno_payload(t)), 201
+    # Quantas pendências ESTA passagem deixou em aberto: é o número que a
+    # tela escreve na confirmação ("2 pendências ficaram para o próximo
+    # turno"). No celular o painel é longo, e sem a frase a pessoa não sabia
+    # se o encerramento tinha entrado.
+    deixadas = DiarioPendencia.query.filter_by(turno_id=t.id, status='aberta').count()
+    return jsonify(dict(_turno_payload(t), pendencias_deixadas=deixadas)), 201
 
 
 def _registrar_passagem_das_abertas(t):
@@ -1134,6 +1210,13 @@ def ver_turno(turno_id):
         correcoes=list(t.correcoes or []),
         quem_corrigiu={u.id: (u.name or u.email) for u in User.query.filter(
             User.id.in_([c.created_by for c in (t.correcoes or [])] or [0]))},
+        # Quem prendeu cada foto, quando NÃO foi o autor da passagem (a gestão
+        # também anexa): a foto da gestão não pode ser lida como parte do que
+        # o autor assinou.
+        quem_anexou={u.id: (u.name or u.email) for u in User.query.filter(
+            User.id.in_(list({a.uploaded_by for lista in anexos.values() for a in lista
+                              if a.uploaded_by and a.uploaded_by != t.created_by})
+                        or [0]))},
         autor=User.query.get(t.created_by),
         pendencias=[{'p': p, 'trilha': analitico.trilha_da_pendencia(p.id)}
                     for p in DiarioPendencia.query.filter_by(turno_id=t.id)
@@ -1154,20 +1237,37 @@ def criar_pendencia_gestor():
     titulo = (data.get('titulo') or '').strip()
     if not titulo:
         return jsonify({'error': 'Informe a pendência.'}), 400
+    # O responsável é uma PESSOA DESTE CONTRATO. Aceitar qualquer id gravava
+    # como responsável quem nem abre o contrato (ou um id que não existe —
+    # no Postgres, um erro 500 na hora de gravar).
+    responsavel = None
+    if data.get('assigned_to'):
+        try:
+            responsavel = int(data['assigned_to'])
+        except (TypeError, ValueError):
+            responsavel = None
+        if responsavel is None or not _ve_o_contrato(responsavel, client_id):
+            return jsonify({'error': 'O responsável escolhido não trabalha neste '
+                                     'contrato (ou não está mais ativo). Escolha '
+                                     'alguém do contrato.'}), 400
+    prazo = None
+    if data.get('due_date'):
+        try:
+            prazo = date.fromisoformat(str(data['due_date'])[:10])
+        except ValueError:
+            return jsonify({'error': 'Prazo inválido.'}), 400
     p = DiarioPendencia(client_id=client_id, titulo=titulo,
                         descricao=(data.get('descricao') or '').strip(),
                         prioridade=data.get('prioridade') or 'media',
-                        assigned_to=int(data['assigned_to']) if data.get('assigned_to') else None,
-                        due_date=date.fromisoformat(data['due_date']) if data.get('due_date') else None,
+                        assigned_to=responsavel, due_date=prazo,
                         created_by=current_user.id)
     db.session.add(p)
     if p.prioridade == 'alta':
-        # O responsável só recebe se enxerga o contrato: o título da pendência
-        # não pode chegar ao celular de quem não tem acesso a ele.
+        # O responsável já foi conferido acima: ativo e com o contrato.
         destino = ([p.assigned_to] if p.assigned_to and p.assigned_to != current_user.id
-                   and _ve_o_contrato(p.assigned_to, client_id)
                    else _time_do_piso(client_id, exceto=current_user.id))
-        _avisar(destino, 'Pendência crítica', p.titulo, _link_do_turno(client_id))
+        _avisar(destino, 'Pendência crítica', p.titulo, _link_do_turno(client_id),
+                client_id)
     db.session.commit()
     return jsonify({'id': p.id, 'status': p.status}), 201
 
@@ -1328,25 +1428,58 @@ JANELA_DO_PISO_DIAS = 30
 LIMITE_DO_PISO = 50
 
 
+# Os perfis que fazem a passagem no chão: o encarregado do posto e o técnico
+# de manutenção, que passa o turno da equipe dele. No Trino o encarregado era
+# o único perfil de piso; aqui, sem o técnico, o contrato de manutenção
+# atendido só por técnicos não recebia aviso nenhum.
+PERFIS_DO_PISO = ('encarregado', 'tecnico')
+
+
+def _pode_receber(u, client_id):
+    """Ativo, age na Passagem e tem o contrato HOJE — a régua de todo aviso.
+
+    A carteira é a do ``require_client`` (``acesso.allowed_client_ids_or_none``):
+    o administrador e quem tem "todos os contratos" passam; o resto, só com
+    o contrato vinculado. Conferida na hora do envio, e não na hora em que a
+    pessoa entrou na lista: quem lançou passagem semana passada e saiu do
+    contrato ontem não pode continuar recebendo título de tarefa e de
+    pendência de um contrato que já não abre.
+    """
+    from facilities.core.acesso import allowed_client_ids_or_none
+    if u is None or not u.is_active or u.is_deleted:
+        return False
+    if not u.can_access(MODULO):
+        return False
+    permitidos = allowed_client_ids_or_none(u)
+    return permitidos is None or int(client_id) in permitidos
+
+
 def _time_do_piso(client_id, configuracao_id=None, exceto=None):
-    """Quem está no chão desta operação: os encarregados do contrato e quem
-    lançou passagem desta área nos últimos 30 dias.
+    """Quem está no chão desta operação: o pessoal de piso do contrato
+    (encarregados e técnicos) e quem lançou passagem desta área nos últimos
+    30 dias.
 
     Não há cadastro de "quem trabalha em qual turno" — então vale quem de
     fato lança. Um gestor que nunca lançou passagem não recebe aviso de piso.
+
+    O piso "do contrato" é quem o tem na carteira: vinculado, ou com "todos
+    os contratos" (o volante que cobre qualquer posto) — a mesma régua do
+    ``require_client``, que já o deixa lançar em qualquer contrato.
 
     "Desta área" é a ÁREA do modelo, não o modelo: no CD com um modelo por
     turno, quem lança o T2 noutro modelo é justamente quem herda o que o T1
     deixou (a mesma régua de ``analitico.area_carrega``).
     """
     from datetime import timedelta
+    from sqlalchemy import or_
     from facilities.core.models import User
     ids = set()
-    encarregados = (User.query
-                    .filter(User.clients.any(id=client_id),
-                            User.is_active.is_(True), User.is_deleted.isnot(True))
-                    .all())
-    ids |= {u.id for u in encarregados if u.e_encarregado()}
+    piso = (User.query
+            .filter(User.role.in_(PERFIS_DO_PISO),
+                    or_(User.clients.any(id=client_id), User.all_clients.is_(True)),
+                    User.is_active.is_(True), User.is_deleted.isnot(True))
+            .all())
+    ids |= {u.id for u in piso}
     desde = datetime.utcnow() - timedelta(days=JANELA_DO_PISO_DIAS)
     q = DiarioTurno.query.with_entities(DiarioTurno.created_by).filter(
         DiarioTurno.client_id == client_id, DiarioTurno.created_at >= desde)
@@ -1360,31 +1493,38 @@ def _time_do_piso(client_id, configuracao_id=None, exceto=None):
             da_area = [cid for cid, ch in chaves.items() if ch == alvo] or [configuracao_id]
             q = q.filter(DiarioTurno.configuracao_id.in_(da_area))
     ids |= {uid for (uid,) in q.distinct().all() if uid}
-    if ids:
-        ativos = {u.id for u in User.query.filter(
-            User.id.in_(ids), User.is_active.is_(True),
-            User.is_deleted.isnot(True)).all()}
-        ids &= ativos
     ids.discard(exceto)
+    if ids:
+        # Quem lançou no último mês só fica se AINDA tem o contrato (e
+        # continua ativo): a lista de lançamentos lembra quem saiu.
+        ids = {u.id for u in User.query.filter(User.id.in_(ids)).all()
+               if _pode_receber(u, client_id)}
     return sorted(ids)[:LIMITE_DO_PISO]
 
 
 def _ve_o_contrato(user_id, client_id):
-    """Ativo e com acesso ao contrato — a mesma regra do ``require_client``."""
+    """Ativo, age na Passagem e tem o contrato — a mesma carteira do
+    ``require_client`` (que honra "todos os contratos")."""
     from facilities.core.models import User
-    u = User.query.get(user_id)
-    if u is None or not u.is_active or u.is_deleted:
-        return False
-    return u._effective_role() == 'master' or client_id in u.client_ids
+    return _pode_receber(db.session.get(User, user_id), client_id)
 
 
-def _avisar(user_ids, titulo, mensagem, link):
-    """Grava a notificação na sessão atual; o commit é de quem chamou."""
-    from facilities.core.models import Notification
-    for uid in user_ids:
-        if uid:
+def _avisar(user_ids, titulo, mensagem, link, client_id):
+    """Grava a notificação na sessão atual; o commit é de quem chamou.
+
+    Só recebe quem tem o contrato HOJE (``_pode_receber``). A conferência
+    mora AQUI, e não em cada chamador, para nenhum aviso novo esquecê-la: o
+    gestor que pediu a tarefa e depois saiu do contrato também não pode
+    continuar lendo a resposta do turno no sino.
+    """
+    from facilities.core.models import Notification, User
+    ids = {uid for uid in user_ids if uid}
+    if not ids:
+        return
+    for u in User.query.filter(User.id.in_(ids)).order_by(User.id).all():
+        if _pode_receber(u, client_id):
             db.session.add(Notification(
-                user_id=uid, notification_type='passagem_turno',
+                user_id=u.id, notification_type='passagem_turno',
                 title=titulo[:150], message=mensagem, link=link, status='unread'))
 
 
@@ -1418,7 +1558,14 @@ LIMITE_GESTORES_AVISADOS = LIMITE_DO_PISO
 def _gestores_do_contrato(client_id):
     """Quem responde pelo contrato: o responsável cadastrado nele; sem
     responsável, os plenos vinculados. Nunca "todos os Masters" — o Master é
-    global e receberia a pendência parada de todos os contratos da casa."""
+    global e receberia a pendência parada de todos os contratos da casa.
+
+    O responsável vale se ainda enxerga o contrato pela régua do
+    ``require_client`` — o gestor regional com "todos os contratos" é
+    responsável de verdade, e antes ficava de fora por não ter o vínculo
+    explícito. Já na falta de responsável entram só os VINCULADOS: o regional
+    receberia o aviso de todos os contratos da casa, a mesma conta que os
+    chamados fazem (``chamados.servico.gestores_do_contrato``)."""
     from facilities.core.models import Client, User
     cli = Client.query.get(client_id)
     if cli is not None and cli.responsible_user_id and \
@@ -1462,7 +1609,7 @@ def _avisar_pendencias_paradas(client_id):
                     f'Aberta em {aberta}, prioridade '
                     f'{analitico.rotulo_prioridade(p.prioridade).lower()}. Passou por '
                     f'{n_turnos} passagens sem solução — veja a trilha e cobre um dono.',
-                    links[p.id])
+                    links[p.id], client_id)
 
 
 def _gestor_do_contrato():
@@ -1532,7 +1679,7 @@ def criar_tarefa_turno():
     db.session.add(t)
     _avisar(_time_do_piso(client_id, cfg.id, exceto=current_user.id),
             f'Tarefa para o {turno_nome} de {dia.strftime("%d/%m")}',
-            t.titulo, _link_do_turno(client_id))
+            t.titulo, _link_do_turno(client_id), client_id)
     db.session.commit()
     return jsonify({'ok': True, 'id': t.id}), 201
 
@@ -1647,7 +1794,7 @@ def responder_tarefa_turno(tarefa_id):
         _avisar([t.criada_por],
                 ('Tarefa virou pendência: ' if virou else 'Tarefa feita: ') + t.titulo,
                 f'{t.turno} de {t.data_turno.strftime("%d/%m")} — {texto[:200]}',
-                f'/passagem-de-turno/?client_id={t.client_id}')
+                f'/passagem-de-turno/?client_id={t.client_id}', t.client_id)
     db.session.commit()
     return jsonify({'ok': True, 'id': t.id, 'status': t.status,
                     'pendencia_id': t.pendencia_id})
@@ -1727,7 +1874,7 @@ def _tarefas_no_encerramento(t):
             _avisar([x.criada_por], f'Tarefa não respondida: {x.titulo}',
                     f'{t.turno} de {dia_curto} encerrado sem resposta — virou '
                     f'pendência de prioridade alta.',
-                    f'/passagem-de-turno/?client_id={t.client_id}')
+                    f'/passagem-de-turno/?client_id={t.client_id}', t.client_id)
     db.session.flush()
 
 
@@ -2005,6 +2152,13 @@ def anexar_no_turno(turno_id):
 
     ``atividade`` é o código da linha do checklist. Vazio = observação geral
     do turno.
+
+    **Quem anexa: o autor da passagem, ou a gestão do contrato.** A passagem
+    é o documento que o autor assina; antes, qualquer colega do contrato
+    prendia uma "prova" na linha "Varrer" da passagem encerrada de outro, e a
+    tela a mostrava como parte do documento. O autor continua anexando
+    DEPOIS de encerrar: sem sinal, as fotos sobem pela fila do aparelho só
+    depois do encerramento — recusar ali perderia a prova de quem fez certo.
     """
     import uuid
 
@@ -2017,6 +2171,9 @@ def anexar_no_turno(turno_id):
     _storage = storage()
 
     t = _turno_autorizado(turno_id)
+    if t.created_by != current_user.id and not current_user.sees_client_data():
+        return jsonify({'error': 'Só quem lançou esta passagem, ou a gestão do '
+                                 'contrato, pode anexar fotos e arquivos a ela.'}), 403
     arquivos = [f for f in request.files.getlist('arquivo') if f and f.filename]
     if not arquivos:
         return jsonify({'error': 'Escolha ao menos um arquivo.'}), 400
@@ -2124,10 +2281,17 @@ def baixar_anexo(anexo_id):
 @login_required
 @module_required(MODULO)
 def excluir_anexo(anexo_id):
-    """Remove o anexo — quem subiu ou o Master.
+    """Remove o anexo — no rascunho, quem subiu ou o administrador; na
+    passagem encerrada, só o administrador.
 
     Apagar é apagar: foto trocada ou do turno errado precisa sumir, e deixar
     "inativa" manteria a prova errada à vista de quem consulta.
+
+    Mas a passagem ENCERRADA é o documento assinado (corrigir é só com
+    motivo e trilha, em ``corrigir_turno``): apagar a foto dela, sem rastro,
+    seria reescrever o que foi entregue ao turno seguinte. Ali só o
+    administrador apaga — o caso real é a foto errada que alguém precisa
+    tirar do ar, e é a ele que a recusa manda pedir.
     """
     from flask import current_app as flask_app
 
@@ -2135,9 +2299,15 @@ def excluir_anexo(anexo_id):
     _storage = storage()
 
     a = DiarioAnexo.query.get_or_404(anexo_id)
-    _turno_autorizado(a.turno_id)
-    if a.uploaded_by != current_user.id and current_user._effective_role() != 'master':
-        return jsonify({'error': 'Só quem anexou (ou o Master) pode excluir.'}), 403
+    t = _turno_autorizado(a.turno_id)
+    administrador = current_user._effective_role() == 'master'
+    if t.status == 'encerrado' and not administrador:
+        return jsonify({'error': 'Esta passagem já foi encerrada, e o anexo faz '
+                                 'parte dela. Se a foto está errada, peça ao '
+                                 'administrador para excluir.'}), 403
+    if a.uploaded_by != current_user.id and not administrador:
+        return jsonify({'error': 'Só quem anexou (ou o administrador) pode '
+                                 'excluir.'}), 403
     chave = a.storage_key
     db.session.delete(a)
     db.session.commit()
@@ -2161,12 +2331,24 @@ def abrir_chamado(ocorrencia_id):
     área do modelo, descrição e referência vêm da ocorrência; a crítica entra
     com prioridade alta. Idempotente — o botão fica numa lista que o gestor
     relê todo dia, e o segundo clique leva ao chamado do primeiro.
+
+    As recusas saem SEMPRE em JSON, com a frase para a tela: o botão do painel
+    lê a resposta como JSON, e um 403 em HTML deixava o botão desabilitado
+    sem mensagem nenhuma. A recusa por regra do chamado (``RecusaChamado`` —
+    por exemplo, a ocorrência de uma passagem ainda em rascunho) leva o
+    status que o serviço decidiu.
     """
-    from facilities.core.acesso import require_client
+    from facilities.core.acesso import allowed_client_ids_or_none
     from facilities.chamados import servico as chamados
 
-    o = DiarioOcorrencia.query.get_or_404(ocorrencia_id)
-    require_client(o.client_id)
+    o = db.session.get(DiarioOcorrencia, ocorrencia_id)
+    if o is None:
+        return jsonify({'error': 'Ocorrência não encontrada. A tela pode estar '
+                                 'desatualizada: recarregue a página.'}), 404
+    permitidos = allowed_client_ids_or_none()
+    if permitidos is not None and o.client_id not in permitidos:
+        return jsonify({'error': 'Esta ocorrência é de um contrato que não está '
+                                 'entre os seus contratos.'}), 403
     if not current_user.can_access('chamados'):
         return jsonify({'error': 'Seu perfil não abre chamado.'}), 403
     try:

@@ -74,6 +74,11 @@ STATUS_ENCERRADOS = (FECHADO, CANCELADO)
 ORIGEM_MANUAL = 'manual'
 ORIGEM_OCORRENCIA = 'ocorrencia'
 ORIGEM_PENDENCIA = 'pendencia'
+# Quem entra no índice único de origem (``uq_chamados_origem_viva``): o
+# chamado que veio de outro registro e não foi cancelado. A migração inicial
+# repete este texto À MÃO — e o ``flask db check`` NÃO compara a condição de
+# índice parcial: mudou aqui, escreva uma migração nova que recrie o índice.
+CONDICAO_ORIGEM_VIVA = "origem_id IS NOT NULL AND status <> 'cancelado'"
 
 
 class Chamado(db.Model):
@@ -105,9 +110,17 @@ class Chamado(db.Model):
     atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     __table_args__ = (
-        # A busca por origem: o botão "abrir chamado" fica numa lista relida
-        # todo dia, e o segundo clique tem de achar o chamado do primeiro.
-        db.Index('ix_chamados_origem', 'origem', 'origem_id'),
+        # Uma ocorrência (ou pendência) vira UM chamado vivo — garantido pelo
+        # banco, não só pela consulta: dois cliques ao mesmo tempo (duas abas,
+        # a gestora e o encarregado) passavam os dois pelo "já existe?" e
+        # abriam duas OS. Parcial de propósito: o chamado manual não tem
+        # origem_id (NULL nunca colide), e o CANCELADO sai do índice — a
+        # ocorrência cujo chamado foi cancelado pode virar chamado de novo.
+        # É também o índice da busca por origem (o botão "abrir chamado" fica
+        # numa lista relida todo dia, e o segundo clique acha o do primeiro).
+        db.Index('uq_chamados_origem_viva', 'origem', 'origem_id', unique=True,
+                 postgresql_where=db.text(CONDICAO_ORIGEM_VIVA),
+                 sqlite_where=db.text(CONDICAO_ORIGEM_VIVA)),
     )
 
     contrato = db.relationship('Client')

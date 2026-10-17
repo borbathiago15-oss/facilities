@@ -16,8 +16,8 @@
   <a class="ch-num" href="{{ url_for('chamados.index', client_id=client_id, visao='abertos') }}"><b>{{ numeros.em_aberto }}</b><span>em aberto</span></a>
   <a class="ch-num {% if numeros.atrasados %}alerta{% endif %}" href="{{ url_for('chamados.index', client_id=client_id, visao='atrasados') }}"><b>{{ numeros.atrasados }}</b><span>{{ 'atrasado' if numeros.atrasados == 1 else 'atrasados' }}</span></a>
   <a class="ch-num" href="{{ url_for('chamados.index', client_id=client_id, visao='confirmar') }}"><b>{{ numeros.aguardando_confirmacao }}</b><span>aguardando confirmação</span></a>
-  <div class="ch-num"><b>{% if numeros.pct_no_prazo is none %}—{% else %}{{ '%.0f'|format(numeros.pct_no_prazo) }}%{% endif %}</b><span>resolvidos no prazo ({{ numeros.dias }} dias)</span></div>
-  <div class="ch-num"><b>{% if numeros.horas_medias is none %}—{% elif numeros.horas_medias < 48 %}{{ '%.0f'|format(numeros.horas_medias) }}h{% else %}{{ '%.1f'|format(numeros.horas_medias / 24)|replace('.', ',') }} dias{% endif %}</b><span>tempo médio até resolver</span></div>
+  <div class="ch-num"><b>{% if numeros.pct_no_prazo is none %}—{% else %}{{ '%.1f'|format(numeros.pct_no_prazo)|replace('.', ',') }}%{% endif %}</b><span>resolvidos no prazo ({{ numeros.dias }} dias)</span></div>
+  <div class="ch-num"><b>{% if numeros.horas_medias is none %}—{% elif numeros.horas_medias < 1 %}menos de 1h{% elif numeros.horas_medias < 48 %}{{ '%.0f'|format(numeros.horas_medias) }}h{% else %}{{ '%.1f'|format(numeros.horas_medias / 24)|replace('.', ',') }} dias{% endif %}</b><span>tempo médio até resolver</span></div>
 </div>
 
 <form class="ch-filtros" method="get">
@@ -42,6 +42,9 @@
   {% endfor %}
 </nav>
 
+{% if cortada %}
+<p class="small text-muted mb-2">Mostrando os {{ por_pagina }} chamados mais recentes. Para achar um mais antigo, escolha o contrato, a prioridade ou a categoria acima.</p>
+{% endif %}
 <div class="ch-lista">
   {% for ch in chamados %}
   <a class="ch-item {% if ch.atrasado(agora) %}atrasado{% endif %}" href="{{ url_for('chamados.ver', chamado_id=ch.id) }}">
