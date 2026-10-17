@@ -110,9 +110,11 @@ tests/                 pytest (SQLite por padrão; Postgres com TEST_DATABASE_UR
    vezes maior. Em produção, apontar `RATELIMIT_STORAGE_URI` para um Redis.
 8. **Atrás de proxy** (Cloudflare, balanceador): definir `PROXY_HOPS` com o
    número de proxies, senão todo login conta como vindo do mesmo IP.
-9. **Ícone e marca**: as telas usam o símbolo do grupo (o mesmo ícone do app
-   instalado) e o nome escrito em texto. Se houver um logo oficial do
-   Facilities, trocar `static/pwa/icone-*.png` e a marca do topo.
+9. **Ícone e marca**: logo oficial aplicada em 17/10/2026 —
+   `static/marca/trino-facilities.png` (login) e o símbolo nos ícones do app
+   (`static/pwa/icone-*.png`, `apple-touch-icon.png`). Trocar de novo: mesmos
+   nomes de arquivo e subir `VERSAO` no `sw.js` (o ícone fica guardado no
+   aparelho).
 10. Ideias de produto ainda não decididas: rondas com QR code, preventiva
    (plano e agenda), relatório mensal de chamados, envio da senha temporária
    por e-mail.

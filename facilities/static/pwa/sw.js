@@ -22,7 +22,7 @@
 //
 // Trocar VERSAO força o navegador a instalar a versão nova e apagar a antiga.
 // v4: identidade nova — ícone e página "Sem conexão" guardados de novo.
-const VERSAO = 'facilities-app-v1';
+const VERSAO = 'facilities-app-v2';
 const TELAS = 'trino-telas';
 const ESTATICOS = 'trino-estaticos-v3';
 const OFFLINE = '/static/pwa/offline.html';
