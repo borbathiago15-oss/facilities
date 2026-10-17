@@ -296,8 +296,21 @@ def trilha_local(cid):
 @bp.get('/q/<codigo>')
 @login_required
 def qr(codigo):
+    """O endereço do QR. Quem executa (posto e supervisor) vai direto ao
+    turno, já no ponto; a gestão vê o ponto e o que foi feito ali hoje (D57)."""
+    from facilities.campo.rotas import PERFIS_DO_CAMPO
     ponto = servico.ponto_pelo_codigo(codigo)
     if ponto is None:
         abort(404)
     require_client(ponto.client_id)
-    return render_template('cadastros/ponto.html', ponto=ponto)
+    if _perfil() in PERFIS_DO_CAMPO and ponto.is_active:
+        return redirect(url_for('rotas.turno', ponto=ponto.codigo_qr))
+    from facilities import tempo
+    from facilities.rotas.models import Execucao, TarefaDia
+    hoje = tempo.hoje()
+    tarefas = (TarefaDia.query.filter_by(ponto_id=ponto.id, data=hoje)
+               .order_by(TarefaDia.previsto_para).all())
+    feitas = (Execucao.query.filter(Execucao.ponto_id == ponto.id)
+              .order_by(Execucao.concluida_em.desc()).limit(20).all())
+    feitas = [e for e in feitas if tempo.local(e.concluida_em).date() == hoje]
+    return render_template('cadastros/ponto.html', ponto=ponto, tarefas=tarefas, feitas=feitas)

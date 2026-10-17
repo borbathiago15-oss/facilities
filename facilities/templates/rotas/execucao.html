@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+{% block title %}Execução — {{ ex.ponto.nome }}{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item"><a href="{{ url_for('rotas.inicio') }}">Rotas</a></li><li class="breadcrumb-item"><a href="{{ url_for('rotas.dia', cid=ex.client_id, data=ex.iniciada_em|hora_local('%Y-%m-%d')) }}">Dia</a></li><li class="breadcrumb-item active" aria-current="page">Execução</li>{% endblock %}
+{% block content %}
+<h1 class="fc-titulo">{{ ex.ponto.ambiente.nome }} · {{ ex.ponto.nome }}</h1>
+<p class="fc-sub">{{ ex.versao.modelo.nome }} (versão {{ ex.versao.numero }}){% if ex.extra %} · atividade extra{% endif %}</p>
+<div class="fc-cartao mb-3">
+  <div class="row small">
+    <div class="col-6 col-md-3"><div class="text-muted">Quem fez</div><div class="fw-semibold">{{ ex.pessoa.name }}</div></div>
+    <div class="col-6 col-md-3"><div class="text-muted">QR lido</div><div class="fw-semibold">{{ ex.lido_em|hora_local }}</div></div>
+    <div class="col-6 col-md-3"><div class="text-muted">Concluído</div><div class="fw-semibold">{{ ex.concluida_em|hora_local }}</div></div>
+    <div class="col-6 col-md-3"><div class="text-muted">Registro</div><div class="fw-semibold">{% if ex.sem_sinal %}Feito sem sinal (horário do celular), recebido {{ ex.recebida_em|hora_local }}{% else %}Horário do sistema{% endif %}</div></div>
+  </div>
+  {% if ex.tarefa %}<p class="small mt-2 mb-0">Tarefa das {{ ex.tarefa.previsto_para|hora_local('%H:%M') }} da rota "{{ ex.tarefa.rota.nome }}".</p>{% endif %}
+</div>
+<div class="fc-cartao mb-3">
+  <h2 class="h6 fw-bold">Respostas</h2>
+  <ul class="mb-0">
+  {% for it in itens %}
+    {% if it.codigo in respostas %}
+    <li>{{ it.texto }}: <strong>{{ respostas[it.codigo] }}</strong>{% if originais.get(it.codigo) != respostas.get(it.codigo) %} <span class="small text-muted">(corrigido; original: {{ originais.get(it.codigo, '—') }})</span>{% endif %}</li>
+    {% endif %}
+  {% endfor %}
+  </ul>
+  {% if ex.observacao %}<p class="mt-2 mb-0"><strong>Observação:</strong> {{ ex.observacao }}</p>{% endif %}
+</div>
+{% if ex.fotos %}
+<div class="fc-cartao mb-3">
+  <h2 class="h6 fw-bold">Fotos</h2>
+  <div class="d-flex flex-wrap gap-2">
+    {% for f in ex.fotos %}
+    <figure class="m-0"><a href="{{ url_for('rotas.foto', fid=f.id) }}" target="_blank" rel="noopener"><img class="fc-miniatura" src="{{ url_for('rotas.foto', fid=f.id) }}" alt="Foto {{ f.momento }}"></a>
+      <figcaption class="small text-muted">{{ {'antes': 'Antes', 'depois': 'Depois'}.get(f.momento, f.item_codigo) }}</figcaption></figure>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+{% if ex.nao_conformidades %}
+<div class="fc-cartao mb-3">
+  <h2 class="h6 fw-bold text-danger">Não conformidades</h2>
+  {% for nc in ex.nao_conformidades %}
+  <div class="d-flex flex-wrap gap-2 align-items-center border-top py-2">
+    <span>{{ nc.item_texto }}: <strong>{{ nc.resposta }}</strong></span>
+    {% if nc.chamado_id %}<a class="ms-auto" href="{{ url_for('chamados.ver', chamado_id=nc.chamado_id) }}">Ver o chamado</a>
+    {% else %}
+    <form method="post" action="{{ url_for('rotas.chamado_da_nc', nid=nc.id) }}" class="ms-auto m-0">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-sm btn-outline-danger" type="submit">Abrir chamado</button>
+    </form>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% if ex.correcoes %}
+<div class="fc-cartao mb-3">
+  <h2 class="h6 fw-bold">Correções</h2>
+  {% for c in ex.correcoes %}<p class="small mb-1">{{ c.created_at|hora_local }} · {{ c.autor.name }}: {{ c.motivo }}</p>{% endfor %}
+</div>
+{% endif %}
+{% if pode_corrigir %}
+<details class="fc-cartao"><summary class="fw-bold">Corrigir uma resposta</summary>
+  <p class="small text-muted mt-2">A resposta original não se apaga: a correção fica registrada com o seu nome e o motivo.</p>
+  <form method="post" action="{{ url_for('rotas.corrigir', eid=ex.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% for it in itens %}
+    <label class="form-label small" for="r_{{ it.codigo }}">{{ it.texto }}</label>
+    <input class="form-control mb-2" id="r_{{ it.codigo }}" name="r_{{ it.codigo }}" value="{{ respostas.get(it.codigo, '') }}">
+    {% endfor %}
+    <label class="form-label small fw-semibold" for="cmotivo">Motivo da correção</label>
+    <input class="form-control mb-2" id="cmotivo" name="motivo" required minlength="5" maxlength="500">
+    <button class="btn btn-primary fw-bold" type="submit">Registrar correção</button>
+  </form>
+</details>
+{% endif %}
+{% endblock %}

@@ -167,8 +167,9 @@ def test_qr_exige_login_e_carteira(app_module, auth_client):
                        locais=['Shopping Centro'])
     assert fabrica.entrar(app_module, 'enc.fora@trino.com').get(
         f"/q/{ids['qr']}").status_code == 403
-    assert fabrica.entrar(app_module, 'enc.dentro@trino.com').get(
-        f"/q/{ids['qr']}").status_code == 200
+    # Quem executa vai direto ao turno, já no ponto (Fase 4A).
+    r = fabrica.entrar(app_module, 'enc.dentro@trino.com').get(f"/q/{ids['qr']}")
+    assert r.status_code == 302 and f"/app/turno?ponto={ids['qr']}" in r.headers['Location']
 
 
 def test_menu_mostra_cadastros_para_a_gestao(app_module, auth_client):

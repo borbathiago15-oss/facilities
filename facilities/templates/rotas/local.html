@@ -1,0 +1,67 @@
+{% extends 'base.html' %}
+{% block title %}{{ local.name }} — rotas{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item"><a href="{{ url_for('rotas.inicio') }}">Rotas</a></li><li class="breadcrumb-item active" aria-current="page">{{ local.name }}</li>{% endblock %}
+{% block content %}
+<h1 class="fc-titulo">{{ local.name }}</h1>
+<p class="fc-sub">Primeiro os checklists (o que fazer), depois as rotas (onde, quando e quem).</p>
+<div class="d-flex flex-wrap gap-2 mb-3">
+  <a class="btn btn-primary btn-sm" href="{{ url_for('rotas.dia', cid=local.id) }}"><i class="bi bi-calendar-check"></i> Acompanhar hoje</a>
+  <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('cadastros.local', cid=local.id) }}"><i class="bi bi-diagram-3"></i> Pontos e QR do local</a>
+</div>
+
+<section class="fc-cartao mb-3" aria-labelledby="tit-ck">
+  <h2 class="h6 fw-bold" id="tit-ck"><i class="bi bi-ui-checks"></i> Checklists deste local</h2>
+  {% for m in modelos %}
+  <a class="d-flex flex-wrap gap-2 align-items-center border-top py-2 text-reset text-decoration-none" href="{{ url_for('rotas.modelo', mid=m.id) }}">
+    <span class="fw-semibold">{{ m.nome }}</span>
+    {% if m.versao_atual %}<span class="badge text-bg-light">versão {{ m.versao_atual.numero }}</span>{% else %}<span class="badge text-bg-warning">não publicado</span>{% endif %}
+    {% if m.origem_id %}<span class="small text-muted">cópia da biblioteca</span>{% endif %}
+    <i class="bi bi-chevron-right ms-auto"></i>
+  </a>
+  {% else %}
+  <p class="small text-muted">Nenhum checklist ainda. Copie um da biblioteca da Trino ou crie um novo.</p>
+  {% endfor %}
+  {% if pode_montar %}
+  <div class="row g-2 mt-2">
+    {% if biblioteca %}
+    <form class="col-md-6 d-flex gap-2" method="post" action="{{ url_for('rotas.copiar', cid=local.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label class="visually-hidden" for="copiar">Checklist da biblioteca</label>
+      <select class="form-select" id="copiar" name="modelo_id">{% for b in biblioteca %}<option value="{{ b.id }}">{{ b.nome }}</option>{% endfor %}</select>
+      <button class="btn btn-outline-primary text-nowrap" type="submit">Copiar da biblioteca</button>
+    </form>
+    {% endif %}
+    <form class="col-md-6 d-flex gap-2" method="post" action="{{ url_for('rotas.criar_modelo', cid=local.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label class="visually-hidden" for="novock">Nome do checklist novo</label>
+      <input class="form-control" id="novock" name="nome" required maxlength="150" placeholder="Nome do checklist novo">
+      <button class="btn btn-outline-primary text-nowrap" type="submit">Criar</button>
+    </form>
+  </div>
+  {% endif %}
+</section>
+
+<section class="fc-cartao" aria-labelledby="tit-rotas">
+  <h2 class="h6 fw-bold" id="tit-rotas"><i class="bi bi-signpost-split"></i> Rotas</h2>
+  {% for r in rotas %}
+  <a class="d-flex flex-wrap gap-2 align-items-center border-top py-2 text-reset text-decoration-none" href="{{ url_for('rotas.rota', rid=r.id) }}">
+    <span class="fw-semibold">{{ r.nome }}</span>
+    <span class="small text-muted">{{ r.turno }} · {{ r.hora_inicio.strftime('%H:%M') }} às {{ r.hora_fim.strftime('%H:%M') }} · {{ r.itens|length }} atividade(s)</span>
+    {% if not r.is_active %}<span class="badge text-bg-secondary">desativada</span>{% endif %}
+    <i class="bi bi-chevron-right ms-auto"></i>
+  </a>
+  {% else %}
+  <p class="small text-muted">Nenhuma rota ainda.</p>
+  {% endfor %}
+  {% if pode_montar %}
+  <details class="mt-2" {% if not rotas %}open{% endif %}>
+    <summary class="fw-semibold">Criar rota</summary>
+    <form method="post" action="{{ url_for('rotas.criar_rota', cid=local.id) }}" class="mt-2">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% include 'rotas/_campos_rota.html' %}
+      <button class="btn btn-primary fw-bold mt-2" type="submit">Criar rota</button>
+    </form>
+  </details>
+  {% endif %}
+</section>
+{% endblock %}

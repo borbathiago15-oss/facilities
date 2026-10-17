@@ -1,0 +1,13 @@
+{% set sfx = item.id if item else 'novo' %}
+<div class="row g-2">
+  <div class="col-md-5"><label class="form-label small fw-semibold" for="ip{{ sfx }}">Ponto (com QR)</label>
+    <select class="form-select" id="ip{{ sfx }}" name="ponto_id" required>{% for p in pontos %}<option value="{{ p.id }}" {% if item and item.ponto_id == p.id %}selected{% endif %}>{{ p.ambiente.setor.nome }} · {{ p.ambiente.nome }} · {{ p.nome }}</option>{% endfor %}</select></div>
+  <div class="col-md-4"><label class="form-label small fw-semibold" for="im{{ sfx }}">Checklist</label>
+    <select class="form-select" id="im{{ sfx }}" name="modelo_id" required>{% for m in modelos %}<option value="{{ m.id }}" {% if item and item.modelo_id == m.id %}selected{% endif %}>{{ m.nome }}</option>{% endfor %}</select></div>
+  <div class="col-md-3"><label class="form-label small fw-semibold" for="io{{ sfx }}">Ordem</label>
+    <input class="form-control" id="io{{ sfx }}" name="ordem" inputmode="numeric" value="{{ item.ordem if item else '' }}"></div>
+  <div class="col-md-7"><label class="form-label small fw-semibold" for="ih{{ sfx }}">Horários fixos</label>
+    <input class="form-control" id="ih{{ sfx }}" name="horarios" value="{{ (item.horarios or '') if item else '' }}" placeholder="Ex.: 07:00, 09:00, 11:00, 13:00"></div>
+  <div class="col-md-5"><label class="form-label small fw-semibold" for="if{{ sfx }}">e/ou a cada (minutos)</label>
+    <input class="form-control" id="if{{ sfx }}" name="frequencia_min" type="number" min="15" max="720" value="{{ (item.frequencia_min or '') if item else '' }}" placeholder="Ex.: 60 (de hora em hora)"></div>
+</div>

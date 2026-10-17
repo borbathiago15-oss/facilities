@@ -100,7 +100,45 @@ def local_a(app_module, auth_client):
         ids['anexo_passagem'] = an.id if an else 999999
         ca = ChamadoAnexo.query.filter_by(chamado_id=ids['chamado']).first()
         ids['anexo_chamado'] = ca.id if ca else 999999
+        ids.update(_rotas_de_a(app_module, a, ids))
     return ids
+
+
+def _rotas_de_a(app_module, a, ids):
+    """Fase 4A: checklist, rota, escala, tarefa, execução com foto e NC em A."""
+    from app import User, db
+    from facilities.rotas import servico as s
+    from facilities.rotas.models import Execucao, ExecucaoFoto, NaoConformidade, RotaEscala
+    from tests.test_rotas_servico import Arquivo
+    loc = fabrica.local()
+    m = s.criar_modelo(a, {'nome': f'Checklist {MARCA}'}, None)
+    s.publicar(m, s.normalizar_itens([{'texto': f'Pergunta {MARCA}', 'tipo': 'sim_nao',
+                                       'problema_se': 'nao'}]), {}, None)
+    rota = s.salvar_rota(loc, None, {'nome': f'Rota {MARCA}', 'turno': 'T1',
+                                     'hora_inicio': '00:00', 'hora_fim': '23:59',
+                                     'tolerancia_min': '240', 'dias_semana': '1234567'})
+    item = s.salvar_item(rota, None, {'ponto_id': ids['ponto'], 'modelo_id': m.id,
+                                      'horarios': tempo.agora().strftime('%H:%M')})
+    dono = fabrica.pessoa(app_module, 'dono.a@trino.com', 'encarregado',
+                          locais=['Shopping Centro'])
+    s.salvar_escala(rota, {'user_id': dono, 'dias_semana': '1234567',
+                           'data_inicio': tempo.hoje().isoformat()})
+    s.garantir_hoje([a])
+    db.session.commit()
+    tarefa = s.tarefas_do_dia([a], tempo.hoje())[0]
+    from facilities.cadastros.models import PontoInspecao
+    ex, _ = s.registrar_execucao(db.session.get(User, dono), {
+        'envio_id': 'varredura-a-0001', 'ponto': db.session.get(PontoInspecao, ids['ponto']).codigo_qr,
+        'tarefa_id': tarefa.id, 'respostas': {s.normalizar_itens([{'texto': f'Pergunta {MARCA}'}])[0]['codigo']: 'nao'},
+        'sem_sinal': True, 'lido_em': tarefa.previsto_para.isoformat()},
+        {'depois': [Arquivo()]}, agora_utc=tarefa.previsto_para)
+    # Uma segunda tarefa, ainda aberta, para a rota "não realizada".
+    db.session.commit()
+    return {'modelo': m.id, 'rota': rota.id, 'item': item.id,
+            'escala': RotaEscala.query.filter_by(rota_id=rota.id).one().id,
+            'tarefa_rota': tarefa.id, 'execucao': ex.id,
+            'foto': ExecucaoFoto.query.filter_by(execucao_id=ex.id).first().id,
+            'nc': NaoConformidade.query.filter_by(execucao_id=ex.id).first().id}
 
 
 def _digital(app_module, a):
@@ -124,7 +162,14 @@ def _digital(app_module, a):
     return hashlib.sha256(repr(partes).encode()).hexdigest()
 
 
-def _valor_do_parametro(nome, ids, entidade=None):
+def _valor_do_parametro(nome, ids, entidade=None, endpoint=''):
+    if endpoint.startswith('rotas.'):
+        por_rota = {'eid': ids['escala'] if 'escala' in endpoint else ids['execucao'],
+                    'rid': ids['rota'], 'iid': ids['item'], 'mid': ids['modelo'],
+                    'nid': ids['nc'], 'fid': ids['foto'], 'tid': ids['tarefa_rota'],
+                    'cid': ids['local']}
+        if nome in por_rota:
+            return por_rota[nome]
     mapa = {
         'cid': ids['local'], 'client_id': ids['local'], 'chamado_id': ids['chamado'],
         'turno_id': ids['turno'], 'pending_id': ids['pendencia'], 'tarefa_id': ids['tarefa'],
@@ -150,7 +195,7 @@ def _urls(app_module, ids):
                     v = ids['anexo_chamado'] if regra.endpoint.startswith('chamados.') \
                         else ids['anexo_passagem']
                 else:
-                    v = _valor_do_parametro(arg, ids, ent)
+                    v = _valor_do_parametro(arg, ids, ent, regra.endpoint)
                 assert v is not None, (f'A varredura não sabe de onde vem <{arg}> de '
                                        f'{regra.rule}: ensine em _valor_do_parametro.')
                 valores[arg] = v
@@ -173,7 +218,14 @@ def test_ninguem_de_b_le_ou_altera_a(app_module, local_a, papel):
              'nome': 'Invasão', 'texto': 'Invasão', 'motivo': 'Invasão', 'resposta': 'x',
              'acao': 'cancelar', 'setor_id': local_a['setor'],
              'ambiente_id': local_a['ambiente'], 'data_turno': tempo.hoje().isoformat(),
-             'turno': 'Diurno', 'ativo': '0'}
+             'turno': 'Diurno', 'ativo': '0',
+             # Fase 4A: o QR e a tarefa de A, no JSON e no "corpo" do aplicativo.
+             'ponto': local_a['qr'], 'tarefa_id': local_a['tarefa_rota'],
+             'motivo': 'acesso', 'versao_id': '1',
+             'corpo': json.dumps({'envio_id': f'invasao-{papel}-0001', 'ponto': local_a['qr'],
+                                  'tarefa_id': local_a['tarefa_rota'], 'respostas': {},
+                                  'sem_sinal': True,
+                                  'lido_em': '2026-10-17T12:00:00'})}
     vazou = []
     for endpoint, metodo, caminho in _urls(app_module, local_a):
         url = caminho + (('&' if '?' in caminho else '?') + f'client_id={a}')

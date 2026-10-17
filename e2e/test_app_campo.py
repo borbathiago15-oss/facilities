@@ -38,9 +38,8 @@ def test_a_camera_le_o_qr_e_abre_o_ponto(servidor, navegador, perfil):
         pg = ctx.new_page()
         entrar(pg, servidor['base'], 'ana@e2e.test')
         pg.goto(servidor['base'] + '/app/ler-qr')
-        pg.wait_for_url('**/q/' + servidor['qr'], timeout=20000)
+        pg.wait_for_url('**/app/turno?ponto=' + servidor['qr'], timeout=20000)
         assert pg.get_by_role('heading', name='Porta do banheiro').is_visible()
-        assert 'QR conferido' in pg.content()
     finally:
         b.close()
 

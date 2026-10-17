@@ -1,0 +1,102 @@
+{% extends 'base.html' %}
+{% block title %}{{ rota.nome }}{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item"><a href="{{ url_for('rotas.inicio') }}">Rotas</a></li><li class="breadcrumb-item"><a href="{{ url_for('rotas.local', cid=rota.client_id) }}">{{ rota.local.name }}</a></li><li class="breadcrumb-item active" aria-current="page">{{ rota.nome }}</li>{% endblock %}
+{% block content %}
+<h1 class="fc-titulo">{{ rota.nome }}</h1>
+<p class="fc-sub">{{ rota.turno }} · {{ rota.hora_inicio.strftime('%H:%M') }} às {{ rota.hora_fim.strftime('%H:%M') }} · tolerância de {{ rota.tolerancia_min }} min · {% for d in rota.dias_semana %}{{ dias[d] }}{% if not loop.last %}, {% endif %}{% endfor %}{% if not rota.is_active %} · <strong>desativada</strong>{% endif %}</p>
+
+<section class="fc-cartao mb-3" aria-labelledby="tit-ativ">
+  <h2 class="h6 fw-bold" id="tit-ativ"><i class="bi bi-list-check"></i> Atividades (onde, o quê e quando)</h2>
+  {% for it in rota.itens %}
+  <div class="border-top py-2 {% if not it.is_active %}text-muted{% endif %}">
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+      <span class="fw-semibold">{{ it.ponto.ambiente.nome }} · {{ it.ponto.nome }}</span>
+      <span class="small">{{ it.modelo.nome }}</span>
+      {% if not it.is_active %}<span class="badge text-bg-secondary">fora da rota</span>{% endif %}
+    </div>
+    <div class="small text-muted">
+      {% if it.horarios %}Horários: {{ it.horarios }}{% endif %}{% if it.horarios and it.frequencia_min %} · {% endif %}{% if it.frequencia_min %}a cada {{ it.frequencia_min }} min{% endif %}
+      · hoje: {% for m in horarios(it) %}{{ m.strftime('%H:%M') }}{% if not loop.last %}, {% endif %}{% else %}nenhum{% endfor %}
+    </div>
+    {% if pode_montar %}
+    <details class="mt-1"><summary class="small">Alterar</summary>
+      <form method="post" action="{{ url_for('rotas.editar_item', rid=rota.id, iid=it.id) }}" class="mt-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {% set item = it %}{% include 'rotas/_campos_item.html' %}
+        <button class="btn btn-primary btn-sm fw-bold mt-2" type="submit">Salvar</button>
+      </form>
+      <form method="post" action="{{ url_for('rotas.editar_item', rid=rota.id, iid=it.id) }}" class="mt-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="ativo" value="{{ '0' if it.is_active else '1' }}">
+        <button class="btn btn-outline-secondary btn-sm" type="submit">{{ 'Tirar da rota' if it.is_active else 'Voltar para a rota' }}</button>
+      </form>
+    </details>
+    {% endif %}
+  </div>
+  {% else %}
+  <p class="small text-muted">Nenhuma atividade ainda.</p>
+  {% endfor %}
+  {% if pode_montar %}
+  {% if not pontos or not modelos %}
+  <div class="alert alert-warning small mt-2">Para incluir atividades, o local precisa de {% if not pontos %}<a href="{{ url_for('cadastros.local', cid=rota.client_id) }}">pontos com QR</a>{% endif %}{% if not pontos and not modelos %} e de {% endif %}{% if not modelos %}<a href="{{ url_for('rotas.local', cid=rota.client_id) }}">checklist publicado</a>{% endif %}.</div>
+  {% else %}
+  <details class="mt-2" {% if not rota.itens %}open{% endif %}><summary class="fw-semibold">+ Incluir atividade</summary>
+    <form method="post" action="{{ url_for('rotas.criar_item', rid=rota.id) }}" class="mt-2">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% set item = none %}{% include 'rotas/_campos_item.html' %}
+      <button class="btn btn-primary btn-sm fw-bold mt-2" type="submit">Incluir</button>
+    </form>
+  </details>
+  {% endif %}
+  {% endif %}
+</section>
+
+<section class="fc-cartao mb-3" aria-labelledby="tit-esc">
+  <h2 class="h6 fw-bold" id="tit-esc"><i class="bi bi-person-badge"></i> Quem executa (escala)</h2>
+  {% for e in rota.escalas if e.is_active %}
+  <div class="d-flex flex-wrap gap-2 align-items-center border-top py-2">
+    <span class="fw-semibold">{{ e.pessoa.name }}</span>
+    <span class="small text-muted">{% for d in e.dias_semana %}{{ dias[d] }}{% if not loop.last %}, {% endif %}{% endfor %} · desde {{ e.data_inicio.strftime('%d/%m/%Y') }}{% if e.data_fim %} até {{ e.data_fim.strftime('%d/%m/%Y') }}{% endif %}</span>
+    {% if pode_montar %}
+    <form method="post" action="{{ url_for('rotas.encerrar_escala', rid=rota.id, eid=e.id) }}" class="ms-auto m-0">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-outline-secondary btn-sm" type="submit">Encerrar escala</button>
+    </form>
+    {% endif %}
+  </div>
+  {% else %}
+  <p class="small text-muted">Ninguém escalado: as tarefas aparecem para todo o pessoal do local.</p>
+  {% endfor %}
+  {% if pode_montar %}
+  <details class="mt-2"><summary class="fw-semibold">+ Escalar pessoa</summary>
+    <form method="post" action="{{ url_for('rotas.criar_escala', rid=rota.id) }}" class="mt-2">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="row g-2">
+        <div class="col-md-4"><label class="form-label small fw-semibold" for="epes">Pessoa</label>
+          <select class="form-select" id="epes" name="user_id" required><option value="">Escolha</option>{% for p in pessoas %}<option value="{{ p.id }}">{{ p.name }} — {{ p.perfil_rotulo }}</option>{% endfor %}</select></div>
+        <div class="col-6 col-md-2"><label class="form-label small fw-semibold" for="eini">A partir de</label><input class="form-control" id="eini" name="data_inicio" type="date" value="{{ hoje }}" required></div>
+        <div class="col-6 col-md-2"><label class="form-label small fw-semibold" for="efim">Até (opcional)</label><input class="form-control" id="efim" name="data_fim" type="date"></div>
+        <fieldset class="col-md-4"><legend class="form-label small fw-semibold mb-1">Dias</legend>
+          <div class="d-flex flex-wrap gap-1">{% for k, v in dias.items() %}<label class="border rounded px-2 py-1 small"><input type="checkbox" name="dias_semana" value="{{ k }}" {% if k in rota.dias_semana %}checked{% endif %}> {{ v }}</label>{% endfor %}</div></fieldset>
+      </div>
+      <button class="btn btn-primary btn-sm fw-bold mt-2" type="submit">Escalar</button>
+    </form>
+  </details>
+  {% endif %}
+</section>
+
+{% if pode_montar %}
+<details class="fc-cartao mb-3"><summary class="fw-bold">Alterar a rota (turno, horário, tolerância, dias)</summary>
+  <form method="post" action="{{ url_for('rotas.editar_rota', rid=rota.id) }}" class="mt-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% include 'rotas/_campos_rota.html' %}
+    <button class="btn btn-primary fw-bold mt-2" type="submit">Salvar</button>
+  </form>
+  <form method="post" action="{{ url_for('rotas.ativo_rota', rid=rota.id) }}" class="mt-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="ativo" value="{{ '0' if rota.is_active else '1' }}">
+    <button class="btn btn-outline-secondary btn-sm" type="submit">{{ 'Desativar a rota' if rota.is_active else 'Reativar a rota' }}</button>
+  </form>
+</details>
+{% endif %}
+{% endblock %}

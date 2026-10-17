@@ -554,3 +554,23 @@ body.dark .page-title, body.dark .pg-titulo, body.dark .pg-num-v, body.dark .pg-
 .fc-leitor video { width: 100%; height: 100%; object-fit: cover; }
 .fc-leitor-mira { position: absolute; inset: 18%; border: 3px solid rgba(255, 255, 255, .85);
   border-radius: 12px; box-shadow: 0 0 0 999px rgba(0, 0, 0, .35); }
+
+/* ── Rotas: situação das tarefas e miniaturas ─────────────────────────── */
+.fc-sit { font-weight: 700; }
+.fc-sit-prevista { background: var(--gray-100, #f1f3f5); color: var(--gray-700, #495057); }
+.fc-sit-no_horario { background: var(--info); color: #fff; }
+.fc-sit-atrasada { background: var(--aviso); color: #fff; }
+.fc-sit-concluida_no_prazo { background: var(--ok); color: #fff; }
+.fc-sit-concluida_com_atraso { background: var(--aviso-fundo); color: var(--aviso); border: 1px solid var(--aviso-borda); }
+.fc-sit-nao_realizada { background: var(--perigo-fundo); color: var(--perigo); border: 1px solid var(--perigo-borda); }
+.fc-sit-perdida { background: var(--perigo); color: #fff; }
+.fc-miniatura { width: 120px; height: 120px; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--linha); }
+.fc-opcao { position: relative; display: flex; align-items: center; justify-content: center; min-height: 52px;
+  border: 2px solid var(--linha); border-radius: var(--radius-sm); font-weight: 700; cursor: pointer; }
+.fc-opcao:has(.fc-opcao-radio:checked) { border-color: var(--marca); background: var(--marca); color: #fff; }
+.fc-opcao:has(.fc-opcao-radio:focus-visible) { outline: 3px solid var(--info); outline-offset: 2px; }
+.fc-opcao-radio { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.fc-texto-livre { white-space: pre-line; }
+.fc-foto { position: relative; }
+.fc-foto-input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.fc-foto:has(.fc-foto-input:focus-visible) label { outline: 3px solid var(--info); outline-offset: 2px; }

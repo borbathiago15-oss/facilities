@@ -43,7 +43,9 @@
     parar();
     dizer('QR lido. Abrindo…');
     if (navigator.vibrate) { try { navigator.vibrate(80); } catch (e) {} }
-    location.assign(alvo);
+    // No aplicativo, o QR abre o turno já no ponto lido: essa tela tem cópia
+    // no aparelho e funciona também sem sinal.
+    location.assign('/app/turno?ponto=' + encodeURIComponent(alvo.slice(3)));
     return true;
   }
 

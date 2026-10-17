@@ -63,6 +63,25 @@ def montar(caminho_db):
             atividades_json=json.dumps([{'nome': 'Banheiros limpos', 'codigo': 'banheiros',
                                          'obrigatorio': False}]),
             tipos_ocorrencia_json='[]', ativo=True, created_by=admin.id))
+        # Fase 4A: a rota da Ana — o banheiro AGORA (para o teste não depender
+        # da hora em que roda), com uma pergunta e foto de depois.
+        from facilities import tempo
+        from facilities.rotas import servico as rotas
+        m = rotas.criar_modelo(local.id, {'nome': 'Limpeza de banheiro',
+                                          'descricao': 'Repor papel, limpar e secar o piso.'},
+                               admin)
+        rotas.publicar(m, rotas.normalizar_itens([
+            {'texto': 'Papel higiênico reposto?', 'tipo': 'sim_nao', 'obrigatorio': True,
+             'problema_se': 'nao'}]), {'exige_foto_depois': '1'}, admin)
+        rota = rotas.salvar_rota(local, None, {
+            'nome': 'Limpeza 2º andar', 'turno': '1º Turno', 'hora_inicio': '00:00',
+            'hora_fim': '23:59', 'tolerancia_min': '240', 'dias_semana': '1234567'})
+        ponto = PontoInspecao.query.filter_by(codigo_qr=QR_DO_TESTE).one()
+        rotas.salvar_item(rota, None, {'ponto_id': ponto.id, 'modelo_id': m.id,
+                                       'horarios': tempo.agora().strftime('%H:%M')})
+        rotas.salvar_escala(rota, {'user_id': pessoas['ana@e2e.test'].id,
+                                   'dias_semana': '1234567',
+                                   'data_inicio': tempo.hoje().isoformat()})
         db.session.commit()
     return app
 

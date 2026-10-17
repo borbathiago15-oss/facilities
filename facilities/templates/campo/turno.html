@@ -1,0 +1,20 @@
+{% extends 'campo/base_app.html' %}
+{% block title %}Meu turno{% endblock %}
+{% block content %}
+<div id="turno-app">
+  <noscript><div class="alert alert-warning">O aplicativo precisa do JavaScript ligado.</div></noscript>
+  <div id="turno-aviso" role="status"></div>
+  <section id="turno-ponto" hidden></section>
+  <section id="turno-execucao" hidden></section>
+  <section id="turno-lista">
+    <h1 class="fc-titulo">Meu turno</h1>
+    <p class="fc-sub" id="turno-sub">Tarefas de hoje nos seus locais.</p>
+    <a class="btn btn-primary btn-lg w-100 fc-app-acao mb-3" href="{{ url_for('campo.ler_qr') }}"><i class="bi bi-qr-code-scan"></i> Ler o QR do local</a>
+    <div id="turno-itens"></div>
+  </section>
+</div>
+{# Os dados vão como JSON (não executa): é o que deixa a tela funcionar
+   também SEM internet, a partir da cópia guardada no aparelho. #}
+<script type="application/json" id="turno-dados">{{ dados|tojson }}</script>
+{% endblock %}
+{% block scripts_app %}<script src="{{ url_for('static', filename='js/rotas-turno.js') }}"></script>{% endblock %}

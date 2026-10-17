@@ -6,9 +6,23 @@
 {% if not ponto.is_active %}
 <div class="alert alert-warning">Este ponto está desativado. Se a etiqueta ainda está na parede, avise a gestão.</div>
 {% endif %}
-<div class="fc-cartao">
+<div class="fc-cartao mb-3">
   {% if ponto.descricao %}<p>{{ ponto.descricao }}</p>{% endif %}
   {% if ponto.equipamento %}<p class="small mb-1"><strong>Equipamento:</strong> {{ ponto.equipamento.nome }}{% if ponto.equipamento.patrimonio %} · patrimônio {{ ponto.equipamento.patrimonio }}{% endif %}</p>{% endif %}
   <p class="small text-muted mb-0">QR conferido: este é o ponto certo.</p>
+</div>
+<div class="fc-cartao">
+  <h2 class="h6 fw-bold">Hoje neste ponto</h2>
+  {% for t in tarefas or [] %}
+  <div class="d-flex flex-wrap gap-2 border-top py-1 small">
+    <span class="fw-bold">{{ t.previsto_para|hora_local('%H:%M') }}</span><span>{{ t.versao.modelo.nome }}</span>
+    <span class="ms-auto">{% if t.execucoes %}<a href="{{ url_for('rotas.execucao', eid=t.execucoes[0].id) }}">{{ t.execucoes[0].pessoa.name }} · {{ t.execucoes[0].concluida_em|hora_local('%H:%M') }}</a>{% else %}{{ t.status.replace('_', ' ') }}{% endif %}</span>
+  </div>
+  {% else %}
+  <p class="small text-muted mb-0">Nenhuma tarefa de rota hoje.</p>
+  {% endfor %}
+  {% for e in feitas or [] if e.extra %}
+  <div class="d-flex flex-wrap gap-2 border-top py-1 small"><span class="fw-bold">{{ e.concluida_em|hora_local('%H:%M') }}</span><span>{{ e.versao.modelo.nome }} (extra)</span><span class="ms-auto">{{ e.pessoa.name }}</span></div>
+  {% endfor %}
 </div>
 {% endblock %}

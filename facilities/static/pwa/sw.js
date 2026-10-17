@@ -22,7 +22,7 @@
 //
 // Trocar VERSAO força o navegador a instalar a versão nova e apagar a antiga.
 // v4: identidade nova — ícone e página "Sem conexão" guardados de novo.
-const VERSAO = 'facilities-app-v3';
+const VERSAO = 'facilities-app-v4';
 const TELAS = 'trino-telas';
 const ESTATICOS = 'trino-estaticos-v3';
 const OFFLINE = '/static/pwa/offline.html';
@@ -32,6 +32,7 @@ const TELAS_SEM_INTERNET = [
   /^\/passagem-de-turno\/turno\/?$/,   // nova passagem de turno
   /^\/app\/?$/,                         // início do aplicativo de campo
   /^\/app\/ler-qr\/?$/,                 // leitor de QR (não tem dado de ninguém)
+  /^\/app\/turno\/?$/,                  // meu turno: tarefas e checklists do dia
 ];
 
 self.addEventListener('install', (evento) => {

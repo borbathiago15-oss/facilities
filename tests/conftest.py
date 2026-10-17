@@ -127,6 +127,9 @@ def clean_transactional_data(app_module):
         from facilities.core.models import Client
         # Os cadastros da estrutura: desliga os locais dos clientes e apaga
         # do filho para o pai. Os estados ficam (são a lista fixa), desativados.
+        from facilities.rotas import models as rotas_models
+        for model in rotas_models.MODELOS_EM_ORDEM_DE_LIMPEZA:
+            model.query.delete()
         Client.query.update({'contratante_id': None, 'estado_id': None})
         # A cadeia e o perfil cliente (Fase 2) também apontam para cadastros.
         app_module.User.query.update({'cliente_id': None, 'superior_id': None})

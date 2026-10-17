@@ -58,6 +58,41 @@ SEMENTES = [
     "must_change_password,failed_login_count,session_epoch,cliente_id,totp_ativo) SELECT "
     "'Cliente GL','cli@ensaio','x','cliente',true,false,false,false,0,0,id,false "
     "FROM contratantes",
+    # Fase 4A: checklist, rota, escala, tarefa, execução, foto, NC, correção.
+    "INSERT INTO checklist_modelos (client_id,nome,exige_foto_antes,exige_foto_depois,"
+    "is_active) VALUES (NULL,'Limpeza de banheiro',false,true,true)",
+    "INSERT INTO checklist_modelos (client_id,nome,exige_foto_antes,exige_foto_depois,"
+    "is_active,origem_id) SELECT c.id,'Limpeza de banheiro',false,true,true,m.id "
+    "FROM clients c, checklist_modelos m WHERE c.name='GL Armazém 1'",
+    "INSERT INTO checklist_versoes (modelo_id,numero,itens_json,exige_foto_antes,"
+    "exige_foto_depois,publicada_em) SELECT id,1,'[]',false,true,now() FROM checklist_modelos",
+    "INSERT INTO rotas (client_id,nome,turno,hora_inicio,hora_fim,tolerancia_min,dias_semana,"
+    "is_active) SELECT id,'Limpeza T1','1º Turno','07:00','15:00',15,'12345',true "
+    "FROM clients WHERE name='GL Armazém 1'",
+    "INSERT INTO rota_itens (rota_id,ponto_id,modelo_id,ordem,horarios,is_active) "
+    "SELECT r.id,p.id,m.id,1,'09:00',true FROM rotas r, pontos_inspecao p, checklist_modelos m "
+    "WHERE m.client_id IS NOT NULL",
+    "INSERT INTO rota_escalas (rota_id,user_id,dias_semana,data_inicio,is_active) "
+    "SELECT r.id,u.id,'12345','2026-10-01',true FROM rotas r, users u WHERE u.email='sup@ensaio'",
+    "INSERT INTO tarefas_dia (rota_id,rota_item_id,client_id,ponto_id,versao_id,user_id,data,"
+    "previsto_para,fim_do_turno,tolerancia_min,status) SELECT i.rota_id,i.id,r.client_id,"
+    "i.ponto_id,v.id,u.id,'2026-10-17','2026-10-17 12:00','2026-10-17 18:00',15,"
+    "'concluida_no_prazo' FROM rota_itens i JOIN rotas r ON r.id=i.rota_id "
+    "JOIN checklist_versoes v ON v.modelo_id=i.modelo_id, users u WHERE u.email='sup@ensaio'",
+    "INSERT INTO execucoes (tarefa_id,client_id,ponto_id,versao_id,user_id,extra,lido_em,"
+    "iniciada_em,concluida_em,sem_sinal,recebida_em,respostas_json,envio_id,n_nao_conformes) "
+    "SELECT t.id,t.client_id,t.ponto_id,t.versao_id,t.user_id,false,'2026-10-17 12:05',"
+    "'2026-10-17 12:05','2026-10-17 12:15',true,'2026-10-17 13:00','{}','envio-ensaio-1',1 "
+    "FROM tarefas_dia t",
+    "INSERT INTO execucao_fotos (execucao_id,momento,mime,tamanho,storage_key,created_at) "
+    "SELECT id,'depois','image/jpeg',10,'execucoes/1/x.jpg',now() FROM execucoes",
+    "INSERT INTO nao_conformidades (execucao_id,client_id,item_codigo,item_texto,resposta,"
+    "created_at) SELECT id,client_id,'papel','Papel reposto?','nao',now() FROM execucoes",
+    "INSERT INTO execucao_correcoes (execucao_id,motivo,respostas_antes_json,"
+    "respostas_depois_json,user_id,created_at) SELECT id,'erro de digitação','{}','{}',"
+    "user_id,now() FROM execucoes",
+    "INSERT INTO agendador_execucoes (iniciada_em,concluida_em,origem,tarefas_geradas,"
+    "tarefas_perdidas,ok) VALUES (now(),now(),'comando',1,0,true)",
 ]
 
 
