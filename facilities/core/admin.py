@@ -1,4 +1,4 @@
-"""Cadastros do administrador: pessoas e contratos.
+"""Cadastros do administrador: pessoas e locais (os antigos "contratos").
 
 Nada se apaga: pessoa e contrato são DESATIVADOS. O histórico de passagens,
 pendências e chamados aponta para eles, e apagar deixaria o histórico sem
@@ -119,18 +119,21 @@ def nova_senha(uid):
     return redirect(url_for('admin.usuarios'))
 
 
-# ── Contratos ────────────────────────────────────────────────────────────
+# ── Locais (a tabela ``clients``; o endereço /admin/contratos é o de sempre) ─
 
 @bp.get('/contratos')
 @login_required
 @admin_required
 def contratos():
+    from facilities.cadastros.models import Contratante, Estado
     lista = Client.query.filter(Client.is_deleted.is_(False)).order_by(
         Client.is_active.desc(), Client.name).all()
     gestores = (User.query.filter(User.is_deleted.is_(False), User.is_active.is_(True),
                                   User.role.in_(('master', 'pleno')))
                 .order_by(User.name).all())
-    return render_template('core/contratos.html', contratos=lista, gestores=gestores)
+    return render_template('core/contratos.html', contratos=lista, gestores=gestores,
+                           clientes=Contratante.query.order_by(Contratante.nome).all(),
+                           estados=Estado.query.order_by(Estado.nome).all())
 
 
 def _aplicar_contrato(c, form):
@@ -154,20 +157,34 @@ def _responsavel_invalido(c):
     return None
 
 
+def _vincular(c):
+    """Cliente e estado do local; o erro volta como mensagem para a tela."""
+    from facilities.cadastros.servico import CadastroInvalido, vincular_local
+    try:
+        vincular_local(c, request.form, current_user)
+    except CadastroInvalido as erro:
+        return str(erro)
+    return None
+
+
 @bp.post('/contratos')
 @login_required
 @admin_required
 def criar_contrato():
+    from facilities.cadastros.servico import registrar_local
     c = Client(is_active=True)
     _aplicar_contrato(c, request.form)
-    erro = 'Informe o nome do contrato.' if not c.name else _responsavel_invalido(c)
+    erro = ('Informe o nome do local.' if not c.name
+            else _responsavel_invalido(c) or _vincular(c))
     if erro:
+        db.session.rollback()
         flash(erro, 'danger')
         return redirect(url_for('admin.contratos'))
     db.session.add(c)
+    registrar_local(c, None, current_user, nova=True)
     db.session.commit()
-    flash(f'Contrato {c.name} cadastrado. Agora configure a passagem de turno '
-          f'dele (áreas, turnos e perguntas).', 'success')
+    flash(f'Local {c.name} cadastrado. Agora cadastre a estrutura dele (setores, '
+          f'ambientes e pontos) e configure a passagem de turno.', 'success')
     return redirect(url_for('admin.contratos'))
 
 
@@ -175,14 +192,18 @@ def criar_contrato():
 @login_required
 @admin_required
 def editar_contrato(cid):
+    from facilities.cadastros.servico import foto, registrar_local
     c = db.get_or_404(Client, cid)
+    antes = foto(c)
     _aplicar_contrato(c, request.form)
     c.is_active = bool(request.form.get('is_active'))
-    erro = 'Informe o nome do contrato.' if not c.name else _responsavel_invalido(c)
+    erro = ('Informe o nome do local.' if not c.name
+            else _responsavel_invalido(c) or _vincular(c))
     if erro:
         db.session.rollback()
         flash(erro, 'danger')
         return redirect(url_for('admin.contratos'))
+    registrar_local(c, antes, current_user)
     db.session.commit()
-    flash(f'Contrato {c.name} atualizado.', 'success')
+    flash(f'Local {c.name} atualizado.', 'success')
     return redirect(url_for('admin.contratos'))

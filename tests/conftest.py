@@ -73,11 +73,24 @@ def app_module():
             pasta = os.path.join(raiz, 'migrations')
             db.session.remove()
             downgrade(directory=pasta, revision='base')
+            # A volta das migrações guarda os cadastros em _quarentena_* e a
+            # ida seguinte os devolve (é o que protege a produção). No banco
+            # de TESTE isso traria de volta o lixo da rodada anterior: aqui,
+            # e só aqui, a quarentena é descartada.
+            from sqlalchemy import inspect, text
+            for nome in inspect(db.engine).get_table_names():
+                if nome.startswith('_quarentena_'):
+                    with db.engine.begin() as con:
+                        con.execute(text(f'DROP TABLE "{nome}"'))
             upgrade(directory=pasta)
         else:
             # O boot não faz DDL em banco nenhum: no SQLite temporário o
-            # schema sai direto dos modelos.
+            # schema sai direto dos modelos — e as 27 UFs, que no Postgres
+            # vêm da migração, entram aqui.
             db.create_all()
+            from facilities.cadastros.models import UFS, Estado
+            for sigla, nome in UFS:
+                db.session.add(Estado(sigla=sigla, nome=nome, is_active=False))
         for nome in CONTRATOS_SEMEADOS:
             if not app_mod.Client.query.filter_by(name=nome).first():
                 db.session.add(app_mod.Client(name=nome, cost_center='CC-' + nome[:3].upper(),
@@ -102,12 +115,22 @@ def clean_transactional_data(app_module):
     """Isola cada teste: apaga o que é lançado (mantém contratos e pessoas)."""
     yield
     with app_module.app.app_context():
+        from tests.fabrica import desligar_criadas
+        desligar_criadas()
         from facilities.core.models import Notification
         from facilities.passagem.models import (
             DiarioAnexo, DiarioArea, DiarioConfiguracao, DiarioOcorrencia,
             DiarioPendencia, DiarioPendenciaEvento, DiarioTarefaTurno,
             DiarioTurno, DiarioTurnoCorrecao)
         from facilities.chamados import models as chamados_models
+        from facilities.cadastros import models as cadastros_models
+        from facilities.core.models import Client
+        # Os cadastros da estrutura: desliga os locais dos clientes e apaga
+        # do filho para o pai. Os estados ficam (são a lista fixa), desativados.
+        Client.query.update({'contratante_id': None, 'estado_id': None})
+        for model in cadastros_models.MODELOS_EM_ORDEM_DE_LIMPEZA:
+            model.query.delete()
+        cadastros_models.Estado.query.update({'is_active': False})
         modelos = list(getattr(chamados_models, 'MODELOS_EM_ORDEM_DE_LIMPEZA', ()))
         modelos += [Notification, DiarioAnexo, DiarioPendenciaEvento, DiarioTurnoCorrecao,
                     DiarioTarefaTurno, DiarioOcorrencia, DiarioPendencia, DiarioTurno,

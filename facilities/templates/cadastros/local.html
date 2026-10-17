@@ -1,0 +1,211 @@
+{% extends 'base.html' %}
+{% block title %}{{ local.name }} — estrutura{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item"><a href="{{ url_for('cadastros.inicio') }}">Cadastros</a></li><li class="breadcrumb-item active" aria-current="page">{{ local.name }}</li>{% endblock %}
+
+{% macro csrf() %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% if com_inativos %}<input type="hidden" name="inativos" value="1">{% endif %}{% endmacro %}
+
+{% macro botao_ativo(entidade, obj) %}
+  {% if pode_alterar %}
+  <form method="post" action="{{ url_for('cadastros.ativo_item', cid=local.id, entidade=entidade, oid=obj.id) }}" class="d-inline m-0">
+    {{ csrf() }}<input type="hidden" name="ativo" value="{{ '0' if obj.is_active else '1' }}">
+    <button class="btn btn-outline-secondary btn-sm" type="submit">{{ 'Desativar' if obj.is_active else 'Reativar' }}</button>
+  </form>
+  {% endif %}
+{% endmacro %}
+
+{% macro inativo(obj) %}{% if not obj.is_active %}<span class="badge text-bg-secondary">desativado</span>{% endif %}{% endmacro %}
+
+{% macro form_ambiente(a, setor) %}
+  {% set sfx = a.id if a else 'n' ~ setor.id %}
+  <div class="row g-2">
+    <div class="col-md-5"><label class="form-label small fw-semibold" for="anome{{ sfx }}">Nome do ambiente</label>
+      <input class="form-control" id="anome{{ sfx }}" name="nome" value="{{ a.nome if a else '' }}" required maxlength="120" placeholder="Ex.: Banheiro masculino 2º andar"></div>
+    <div class="col-md-4"><label class="form-label small fw-semibold" for="adesc{{ sfx }}">Descrição (opcional)</label>
+      <input class="form-control" id="adesc{{ sfx }}" name="descricao" value="{{ (a.descricao or '') if a else '' }}" maxlength="300" placeholder="Ex.: 2 mictórios, 3 vasos, 2 pias"></div>
+    <div class="col-md-3"><label class="form-label small fw-semibold" for="aset{{ sfx }}">Setor</label>
+      <select class="form-select" id="aset{{ sfx }}" name="setor_id">
+        {% for s in todos_setores %}<option value="{{ s.id }}" {% if s.id == setor.id %}selected{% endif %}>{{ s.nome }}</option>{% endfor %}
+      </select></div>
+  </div>
+{% endmacro %}
+
+{% macro form_equipamento(e, amb) %}
+  {% set sfx = e.id if e else 'n' ~ amb.id %}
+  <div class="row g-2">
+    <div class="col-md-4"><label class="form-label small fw-semibold" for="enome{{ sfx }}">Equipamento</label>
+      <input class="form-control" id="enome{{ sfx }}" name="nome" value="{{ e.nome if e else '' }}" required maxlength="120" placeholder="Ex.: Ar-condicionado split"></div>
+    <div class="col-md-3"><label class="form-label small fw-semibold" for="epat{{ sfx }}">Patrimônio</label>
+      <input class="form-control" id="epat{{ sfx }}" name="patrimonio" value="{{ (e.patrimonio or '') if e else '' }}" maxlength="50"></div>
+    <div class="col-md-3"><label class="form-label small fw-semibold" for="efab{{ sfx }}">Fabricante</label>
+      <input class="form-control" id="efab{{ sfx }}" name="fabricante" value="{{ (e.fabricante or '') if e else '' }}" maxlength="80"></div>
+    <div class="col-md-2"><label class="form-label small fw-semibold" for="emod{{ sfx }}">Modelo</label>
+      <input class="form-control" id="emod{{ sfx }}" name="modelo" value="{{ (e.modelo or '') if e else '' }}" maxlength="80"></div>
+  </div>
+  <input type="hidden" name="ambiente_id" value="{{ amb.id }}">
+{% endmacro %}
+
+{% macro form_ponto(p, amb) %}
+  {% set sfx = p.id if p else 'n' ~ amb.id %}
+  <div class="row g-2">
+    <div class="col-md-4"><label class="form-label small fw-semibold" for="pnome{{ sfx }}">Ponto</label>
+      <input class="form-control" id="pnome{{ sfx }}" name="nome" value="{{ p.nome if p else '' }}" required maxlength="120" placeholder="Ex.: Porta do banheiro"></div>
+    <div class="col-md-5"><label class="form-label small fw-semibold" for="pdesc{{ sfx }}">Onde fica / o que conferir (opcional)</label>
+      <input class="form-control" id="pdesc{{ sfx }}" name="descricao" value="{{ (p.descricao or '') if p else '' }}" maxlength="300"></div>
+    <div class="col-md-3"><label class="form-label small fw-semibold" for="peq{{ sfx }}">Equipamento (opcional)</label>
+      <select class="form-select" id="peq{{ sfx }}" name="equipamento_id">
+        <option value="">Nenhum</option>
+        {% for e in amb.equipamentos %}{% if e.is_active or (p and p.equipamento_id == e.id) %}<option value="{{ e.id }}" {% if p and p.equipamento_id == e.id %}selected{% endif %}>{{ e.nome }}</option>{% endif %}{% endfor %}
+      </select></div>
+  </div>
+  <input type="hidden" name="ambiente_id" value="{{ amb.id }}">
+{% endmacro %}
+
+{% block content %}
+<h1 class="fc-titulo">{{ local.name }}</h1>
+<p class="fc-sub">
+  {% if local.contratante %}Cliente {{ local.contratante.nome }}{% else %}Sem cliente ligado{% endif %}
+  {% if local.estado %} · {{ local.estado.nome }}{% endif %}
+  {% if local.cost_center %} · subcentro {{ local.cost_center }}{% endif %}
+</p>
+
+<div class="d-flex flex-wrap gap-2 mb-3">
+  <a class="btn btn-outline-primary btn-sm" href="{{ url_for('cadastros.etiquetas', cid=local.id) }}" target="_blank" rel="noopener"><i class="bi bi-qr-code"></i> Imprimir as etiquetas de QR</a>
+  <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('cadastros.trilha_local', cid=local.id) }}"><i class="bi bi-clock-history"></i> Histórico</a>
+  {% if com_inativos %}
+  <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('cadastros.local', cid=local.id) }}">Esconder os desativados</a>
+  {% else %}
+  <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('cadastros.local', cid=local.id, inativos=1) }}">Mostrar os desativados</a>
+  {% endif %}
+</div>
+
+{% if pode_alterar %}
+<details class="fc-cartao mb-3" {% if not setores %}open{% endif %}>
+  <summary class="fw-bold">Cadastrar setor</summary>
+  <form method="post" action="{{ url_for('cadastros.criar_item', cid=local.id, entidade='setor') }}" class="mt-3 d-flex flex-wrap gap-2 align-items-end">
+    {{ csrf() }}
+    <div class="flex-grow-1"><label class="form-label small fw-semibold" for="snovo">Nome do setor</label>
+      <input class="form-control" id="snovo" name="nome" required maxlength="120" placeholder="Ex.: Administrativo, Armazém 1, Área externa"></div>
+    <button class="btn btn-primary fw-bold" type="submit">Cadastrar</button>
+  </form>
+</details>
+{% endif %}
+
+{% for s in setores %}
+<section class="fc-cartao mb-3" aria-labelledby="setor{{ s.id }}">
+  <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+    <h2 class="h5 fw-bold m-0" id="setor{{ s.id }}"><i class="bi bi-diagram-3"></i> {{ s.nome }}</h2>{{ inativo(s) }}
+    <span class="ms-auto d-flex gap-2">{{ botao_ativo('setor', s) }}</span>
+  </div>
+  {% if pode_alterar %}
+  <details class="mb-2"><summary class="small">Renomear o setor</summary>
+    <form method="post" action="{{ url_for('cadastros.editar_item', cid=local.id, entidade='setor', oid=s.id) }}" class="d-flex gap-2 mt-2">
+      {{ csrf() }}<label class="visually-hidden" for="sren{{ s.id }}">Nome do setor</label>
+      <input class="form-control" id="sren{{ s.id }}" name="nome" value="{{ s.nome }}" required maxlength="120">
+      <button class="btn btn-primary btn-sm fw-bold" type="submit">Salvar</button>
+    </form>
+  </details>
+  {% endif %}
+
+  {% for a in s.ambientes if a.is_active or com_inativos %}
+  <div class="border rounded p-2 mb-2">
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+      <strong><i class="bi bi-door-open"></i> {{ a.nome }}</strong>{{ inativo(a) }}
+      {% if a.descricao %}<span class="small text-muted">{{ a.descricao }}</span>{% endif %}
+      <span class="ms-auto">{{ botao_ativo('ambiente', a) }}</span>
+    </div>
+    {% if pode_alterar %}
+    <details class="mt-1"><summary class="small">Alterar ou mudar de setor</summary>
+      <form method="post" action="{{ url_for('cadastros.editar_item', cid=local.id, entidade='ambiente', oid=a.id) }}" class="mt-2">
+        {{ csrf() }}{{ form_ambiente(a, s) }}
+        <button class="btn btn-primary btn-sm fw-bold mt-2" type="submit">Salvar</button>
+      </form>
+    </details>
+    {% endif %}
+
+    <div class="mt-2">
+      <div class="small fw-semibold text-muted">Pontos com QR</div>
+      {% for p in a.pontos if p.is_active or com_inativos %}
+      <div class="d-flex flex-wrap gap-2 align-items-center border-top py-1">
+        <i class="bi bi-qr-code"></i> <span>{{ p.nome }}</span>{{ inativo(p) }}
+        {% if p.equipamento %}<span class="small text-muted">{{ p.equipamento.nome }}</span>{% endif %}
+        <span class="ms-auto d-flex flex-wrap gap-2">
+          {% if p.is_active %}<a class="btn btn-outline-primary btn-sm" href="{{ url_for('cadastros.etiquetas', cid=local.id, ponto=p.id) }}" target="_blank" rel="noopener">Etiqueta</a>{% endif %}
+          {{ botao_ativo('ponto', p) }}
+        </span>
+        {% if pode_alterar %}
+        <details class="w-100"><summary class="small">Alterar ou mudar de ambiente</summary>
+          <form method="post" action="{{ url_for('cadastros.editar_item', cid=local.id, entidade='ponto', oid=p.id) }}" class="mt-2">
+            {{ csrf() }}{{ form_ponto(p, a) }}
+            <label class="form-label small fw-semibold mt-2" for="pmov{{ p.id }}">Ambiente</label>
+            <select class="form-select" id="pmov{{ p.id }}" name="ambiente_id">
+              {% for s2 in todos_setores %}{% for a2 in s2.ambientes if a2.is_active %}<option value="{{ a2.id }}" {% if a2.id == a.id %}selected{% endif %}>{{ s2.nome }} · {{ a2.nome }}</option>{% endfor %}{% endfor %}
+            </select>
+            <p class="small text-muted mt-1 mb-0">O QR continua o mesmo: a etiqueta impressa segue valendo.</p>
+            <button class="btn btn-primary btn-sm fw-bold mt-2" type="submit">Salvar</button>
+          </form>
+        </details>
+        {% endif %}
+      </div>
+      {% else %}
+      <div class="small text-muted">Nenhum ponto ainda.</div>
+      {% endfor %}
+      {% if pode_alterar and a.is_active %}
+      <details class="mt-1"><summary class="small fw-semibold">+ Cadastrar ponto</summary>
+        <form method="post" action="{{ url_for('cadastros.criar_item', cid=local.id, entidade='ponto') }}" class="mt-2">
+          {{ csrf() }}{{ form_ponto(none, a) }}
+          <button class="btn btn-primary btn-sm fw-bold mt-2" type="submit">Cadastrar ponto</button>
+        </form>
+      </details>
+      {% endif %}
+    </div>
+
+    <div class="mt-2">
+      <div class="small fw-semibold text-muted">Equipamentos</div>
+      {% for e in a.equipamentos if e.is_active or com_inativos %}
+      <div class="d-flex flex-wrap gap-2 align-items-center border-top py-1">
+        <i class="bi bi-gear"></i> <span>{{ e.nome }}</span>{{ inativo(e) }}
+        {% if e.patrimonio %}<span class="small text-muted">patrimônio {{ e.patrimonio }}</span>{% endif %}
+        <span class="ms-auto">{{ botao_ativo('equipamento', e) }}</span>
+        {% if pode_alterar %}
+        <details class="w-100"><summary class="small">Alterar ou mudar de ambiente</summary>
+          <form method="post" action="{{ url_for('cadastros.editar_item', cid=local.id, entidade='equipamento', oid=e.id) }}" class="mt-2">
+            {{ csrf() }}{{ form_equipamento(e, a) }}
+            <label class="form-label small fw-semibold mt-2" for="emov{{ e.id }}">Ambiente</label>
+            <select class="form-select" id="emov{{ e.id }}" name="ambiente_id">
+              {% for s2 in todos_setores %}{% for a2 in s2.ambientes if a2.is_active %}<option value="{{ a2.id }}" {% if a2.id == a.id %}selected{% endif %}>{{ s2.nome }} · {{ a2.nome }}</option>{% endfor %}{% endfor %}
+            </select>
+            <button class="btn btn-primary btn-sm fw-bold mt-2" type="submit">Salvar</button>
+          </form>
+        </details>
+        {% endif %}
+      </div>
+      {% else %}
+      <div class="small text-muted">Nenhum equipamento.</div>
+      {% endfor %}
+      {% if pode_alterar and a.is_active %}
+      <details class="mt-1"><summary class="small fw-semibold">+ Cadastrar equipamento</summary>
+        <form method="post" action="{{ url_for('cadastros.criar_item', cid=local.id, entidade='equipamento') }}" class="mt-2">
+          {{ csrf() }}{{ form_equipamento(none, a) }}
+          <button class="btn btn-primary btn-sm fw-bold mt-2" type="submit">Cadastrar equipamento</button>
+        </form>
+      </details>
+      {% endif %}
+    </div>
+  </div>
+  {% else %}
+  <p class="small text-muted mb-2">Nenhum ambiente neste setor ainda.</p>
+  {% endfor %}
+
+  {% if pode_alterar and s.is_active %}
+  <details><summary class="small fw-semibold">+ Cadastrar ambiente neste setor</summary>
+    <form method="post" action="{{ url_for('cadastros.criar_item', cid=local.id, entidade='ambiente') }}" class="mt-2">
+      {{ csrf() }}{{ form_ambiente(none, s) }}
+      <button class="btn btn-primary btn-sm fw-bold mt-2" type="submit">Cadastrar ambiente</button>
+    </form>
+  </details>
+  {% endif %}
+</section>
+{% else %}
+<div class="fc-cartao fc-vazio">Nenhum setor ainda. {% if pode_alterar %}Comece cadastrando os setores do local (ex.: Administrativo, Armazém 1).{% endif %}</div>
+{% endfor %}
+{% endblock %}

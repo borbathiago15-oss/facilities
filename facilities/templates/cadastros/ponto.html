@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block title %}{{ ponto.nome }}{% endblock %}
+{% block content %}
+<h1 class="fc-titulo">{{ ponto.nome }}</h1>
+<p class="fc-sub">{{ ponto.ambiente.setor.nome }} · {{ ponto.ambiente.nome }} · {{ ponto.ambiente.setor.local.name }}</p>
+{% if not ponto.is_active %}
+<div class="alert alert-warning">Este ponto está desativado. Se a etiqueta ainda está na parede, avise a gestão.</div>
+{% endif %}
+<div class="fc-cartao">
+  {% if ponto.descricao %}<p>{{ ponto.descricao }}</p>{% endif %}
+  {% if ponto.equipamento %}<p class="small mb-1"><strong>Equipamento:</strong> {{ ponto.equipamento.nome }}{% if ponto.equipamento.patrimonio %} · patrimônio {{ ponto.equipamento.patrimonio }}{% endif %}</p>{% endif %}
+  <p class="small text-muted mb-0">QR conferido: este é o ponto certo.</p>
+</div>
+{% endblock %}

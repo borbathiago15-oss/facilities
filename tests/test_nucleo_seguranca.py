@@ -266,7 +266,8 @@ console.log(JSON.stringify(enviados));
 def test_menu_tem_rotulo_curto_e_marca_o_modulo_aberto(auth_client):
     html = auth_client.get('/chamados/').get_data(as_text=True)
     nav = re.search(r'<nav class="fc-nav".*?</nav>', html, re.S).group(0)
-    for modulo in ('Chamados', 'Contratos', 'Pessoas'):
+    # "Contratos" virou "Locais" na Fase 1 (cliente → local), e entrou "Cadastros".
+    for modulo in ('Chamados', 'Cadastros', 'Locais', 'Pessoas'):
         assert f'>{modulo}</a>' in nav
     assert '<span class="fc-rot-curto">Passagem</span>' in nav
     assert re.search(r'class="ativo"\s+aria-current="page">Chamados</a>', nav)

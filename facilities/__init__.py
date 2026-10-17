@@ -197,6 +197,7 @@ def _modelos(app):
     from facilities.core import models  # noqa: F401
     from facilities.passagem import models as _p  # noqa: F401
     from facilities.chamados import models as _c  # noqa: F401
+    from facilities.cadastros import models as _cad  # noqa: F401
 
 
 def _rotas(app):
@@ -206,7 +207,8 @@ def _rotas(app):
     from facilities.core.rotas import bp as core_bp
     from facilities.passagem.rotas import bp as passagem_bp
     from facilities.chamados.rotas import bp as chamados_bp
-    for bp in (core_bp, auth_bp, admin_bp, app_bp, passagem_bp, chamados_bp):
+    from facilities.cadastros.rotas import bp as cadastros_bp
+    for bp in (core_bp, auth_bp, admin_bp, app_bp, passagem_bp, chamados_bp, cadastros_bp):
         app.register_blueprint(bp)
 
 

@@ -20,9 +20,10 @@
 <div class="fc-cartao mt-3">
   <h2 class="h6 fw-bold mb-2">Primeiros passos do administrador</h2>
   <ol class="mb-0 small">
-    <li>Cadastre os <a href="{{ url_for('admin.contratos') }}">contratos</a> (cliente e local da operação).</li>
-    <li>Cadastre as <a href="{{ url_for('admin.usuarios') }}">pessoas</a> e vincule cada uma aos contratos dela.</li>
-    <li>Em cada contrato, configure a passagem de turno — ou use os modelos prontos de limpeza, portaria e manutenção.</li>
+    <li>Cadastre a <a href="{{ url_for('cadastros.empresas') }}">empresa do grupo</a>, o <a href="{{ url_for('cadastros.clientes') }}">cliente</a> e ative os <a href="{{ url_for('cadastros.estados') }}">estados</a> em uso.</li>
+    <li>Cadastre os <a href="{{ url_for('admin.contratos') }}">locais</a> do cliente e, em cada um, a estrutura: setores, ambientes e pontos com QR.</li>
+    <li>Cadastre as <a href="{{ url_for('admin.usuarios') }}">pessoas</a> e vincule cada uma aos locais dela.</li>
+    <li>Em cada local, configure a passagem de turno — ou use os modelos prontos de limpeza, portaria e manutenção.</li>
   </ol>
 </div>
 {% endif %}

@@ -59,7 +59,14 @@ user_clients = db.Table(
 
 
 class Client(db.Model):
-    """Um CONTRATO de facilities: o cliente atendido e o local da operação."""
+    """Um LOCAL da operação (na origem, o "contrato"): o armazém, a loja, a sede.
+
+    O nome interno (``clients``, ``client_id``) vem do Trino e não muda. Desde
+    a Fase 1 o local pertence a um cliente (``contratante_id``, ver
+    ``facilities/cadastros/models.py``) e fica num estado; o ``cost_center``
+    é o SUBCENTRO de custo do local (o centro pai é do cliente). Os dois
+    campos são opcionais: local antigo, sem cliente, funciona como antes.
+    """
     __tablename__ = 'clients'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(120), nullable=False)
@@ -69,13 +76,21 @@ class Client(db.Model):
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     is_deleted = db.Column(db.Boolean, default=False, nullable=False, index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    contratante_id = db.Column(db.Integer,
+                               db.ForeignKey('contratantes.id', ondelete='RESTRICT'),
+                               nullable=True, index=True)
+    estado_id = db.Column(db.Integer, db.ForeignKey('estados.id', ondelete='RESTRICT'),
+                          nullable=True, index=True)
 
     responsavel = db.relationship('User', foreign_keys=[responsible_user_id])
+    contratante = db.relationship('Contratante', backref='locais')
+    estado = db.relationship('Estado')
 
     def to_dict(self):
         return {'id': self.id, 'name': self.name, 'cost_center': self.cost_center,
                 'endereco': self.endereco, 'is_active': self.is_active,
-                'responsible_user_id': self.responsible_user_id}
+                'responsible_user_id': self.responsible_user_id,
+                'contratante_id': self.contratante_id, 'estado_id': self.estado_id}
 
 
 class User(db.Model, UserMixin):

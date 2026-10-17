@@ -45,10 +45,15 @@
          class="{% if ep.startswith('chamados.') %}ativo{% endif %}"
          {% if ep.startswith('chamados.') %}aria-current="page"{% endif %}>Chamados</a>
       {% endif %}
+      {% if current_user._effective_role() in ('master', 'pleno', 'visualizador') %}
+      <a href="{{ url_for('cadastros.inicio') }}"
+         class="{% if ep.startswith('cadastros.') %}ativo{% endif %}"
+         {% if ep.startswith('cadastros.') %}aria-current="page"{% endif %}>Cadastros</a>
+      {% endif %}
       {% if current_user._effective_role() == 'master' %}
       <a href="{{ url_for('admin.contratos') }}"
          class="{% if ep == 'admin.contratos' %}ativo{% endif %}"
-         {% if ep == 'admin.contratos' %}aria-current="page"{% endif %}>Contratos</a>
+         {% if ep == 'admin.contratos' %}aria-current="page"{% endif %}>Locais</a>
       <a href="{{ url_for('admin.usuarios') }}"
          class="{% if ep == 'admin.usuarios' %}ativo{% endif %}"
          {% if ep == 'admin.usuarios' %}aria-current="page"{% endif %}>Pessoas</a>
