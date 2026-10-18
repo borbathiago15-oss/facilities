@@ -25,6 +25,7 @@
     <div><dt>Prazo</dt><dd>{{ ch.prazo|hora_local if ch.prazo else '—' }}</dd></div>
     {% if ch.origem == 'ocorrencia' %}<div><dt>Origem</dt><dd>Ocorrência da passagem de turno</dd></div>{% endif %}
     {% if ch.origem == 'preventiva' %}<div><dt>Origem</dt><dd>Manutenção preventiva programada</dd></div>{% endif %}
+    {% if ch.origem == 'visita' %}<div><dt>Origem</dt><dd><a href="{{ url_for('visitas.ver', vid=ch.origem_id) }}">Visita de supervisão</a></dd></div>{% endif %}
     {% if ch.pausa_total_seg %}<div><dt>Tempo parado</dt><dd>{{ (ch.pausa_total_seg // 3600) }} h {{ (ch.pausa_total_seg % 3600) // 60 }} min aguardando (somado ao prazo)</dd></div>{% endif %}
   </dl>
   {% if ch.descricao %}<p class="ch-desc">{{ ch.descricao }}</p>{% endif %}

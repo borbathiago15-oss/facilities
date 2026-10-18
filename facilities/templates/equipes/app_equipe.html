@@ -1,0 +1,55 @@
+{% extends 'campo/base_app.html' %}
+{% block title %}Equipe de hoje{% endblock %}
+{% block content %}
+<h1 class="fc-titulo">Equipe · {{ dia.strftime('%d/%m/%Y') }}</h1>
+<p class="fc-sub">Marque quem veio, quem faltou e quem atrasou. Se alguém cobriu a falta, registre quem foi e o motivo.</p>
+<div class="d-flex gap-2 mb-3">
+  <a class="btn btn-outline-secondary flex-fill" href="{{ url_for('equipes.app_equipe', data=ontem) }}"><i class="bi bi-chevron-left"></i> Dia anterior</a>
+  {% if amanha %}<a class="btn btn-outline-secondary flex-fill" href="{{ url_for('equipes.app_equipe', data=amanha) }}">Dia seguinte <i class="bi bi-chevron-right"></i></a>{% endif %}
+</div>
+
+{% for loc in locais %}
+<section class="fc-cartao mb-3" aria-labelledby="tit-l{{ loc.id }}">
+  <h2 class="h6 fw-bold" id="tit-l{{ loc.id }}"><i class="bi bi-geo-alt"></i> {{ loc.name }}</h2>
+  {% for linha in por_local[loc.id] %}
+  {% set e = linha.escala %}{% set p = linha.presenca %}
+  <div class="fc-app-item" id="escala-{{ e.id }}">
+    <div class="d-flex flex-wrap align-items-center gap-2">
+      <span class="fw-semibold">{{ e.funcionario.nome }}</span>
+      {% if p %}<span class="badge fc-pres-badge fc-pres-{{ p.situacao }}">{{ p.situacao_rotulo }}</span>{% endif %}
+    </div>
+    <span class="small text-muted">{{ e.posto.nome }} · {{ e.posto.hora_inicio.strftime('%H:%M') }} às {{ e.posto.hora_fim.strftime('%H:%M') }}{% if e.funcionario.funcao %} · {{ e.funcionario.funcao }}{% endif %}</span>
+    <form method="post" action="{{ url_for('equipes.app_presenca') }}" class="d-flex gap-2 mt-2">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="escala_id" value="{{ e.id }}">
+      <input type="hidden" name="data" value="{{ dia.isoformat() }}">
+      {% for k, v in situacoes.items() %}
+      <button class="btn {% if p and p.situacao == k %}btn-primary{% else %}btn-outline-primary{% endif %} flex-fill fc-app-acao" type="submit" name="situacao" value="{{ k }}" {% if p and p.situacao == k %}aria-pressed="true"{% endif %}>{{ v }}</button>
+      {% endfor %}
+    </form>
+    {% if p and p.situacao == 'faltou' %}
+      {% if p.cobertura %}
+      <p class="small mt-2 mb-0"><i class="bi bi-arrow-left-right"></i> Coberto por <b>{{ p.cobertura.funcionario.nome }}</b> — {{ p.cobertura.motivo }}</p>
+      {% else %}
+      <details class="mt-2">
+        <summary class="fw-semibold small">Alguém cobriu esta falta?</summary>
+        <form method="post" action="{{ url_for('equipes.app_cobertura', prid=p.id) }}" class="mt-2">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <label class="form-label small" for="cq{{ p.id }}">Quem cobriu</label>
+          <select class="form-select mb-2" id="cq{{ p.id }}" name="funcionario_id" required>
+            {% for f in cobridores[loc.id] if f.id != e.funcionario_id %}<option value="{{ f.id }}">{{ f.nome }}</option>{% endfor %}
+          </select>
+          <label class="form-label small" for="cm{{ p.id }}">Motivo</label>
+          <input class="form-control mb-2" id="cm{{ p.id }}" name="motivo" required minlength="3" maxlength="300" placeholder="Ex.: atestado médico, folga trocada">
+          <button class="btn btn-primary w-100 fc-app-acao" type="submit">Registrar cobertura</button>
+        </form>
+      </details>
+      {% endif %}
+    {% endif %}
+  </div>
+  {% endfor %}
+</section>
+{% else %}
+<div class="fc-cartao fc-vazio">Ninguém escalado neste dia nos seus locais. A escala é lançada no site, em Rotas › Equipe.</div>
+{% endfor %}
+{% endblock %}

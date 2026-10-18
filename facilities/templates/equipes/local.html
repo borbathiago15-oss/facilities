@@ -1,0 +1,151 @@
+{% extends 'base.html' %}
+{% block title %}{{ local.name }} — equipe{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item"><a href="{{ url_for('rotas.local', cid=local.id) }}">{{ local.name }}</a></li><li class="breadcrumb-item active" aria-current="page">Equipe</li>{% endblock %}
+{% block content %}
+<h1 class="fc-titulo">Equipe · {{ local.name }}</h1>
+<p class="fc-sub">Quem trabalha aqui, em qual posto e em que dias. O supervisor lança no aplicativo quem veio, quem faltou e quem cobriu.</p>
+<div class="d-flex flex-wrap gap-2 mb-3">
+  <a class="btn btn-primary btn-sm" href="{{ url_for('equipes.mes', cid=local.id) }}"><i class="bi bi-calendar3"></i> Conferir o mês</a>
+  <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('visitas.local', cid=local.id) }}"><i class="bi bi-clipboard-check"></i> Visitas de supervisão</a>
+</div>
+
+<section class="fc-cartao mb-3" aria-labelledby="tit-func">
+  <h2 class="h6 fw-bold" id="tit-func"><i class="bi bi-people"></i> Funcionários</h2>
+  {% for f in funcionarios %}
+  <div class="border-top py-2">
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+      <span class="fw-semibold">{{ f.nome }}</span>
+      {% if f.funcao %}<span class="small text-muted">{{ f.funcao }}</span>{% endif %}
+      {% if f.matricula %}<span class="small text-muted">matrícula {{ f.matricula }}</span>{% endif %}
+      {% if f.usuario %}<span class="badge text-bg-light">usa o aplicativo</span>{% else %}<span class="badge text-bg-light">sem login</span>{% endif %}
+      {% if not f.is_active %}<span class="badge text-bg-secondary">desligado</span>{% endif %}
+    </div>
+    {% if pode_montar %}
+    <details class="mt-1">
+      <summary class="small fw-semibold">Editar</summary>
+      <form method="post" action="{{ url_for('equipes.editar_funcionario', fid=f.id) }}" class="row g-2 mt-1">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="col-md-4"><label class="form-label small" for="fn{{ f.id }}">Nome</label><input class="form-control" id="fn{{ f.id }}" name="nome" required maxlength="120" value="{{ f.nome }}"></div>
+        <div class="col-md-3"><label class="form-label small" for="ff{{ f.id }}">Função</label><input class="form-control" id="ff{{ f.id }}" name="funcao" maxlength="80" value="{{ f.funcao or '' }}"></div>
+        <div class="col-md-2"><label class="form-label small" for="fm{{ f.id }}">Matrícula</label><input class="form-control" id="fm{{ f.id }}" name="matricula" maxlength="30" value="{{ f.matricula or '' }}"></div>
+        <div class="col-md-3"><label class="form-label small" for="fu{{ f.id }}">Login no aplicativo</label>
+          <select class="form-select" id="fu{{ f.id }}" name="user_id"><option value="">Sem login</option>{% for u in logins %}<option value="{{ u.id }}" {% if f.user_id == u.id %}selected{% endif %}>{{ u.name }} ({{ u.email }})</option>{% endfor %}</select></div>
+        <div class="col-12"><button class="btn btn-primary btn-sm fw-bold" type="submit">Salvar</button></div>
+      </form>
+      <form method="post" action="{{ url_for('equipes.editar_funcionario', fid=f.id) }}" class="mt-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="ativo" value="{{ '0' if f.is_active else '1' }}">
+        <button class="btn btn-outline-secondary btn-sm" type="submit">{{ 'Desligar' if f.is_active else 'Reativar' }}</button>
+      </form>
+    </details>
+    {% endif %}
+  </div>
+  {% else %}
+  <p class="small text-muted">Nenhum funcionário ainda.</p>
+  {% endfor %}
+  {% if pode_montar %}
+  <details class="mt-2" {% if not funcionarios %}open{% endif %}>
+    <summary class="fw-semibold">Cadastrar funcionário</summary>
+    <form method="post" action="{{ url_for('equipes.criar_funcionario', cid=local.id) }}" class="row g-2 mt-1">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="col-md-4"><label class="form-label small" for="nfn">Nome</label><input class="form-control" id="nfn" name="nome" required maxlength="120"></div>
+      <div class="col-md-3"><label class="form-label small" for="nff">Função</label><input class="form-control" id="nff" name="funcao" maxlength="80" placeholder="Ex.: ASG"></div>
+      <div class="col-md-2"><label class="form-label small" for="nfm">Matrícula</label><input class="form-control" id="nfm" name="matricula" maxlength="30"></div>
+      <div class="col-md-3"><label class="form-label small" for="nfu">Login no aplicativo</label>
+        <select class="form-select" id="nfu" name="user_id"><option value="">Sem login</option>{% for u in logins %}<option value="{{ u.id }}">{{ u.name }} ({{ u.email }})</option>{% endfor %}</select></div>
+      <div class="col-12"><button class="btn btn-primary fw-bold" type="submit">Cadastrar</button></div>
+    </form>
+  </details>
+  {% endif %}
+</section>
+
+<section class="fc-cartao mb-3" aria-labelledby="tit-postos">
+  <h2 class="h6 fw-bold" id="tit-postos"><i class="bi bi-pin-map"></i> Postos</h2>
+  {% for p in postos %}
+  <div class="border-top py-2">
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+      <span class="fw-semibold">{{ p.nome }}</span>
+      <span class="small text-muted">{{ p.hora_inicio.strftime('%H:%M') }} às {{ p.hora_fim.strftime('%H:%M') }}{% if p.rota %} · rota "{{ p.rota.nome }}"{% endif %}</span>
+      {% if not p.is_active %}<span class="badge text-bg-secondary">desativado</span>{% endif %}
+    </div>
+    {% if pode_montar %}
+    <details class="mt-1">
+      <summary class="small fw-semibold">Editar</summary>
+      <form method="post" action="{{ url_for('equipes.editar_posto', pid=p.id) }}" class="row g-2 mt-1">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="col-md-4"><label class="form-label small" for="pn{{ p.id }}">Nome</label><input class="form-control" id="pn{{ p.id }}" name="nome" required maxlength="120" value="{{ p.nome }}"></div>
+        <div class="col-6 col-md-2"><label class="form-label small" for="pi{{ p.id }}">Início</label><input class="form-control" id="pi{{ p.id }}" name="hora_inicio" type="time" required value="{{ p.hora_inicio.strftime('%H:%M') }}"></div>
+        <div class="col-6 col-md-2"><label class="form-label small" for="pf{{ p.id }}">Fim</label><input class="form-control" id="pf{{ p.id }}" name="hora_fim" type="time" required value="{{ p.hora_fim.strftime('%H:%M') }}"></div>
+        <div class="col-md-4"><label class="form-label small" for="pr{{ p.id }}">Rota do posto (opcional)</label>
+          <select class="form-select" id="pr{{ p.id }}" name="rota_id"><option value="">Nenhuma</option>{% for r in rotas %}<option value="{{ r.id }}" {% if p.rota_id == r.id %}selected{% endif %}>{{ r.nome }}</option>{% endfor %}</select></div>
+        <div class="col-12"><button class="btn btn-primary btn-sm fw-bold" type="submit">Salvar</button></div>
+      </form>
+      <form method="post" action="{{ url_for('equipes.editar_posto', pid=p.id) }}" class="mt-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="ativo" value="{{ '0' if p.is_active else '1' }}">
+        <button class="btn btn-outline-secondary btn-sm" type="submit">{{ 'Desativar' if p.is_active else 'Reativar' }}</button>
+      </form>
+    </details>
+    {% endif %}
+  </div>
+  {% else %}
+  <p class="small text-muted">Nenhum posto ainda.</p>
+  {% endfor %}
+  {% if pode_montar %}
+  <details class="mt-2" {% if not postos %}open{% endif %}>
+    <summary class="fw-semibold">Cadastrar posto</summary>
+    <form method="post" action="{{ url_for('equipes.criar_posto', cid=local.id) }}" class="row g-2 mt-1">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="col-md-4"><label class="form-label small" for="npn">Nome</label><input class="form-control" id="npn" name="nome" required maxlength="120" placeholder="Ex.: Limpeza 2º andar — manhã"></div>
+      <div class="col-6 col-md-2"><label class="form-label small" for="npi">Início</label><input class="form-control" id="npi" name="hora_inicio" type="time" required value="07:00"></div>
+      <div class="col-6 col-md-2"><label class="form-label small" for="npf">Fim</label><input class="form-control" id="npf" name="hora_fim" type="time" required value="15:00"></div>
+      <div class="col-md-4"><label class="form-label small" for="npr">Rota do posto (opcional)</label>
+        <select class="form-select" id="npr" name="rota_id"><option value="">Nenhuma</option>{% for r in rotas %}<option value="{{ r.id }}">{{ r.nome }}</option>{% endfor %}</select></div>
+      <div class="col-12"><p class="form-text mt-0">Com a rota escolhida, quem cobrir uma falta recebe as tarefas da rota daquele dia.</p>
+        <button class="btn btn-primary fw-bold" type="submit">Cadastrar</button></div>
+    </form>
+  </details>
+  {% endif %}
+</section>
+
+<section class="fc-cartao" aria-labelledby="tit-esc">
+  <h2 class="h6 fw-bold" id="tit-esc"><i class="bi bi-calendar-week"></i> Escala em vigor</h2>
+  {% for e in escalas %}
+  <div class="border-top py-2 d-flex flex-wrap gap-2 align-items-center">
+    <span class="fw-semibold">{{ e.funcionario.nome }}</span>
+    <span class="small text-muted">{{ e.posto.nome }} · {% for k, v in dias %}{% if k in e.dias_semana %}{{ v }} {% endif %}{% endfor %}· desde {{ e.data_inicio.strftime('%d/%m/%Y') }}{% if e.data_fim %} até {{ e.data_fim.strftime('%d/%m/%Y') }}{% endif %}</span>
+    {% if pode_montar %}
+    <form method="post" action="{{ url_for('equipes.encerrar_escala', eid=e.id) }}" class="d-flex gap-2 ms-auto">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label class="visually-hidden" for="ef{{ e.id }}">Último dia</label>
+      <input class="form-control form-control-sm" id="ef{{ e.id }}" name="data_fim" type="date" required value="{{ hoje }}">
+      <button class="btn btn-outline-secondary btn-sm text-nowrap" type="submit">Encerrar</button>
+    </form>
+    {% endif %}
+  </div>
+  {% else %}
+  <p class="small text-muted">Ninguém escalado ainda.</p>
+  {% endfor %}
+  {% if pode_montar and funcionarios and postos %}
+  <details class="mt-2" {% if not escalas %}open{% endif %}>
+    <summary class="fw-semibold">Lançar escala</summary>
+    <form method="post" action="{{ url_for('equipes.criar_escala', cid=local.id) }}" class="row g-2 mt-1">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="col-md-4"><label class="form-label small" for="esf">Funcionário</label>
+        <select class="form-select" id="esf" name="funcionario_id" required>{% for f in funcionarios if f.is_active %}<option value="{{ f.id }}">{{ f.nome }}</option>{% endfor %}</select></div>
+      <div class="col-md-4"><label class="form-label small" for="esp">Posto</label>
+        <select class="form-select" id="esp" name="posto_id" required>{% for p in postos if p.is_active %}<option value="{{ p.id }}">{{ p.nome }} ({{ p.hora_inicio.strftime('%H:%M') }}–{{ p.hora_fim.strftime('%H:%M') }})</option>{% endfor %}</select></div>
+      <div class="col-6 col-md-2"><label class="form-label small" for="esi">Começa em</label><input class="form-control" id="esi" name="data_inicio" type="date" required value="{{ hoje }}"></div>
+      <div class="col-6 col-md-2"><label class="form-label small" for="esfim">Termina em (opcional)</label><input class="form-control" id="esfim" name="data_fim" type="date"></div>
+      <fieldset class="col-12">
+        <legend class="form-label small mb-1">Dias da semana</legend>
+        <div class="d-flex flex-wrap gap-3">
+          {% for k, v in dias %}<label class="d-flex gap-1 align-items-center"><input type="checkbox" name="dia_{{ k }}" value="1" {% if k in '12345' %}checked{% endif %}> {{ v }}</label>{% endfor %}
+        </div>
+      </fieldset>
+      <div class="col-12"><button class="btn btn-primary fw-bold" type="submit">Lançar escala</button></div>
+    </form>
+  </details>
+  {% endif %}
+</section>
+{% endblock %}

@@ -388,6 +388,9 @@ def gerar(dia, client_ids=None):
         _ini, fim = _janela(rota, dia)
         fim_utc = tempo.para_utc(fim.date(), fim.time())
         pessoa = escalado(rota, dia)
+        # Fase 6: faltou e alguém cobriu? A tarefa nasce com quem cobriu.
+        from facilities.equipes.servico import substituto
+        pessoa = substituto(rota, dia, pessoa)
         from facilities.rotas import presenca
         presenca.gerar(rota, dia, pessoa)
         for item in rota.itens:
@@ -459,6 +462,8 @@ def rodar(origem='comando', agora_utc=None):
         from facilities.rotas import presenca
         reg.tarefas_geradas = gerar(hoje) + gerar(hoje + timedelta(days=1))
         gerar_ordens(hoje, agora_utc)
+        from facilities.visitas.servico import gerar_visitas
+        gerar_visitas(hoje, agora_utc)
         avisar_tarefas(agora_utc)
         presenca.avisar_e_fechar(agora_utc)
         avisar_prazos(agora_utc)

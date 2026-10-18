@@ -130,6 +130,27 @@ Pontos de atenção:
 Migração `d4057ab57d72`: só acrescenta (2 tabelas, 6 colunas). Os prazos dos
 chamados já abertos não mudam.
 
+## Fase 6 (18/10/2026)
+
+| O que entrou | Onde |
+|---|---|
+| Funcionários do local (login opcional: o funcionário com login é o mesmo usuário, F6-1), postos, escala sem sobreposição (dias, horário que vira o dia, período) | `facilities/equipes/` |
+| Presença no aplicativo (`/app/equipe`): só veio / faltou / atrasou, sem horário (F6-2); hoje e 7 dias para trás; falta dispensa o pedido de presença aleatória | `equipes/servico.py` |
+| Cobertura com motivo: as tarefas da rota do posto passam para quem cobriu (sem login: ficam sem escalado); o agendador já gera com quem cobriu | `equipes.servico.reescalar_rota`, `substituto` |
+| Conferência do mês no site | `/equipes/locais/<id>/mes` |
+| Visitas de supervisão programadas (D56): abrem na data, avisam o supervisor, são feitas no aplicativo; o não conforme abre UM chamado (F6-3) | `facilities/visitas/` |
+
+Migração `78a13bdef69f`: só acrescenta 7 tabelas.
+
+Limites conhecidos: a visita ainda não tira foto (checklist com foto
+obrigatória não serve para visita) e precisa de sinal. O motivo da cobertura
+é texto livre — se a operação quiser uma lista fixa de motivos, é decisão do
+dono.
+
+ATENÇÃO: a presença lançada pelo supervisor tem o mesmo risco da D48
+(controle de jornada): validar com RH e jurídico antes do piloto e constar no
+aviso aos colaboradores (D25).
+
 ## Pendências conhecidas (próximos passos sugeridos)
 
 1. **Hospedagem e deploy** — decidir onde roda (o Dockerfile serve para

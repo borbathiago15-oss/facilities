@@ -10,6 +10,14 @@
 <a class="btn btn-outline-primary w-100 fc-app-acao mb-3" href="{{ url_for('rotas.turno') }}">
   <i class="bi bi-list-check"></i> Meu turno (tarefas da rota)
 </a>
+{% if lanca_presenca %}
+<a class="btn btn-outline-primary w-100 fc-app-acao mb-2" href="{{ url_for('equipes.app_equipe') }}">
+  <i class="bi bi-people"></i> Equipe de hoje (presença)
+</a>
+<a class="btn btn-outline-primary w-100 fc-app-acao mb-3" href="{{ url_for('visitas.app_lista') }}">
+  <i class="bi bi-clipboard-check"></i> Visitas de supervisão{% if visitas_abertas %} ({{ visitas_abertas }}){% endif %}
+</a>
+{% endif %}
 
 {% if ocorrencias %}
 <section class="fc-cartao mb-3 border-warning" aria-labelledby="tit-ocor">

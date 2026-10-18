@@ -85,6 +85,8 @@ ORIGEM_TAREFA_ROTA = 'tarefa_rota'
 # Fase 5: a ordem de serviço gerada por um plano preventivo (origem_id é o
 # ciclo, ``preventiva_ordens.id``: um ciclo vira UMA OS).
 ORIGEM_PREVENTIVA = 'preventiva'
+# Fase 6: o que a visita de supervisão achou não conforme (origem_id = a visita).
+ORIGEM_VISITA = 'visita'
 # Quem entra no índice único de origem (``uq_chamados_origem_viva``): o
 # chamado que veio de outro registro e não foi cancelado. A migração inicial
 # repete este texto À MÃO — e o ``flask db check`` NÃO compara a condição de
