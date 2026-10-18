@@ -171,7 +171,17 @@ def _rotas_de_a(app_module, a, ids):
     vis.gerar_visitas(tempo.hoje())
     db.session.commit()
     from facilities.visitas.models import Visita
-    return {'ocorrencia_publica': oc.id, 'presenca': pres.id, 'plano': plano.id,
+    # Fase 7: estoque, consumo e pedido de insumo em A (o catálogo é do grupo).
+    from facilities.materiais import servico as mat
+    material = mat.salvar_material(None, {'nome': 'Detergente da varredura', 'unidade': 'L',
+                                          'preco_unitario': '10'})
+    mat.movimentar(gestor, loc, {'material_id': str(material.id), 'quantidade': '5',
+                                 'motivo': f'Entrada {MARCA}'}, 'entrada')
+    mat.consumir(gestor, loc, {'material_id': str(material.id), 'quantidade': '1',
+                               'motivo': f'Consumo {MARCA}'})
+    pedido = mat.pedir(gestor, loc, {'texto': f'Pedido {MARCA}'})
+    db.session.commit()
+    return {'material': material.id, 'pedido': pedido.id,'ocorrencia_publica': oc.id, 'presenca': pres.id, 'plano': plano.id,
             'funcionario': func.id, 'posto': posto.id, 'escala_trabalho': esc.id,
             'falta': falta.id, 'programada': prog.id,
             'visita': Visita.query.filter_by(programada_id=prog.id).one().id,
@@ -213,6 +223,10 @@ def _valor_do_parametro(nome, ids, entidade=None, endpoint=''):
                       'eid': ids['escala_trabalho'], 'prid': ids['falta']}
         if nome in por_equipe:
             return por_equipe[nome]
+    if endpoint.startswith('materiais.'):
+        por_material = {'cid': ids['local'], 'mid': ids['material'], 'pid': ids['pedido']}
+        if nome in por_material:
+            return por_material[nome]
     if endpoint.startswith('visitas.'):
         por_visita = {'cid': ids['local'], 'pid': ids['programada'], 'vid': ids['visita']}
         if nome in por_visita:
@@ -282,6 +296,9 @@ def test_ninguem_de_b_le_ou_altera_a(app_module, local_a, papel):
              'escala_id': local_a['escala_trabalho'], 'situacao': 'veio',
              'funcionario_id': local_a['funcionario'], 'posto_id': local_a['posto'],
              'r_pergunta': 'sim',
+             # Fase 7: material de A, no estoque e no pedido.
+             'material_id': local_a['material'], 'quantidade': '1', 'tipo': 'saida',
+             'autorizar_negativo': '1',
              'corpo': json.dumps({'envio_id': f'invasao-{papel}-0001', 'ponto': local_a['qr'],
                                   'tarefa_id': local_a['tarefa_rota'], 'respostas': {},
                                   'sem_sinal': True,

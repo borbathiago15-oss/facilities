@@ -49,6 +49,11 @@
          class="{% if ep.startswith('demandas.') %}ativo{% endif %}"
          {% if ep.startswith('demandas.') %}aria-current="page"{% endif %}>Demandas</a>
       {% endif %}
+      {% if current_user._effective_role() in ('master', 'gerente', 'pleno', 'supervisor', 'visualizador') %}
+      <a href="{{ url_for('materiais.catalogo') }}"
+         class="{% if ep.startswith('materiais.') %}ativo{% endif %}"
+         {% if ep.startswith('materiais.') %}aria-current="page"{% endif %}>Materiais</a>
+      {% endif %}
       {% if current_user.e_gestao() or current_user._effective_role() == 'visualizador' %}
       <a href="{{ url_for('cadastros.inicio') }}"
          class="{% if ep.startswith('cadastros.') %}ativo{% endif %}"

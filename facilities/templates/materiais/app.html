@@ -1,0 +1,48 @@
+{% extends 'campo/base_app.html' %}
+{% block title %}Material{% endblock %}
+{% block content %}
+<h1 class="fc-titulo">Material</h1>
+<p class="fc-sub">Lance o que usou e avise o gestor do que está faltando.</p>
+{% if not locais %}<div class="fc-cartao fc-vazio">Você ainda não tem local liberado.</div>{% else %}
+<section class="fc-cartao mb-3" aria-labelledby="tit-usei">
+  <h2 class="h6 fw-bold" id="tit-usei"><i class="bi bi-droplet-half"></i> Usei material</h2>
+  {% if not materiais %}<p class="small text-muted mb-0">O catálogo de materiais ainda está vazio. Avise a gestão.</p>{% else %}
+  <form method="post" action="{{ url_for('materiais.app_consumo') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label class="form-label small fw-semibold" for="cl">Local</label>
+    <select class="form-select form-select-lg mb-2" id="cl" name="client_id" required>{% for l in locais %}<option value="{{ l.id }}">{{ l.name }}</option>{% endfor %}</select>
+    <label class="form-label small fw-semibold" for="cm">Material</label>
+    <select class="form-select form-select-lg mb-2" id="cm" name="material_id" required>{% for m in materiais %}<option value="{{ m.id }}">{{ m.nome }} ({{ m.unidade }})</option>{% endfor %}</select>
+    <label class="form-label small fw-semibold" for="cq">Quantidade</label>
+    <input class="form-control form-control-lg mb-2" id="cq" name="quantidade" required inputmode="decimal" placeholder="Ex.: 1,5">
+    <label class="form-label small fw-semibold" for="cc">Numa ordem de serviço (opcional)</label>
+    <select class="form-select mb-2" id="cc" name="chamado_id"><option value="">—</option>{% for ch in chamados %}<option value="{{ ch.id }}">{{ ch.numero }} · {{ ch.titulo[:50] }}</option>{% endfor %}</select>
+    <label class="form-label small fw-semibold" for="cr">Na rotina (opcional)</label>
+    <select class="form-select mb-3" id="cr" name="rota_id"><option value="">—</option>{% for r in rotas %}<option value="{{ r.id }}">{{ r.local.name }} · {{ r.nome }}</option>{% endfor %}</select>
+    <button class="btn btn-primary btn-lg w-100 fc-app-acao" type="submit"><i class="bi bi-check-circle"></i> Registrar consumo</button>
+  </form>
+  {% endif %}
+</section>
+<section class="fc-cartao mb-3" aria-labelledby="tit-falta">
+  <h2 class="h6 fw-bold" id="tit-falta"><i class="bi bi-cart"></i> Está faltando material</h2>
+  <form method="post" action="{{ url_for('materiais.app_pedido') }}" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label class="form-label small fw-semibold" for="pl">Local</label>
+    <select class="form-select form-select-lg mb-2" id="pl" name="client_id" required>{% for l in locais %}<option value="{{ l.id }}">{{ l.name }}</option>{% endfor %}</select>
+    <label class="form-label small fw-semibold" for="pm">Material (se estiver na lista)</label>
+    <select class="form-select mb-2" id="pm" name="material_id"><option value="">Não está na lista</option>{% for m in materiais %}<option value="{{ m.id }}">{{ m.nome }} ({{ m.unidade }})</option>{% endfor %}</select>
+    <label class="form-label small fw-semibold" for="pq">Quantidade (opcional)</label>
+    <input class="form-control mb-2" id="pq" name="quantidade" inputmode="decimal">
+    <label class="form-label small fw-semibold" for="pt">O que precisa</label>
+    <input class="form-control mb-2" id="pt" name="texto" maxlength="300" placeholder="Ex.: saco de lixo 100 L acabou">
+    <label class="form-label small fw-semibold" for="pf">Foto (opcional)</label>
+    <input class="form-control mb-3" id="pf" name="foto" type="file" accept="image/*" capture="environment">
+    <button class="btn btn-outline-primary btn-lg w-100 fc-app-acao" type="submit"><i class="bi bi-send"></i> Avisar o gestor</button>
+  </form>
+  {% if meus %}
+  <h3 class="h6 fw-bold mt-3">Meus últimos pedidos</h3>
+  {% for p in meus %}<div class="fc-app-item"><span class="fw-semibold">{{ p.resumo }}</span><span class="small text-muted">{{ p.local.name }} · {{ p.criado_em|hora_local('%d/%m %H:%M') }} · {{ p.situacao_rotulo }}</span></div>{% endfor %}
+  {% endif %}
+</section>
+{% endif %}
+{% endblock %}

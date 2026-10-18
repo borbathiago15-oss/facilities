@@ -1,7 +1,7 @@
 """Painel único de demandas (D55, Fase 5): tudo que espera alguém, numa fila
 só — chamados (inclusive os preventivos) e os avisos do público pelo QR.
-Desde a Fase 6, também as visitas de supervisão em aberto. Pedidos de
-insumo (Fase 7) e cobranças do cliente (Fase 9) entram aqui
+Desde a Fase 6, também as visitas de supervisão em aberto; desde a Fase 7,
+os pedidos de insumo. Cobranças do cliente (Fase 9) entram aqui
 quando chegarem.
 
 A fila segue a carteira de quem olha e põe primeiro o que está atrasado.
@@ -18,7 +18,7 @@ from facilities.core.acesso import allowed_client_ids_or_none, clientes_visiveis
 bp = Blueprint('demandas', __name__, url_prefix='/demandas')
 
 TIPOS = {'chamado': 'Chamado', 'preventiva': 'Preventiva', 'publico': 'Aviso do público',
-         'visita': 'Visita de supervisão'}
+         'visita': 'Visita de supervisão', 'insumo': 'Pedido de insumo'}
 SITUACOES = {'atrasada': 'Atrasada', 'hoje': 'Vence hoje', 'no_prazo': 'No prazo',
              'parada': 'Aguardando (prazo parado)', 'sem_prazo': 'Sem prazo'}
 ORDEM = {'atrasada': 0, 'hoje': 1, 'no_prazo': 2, 'parada': 3, 'sem_prazo': 4}
@@ -36,7 +36,7 @@ def _situacao(prazo, agora, parada=False):
     return 'no_prazo'
 
 
-def demandas(client_ids, agora=None, com_visitas=True):
+def demandas(client_ids, agora=None, com_visitas=True, com_pedidos=True):
     from facilities.chamados.models import (AGUARDANDO, ORIGEM_PREVENTIVA, STATUS_EM_ABERTO,
                                             Chamado)
     from facilities.rotas.models import TIPOS_OCORRENCIA_PUBLICA, SITUACOES_OCORRENCIA
@@ -76,6 +76,14 @@ def demandas(client_ids, agora=None, com_visitas=True):
             'responsavel': v.supervisor.name if v.supervisor else '',
             'prazo': p, 'estado': v.situacao_rotulo, 'situacao': _situacao(p, agora),
             'link': f'/app/visitas/{v.id}'})
+    # Fase 7: os pedidos de insumo que o gestor ainda não viu.
+    from facilities.materiais import servico as materiais
+    for p in (materiais.pedidos_abertos(ids) if com_pedidos else []):
+        itens.append({
+            'tipo': 'insumo', 'titulo': p.resumo, 'numero': '', 'local': p.local.name,
+            'client_id': p.client_id, 'responsavel': p.pessoa.name, 'prazo': p.prazo,
+            'estado': p.situacao_rotulo, 'situacao': _situacao(p.prazo, agora),
+            'link': '/materiais/pedidos'})
     longe = agora + timedelta(days=3650)
     itens.sort(key=lambda i: (ORDEM[i['situacao']], i['prazo'] or longe))
     return itens
@@ -92,8 +100,9 @@ def painel():
     if cid and cid in {c.id for c in locais}:
         ids = [cid]
     from facilities.visitas.servico import PERFIS_QUE_VISITAM
+    from facilities.materiais.servico import ve_custo
     itens = demandas(ids, com_visitas=current_user._effective_role() in PERFIS_QUE_VISITAM
-                     + ('visualizador',))
+                     + ('visualizador',), com_pedidos=ve_custo(current_user))
     contagem = {s: sum(1 for i in itens if i['situacao'] == s) for s in SITUACOES}
     tipo = request.args.get('tipo') or ''
     situacao = request.args.get('situacao') or ''

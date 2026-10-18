@@ -114,6 +114,9 @@ class Contratante(db.Model):
     # Régua de prazo dos chamados deste cliente, em horas por prioridade (D9).
     # Vazio = a régua padrão (urgente 4 h, alta 24 h, média 72 h, baixa 7 dias).
     prazos_chamado_json = db.Column(db.Text)
+    # Prazo para o gestor ver o pedido de insumo do posto, em horas (Fase 7).
+    # Vazio = 48 h.
+    prazo_pedido_insumo_horas = db.Column(db.Integer)
 
     empresa = db.relationship('Empresa')
     gerente = db.relationship('User', foreign_keys=[gerente_id])
