@@ -15,7 +15,9 @@ continua com a sua própria Passagem; os dois sistemas são independentes.
 | Módulo | O que faz |
 |---|---|
 | Passagem de Turno | checklist da rotina, pendências que atravessam turnos (contadas por área), ocorrências, tarefas da gestão para o turno, correção de passagem, painel, relatório mensal em PDF, modelos prontos por serviço |
-| Chamados | abrir (com fotos), atribuir a um técnico, prazo pela prioridade, em espera, resolver (foto do serviço), confirmar ou reabrir, trilha completa, números de prazo |
+| Chamados | abrir (com fotos), atribuir a um técnico, prazo pela prioridade (régua própria por cliente, se ele tiver), em espera com o prazo parado, resolver (foto do serviço), confirmar ou reabrir, trilha completa, números de prazo, aviso no sino e no celular antes e no vencimento |
+| Preventiva | plano por ponto/equipamento (checklist, a cada N dias, quantos dias antes abrir, responsável); o agendador abre a ordem de serviço sozinho, sem duplicar; o técnico faz o checklist no aplicativo pelo QR e a ordem fica resolvida |
+| Demandas | painel único do que espera alguém — chamados, preventivas e avisos do público —, pela carteira, com o atrasado primeiro |
 | Cadastros | empresas do grupo, clientes (gerente e centro de custo), estados, locais (subcentro), e em cada local setores, ambientes, equipamentos e pontos com QR; etiquetas em PDF; histórico de alterações |
 | Rotas e checklists | checklists com versão (biblioteca da Trino copiada por local), rotas do local e turno com horários e/ou frequência, escala, agendador das tarefas do dia, execução pelo QR com fotos, não conformidades, acompanhamento com aderência à rota |
 | Aplicativo de campo (`/app/`) | instalável no celular; meu turno, leitor de QR, execução também sem internet, avisos no celular, confirmação de presença, avisos do público |

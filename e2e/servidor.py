@@ -38,13 +38,14 @@ def montar(caminho_db):
         pessoas = {}
         for email, nome, papel in (('admin@e2e.test', 'Administrador', 'master'),
                                    ('ana@e2e.test', 'Ana Souza', 'encarregado'),
-                                   ('mariana@e2e.test', 'Mariana Lima', 'encarregado')):
+                                   ('mariana@e2e.test', 'Mariana Lima', 'encarregado'),
+                                   ('caio@e2e.test', 'Caio Técnico', 'tecnico')):
             u = User(name=nome, email=email, role=papel)
             u.set_password(SENHA)
             db.session.add(u)
             pessoas[email] = u
         db.session.flush()
-        for email in ('ana@e2e.test', 'mariana@e2e.test'):
+        for email in ('ana@e2e.test', 'mariana@e2e.test', 'caio@e2e.test'):
             pessoas[email].clients = [local]
         admin = pessoas['admin@e2e.test']
         setor = servico.salvar_setor(local, None, {'nome': 'Administrativo'}, admin)
@@ -82,6 +83,17 @@ def montar(caminho_db):
         rotas.salvar_escala(rota, {'user_id': pessoas['ana@e2e.test'].id,
                                    'dias_semana': '1234567',
                                    'data_inicio': tempo.hoje().isoformat()})
+        # Fase 5: a preventiva do Caio no mesmo ponto, com a ordem já aberta.
+        from facilities.preventiva import servico as preventiva
+        filtro = rotas.criar_modelo(local.id, {'nome': 'Limpeza do filtro'}, admin)
+        rotas.publicar(filtro, rotas.normalizar_itens([
+            {'texto': 'Filtro lavado?', 'tipo': 'sim_nao', 'obrigatorio': True}]), {}, admin)
+        preventiva.salvar_plano(local, None, {
+            'nome': 'Filtro do secador', 'ponto_id': ponto.id, 'modelo_id': filtro.id,
+            'intervalo_dias': '30', 'proxima_em': tempo.hoje().isoformat(),
+            'responsavel_id': pessoas['caio@e2e.test'].id}, admin)
+        db.session.flush()
+        preventiva.gerar_ordens(tempo.hoje())
         db.session.commit()
     return app
 

@@ -588,3 +588,9 @@ body.dark .page-title, body.dark .pg-titulo, body.dark .pg-num-v, body.dark .pg-
 .fc-presenca { position: fixed; left: 12px; right: 12px; bottom: calc(72px + env(safe-area-inset-bottom));
   z-index: 1040; background: var(--marca); color: #fff; border-radius: var(--radius-lg);
   padding: 14px; box-shadow: 0 8px 24px rgba(0, 0, 0, .25); }
+.fc-dem { font-weight: 700; }
+.fc-dem-atrasada { background: var(--perigo); color: #fff; }
+.fc-dem-hoje { background: var(--aviso); color: #fff; }
+.fc-dem-no_prazo { background: var(--ok); color: #fff; }
+.fc-dem-parada { background: var(--gray-100); color: var(--gray-700); }
+.fc-dem-sem_prazo { background: var(--gray-100); color: var(--gray-700); }

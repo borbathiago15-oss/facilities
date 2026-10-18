@@ -200,6 +200,7 @@ def _modelos(app):
     from facilities.chamados import models as _c  # noqa: F401
     from facilities.cadastros import models as _cad  # noqa: F401
     from facilities.rotas import models as _rot  # noqa: F401
+    from facilities.preventiva import models as _prev  # noqa: F401
 
 
 def _rotas(app):
@@ -213,8 +214,10 @@ def _rotas(app):
     from facilities.campo.rotas import bp as campo_bp
     from facilities.rotas.telas import bp as rotas_bp
     from facilities.rotas.publico import bp as publico_bp
+    from facilities.preventiva.telas import bp as preventiva_bp
+    from facilities.demandas import bp as demandas_bp
     for bp in (core_bp, auth_bp, admin_bp, app_bp, passagem_bp, chamados_bp, cadastros_bp,
-               campo_bp, rotas_bp, publico_bp):
+               campo_bp, rotas_bp, publico_bp, preventiva_bp, demandas_bp):
         app.register_blueprint(bp)
 
 

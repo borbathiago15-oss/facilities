@@ -182,6 +182,7 @@ def salvar_contratante(contratante, dados, autor):
     contratante.centro_custo = _texto(dados, 'centro_custo', 50)
     contratante.gerente_id = _gerente_valido(_id(dados, 'gerente_id'))
     contratante.prazos_ocorrencia_json = _prazos_de_ocorrencia(dados)
+    contratante.prazos_chamado_json = _regua_de_chamado(dados)
     if nova:
         db.session.add(contratante)
     registrar('contratante', contratante, 'criado' if nova else 'alterado', antes, autor)
@@ -200,6 +201,26 @@ def _prazos_de_ocorrencia(dados):
             raise CadastroInvalido(f'Prazo de "{rotulo}": em minutos, de 5 a 10080 (7 dias).')
         prazos[tipo] = int(bruto)
     return json.dumps(prazos, sort_keys=True) if prazos else None
+
+
+def _regua_de_chamado(dados):
+    """Horas por prioridade (D9); vazio = a régua padrão naquela prioridade."""
+    from facilities.chamados.models import PRIORIDADES
+    regua = {}
+    for prioridade, rotulo in PRIORIDADES.items():
+        bruto = str(dados.get(f'regua_{prioridade}') or '').strip()
+        if not bruto:
+            continue
+        if not bruto.isdigit() or not 1 <= int(bruto) <= 90 * 24:
+            raise CadastroInvalido(f'Prazo de chamado "{rotulo}": em horas, de 1 a 2160 '
+                                   '(90 dias).')
+        regua[prioridade] = int(bruto)
+    return json.dumps(regua, sort_keys=True) if regua else None
+
+
+def regua_de(contratante):
+    return json.loads(contratante.prazos_chamado_json) \
+        if contratante and contratante.prazos_chamado_json else {}
 
 
 def prazos_de(contratante):

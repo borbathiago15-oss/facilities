@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% block title %}Demandas{% endblock %}
+{% block content %}
+<h1 class="fc-titulo">Demandas</h1>
+<p class="fc-sub">Tudo que espera alguém, numa fila só: chamados, preventivas e avisos do público pelo QR. O atrasado vem primeiro.</p>
+<div class="d-flex flex-wrap gap-2 mb-3">
+  {% for k, v in situacoes.items() %}
+  <a class="fc-cartao py-2 px-3 text-reset text-decoration-none {% if situacao == k %}border-primary{% endif %}" href="{{ url_for('demandas.painel', situacao=k, local=cid, tipo=tipo) }}">
+    <div class="small text-muted">{{ v }}</div><div class="fs-4 fw-bold">{{ contagem[k] }}</div></a>
+  {% endfor %}
+</div>
+<form class="d-flex flex-wrap gap-2 mb-3" method="get">
+  <label class="visually-hidden" for="flocal">Local</label>
+  <select class="form-select w-auto" id="flocal" name="local"><option value="">Todos os locais</option>{% for l in locais %}<option value="{{ l.id }}" {% if cid == l.id %}selected{% endif %}>{{ l.name }}</option>{% endfor %}</select>
+  <label class="visually-hidden" for="ftipo">Tipo</label>
+  <select class="form-select w-auto" id="ftipo" name="tipo"><option value="">Todos os tipos</option>{% for k, v in tipos.items() %}<option value="{{ k }}" {% if tipo == k %}selected{% endif %}>{{ v }}</option>{% endfor %}</select>
+  <label class="visually-hidden" for="fsit">Situação</label>
+  <select class="form-select w-auto" id="fsit" name="situacao"><option value="">Todas as situações</option>{% for k, v in situacoes.items() %}<option value="{{ k }}" {% if situacao == k %}selected{% endif %}>{{ v }}</option>{% endfor %}</select>
+  <button class="btn btn-outline-primary" type="submit">Filtrar</button>
+</form>
+<div class="fc-cartao p-0">
+  {% for i in itens %}
+  <a class="d-flex flex-wrap gap-2 align-items-center border-bottom px-3 py-2 text-reset text-decoration-none" href="{{ i.link }}">
+    <span class="badge fc-dem fc-dem-{{ i.situacao }}">{{ situacoes[i.situacao] }}</span>
+    <span class="badge text-bg-light">{{ tipos[i.tipo] }}</span>
+    {% if i.numero %}<span class="small fw-semibold">{{ i.numero }}</span>{% endif %}
+    <span class="fw-semibold">{{ i.titulo }}</span>
+    <span class="small text-muted">{{ i.local }} · {{ i.estado }}{% if i.responsavel %} · {{ i.responsavel }}{% endif %}</span>
+    <span class="small ms-auto">{% if i.prazo %}prazo {{ i.prazo|hora_local('%d/%m %H:%M') }}{% endif %}</span>
+  </a>
+  {% else %}
+  <div class="fc-vazio">Nenhuma demanda esperando. Tudo em dia.</div>
+  {% endfor %}
+</div>
+{% endblock %}

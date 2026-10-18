@@ -210,8 +210,50 @@ def _evento(ch, tipo, por, texto=None):
 
 # ── Abrir ───────────────────────────────────────────────────────────────
 
-def prazo_para(prioridade, a_partir=None):
-    return (a_partir or datetime.utcnow()) + PRAZO_POR_PRIORIDADE[prioridade]
+def regua_do_contrato(client_id):
+    """A régua de prazo (D9): a do cliente do local, se ele tiver uma; senão
+    a padrão (``PRAZO_POR_PRIORIDADE``). Prioridade sem valor no cliente
+    também cai na padrão."""
+    import json
+    regua = dict(PRAZO_POR_PRIORIDADE)
+    c = db.session.get(Client, client_id) if client_id else None
+    contratante = getattr(c, 'contratante', None)
+    if contratante is not None and contratante.prazos_chamado_json:
+        try:
+            for prioridade, horas in json.loads(contratante.prazos_chamado_json).items():
+                if prioridade in regua and int(horas) > 0:
+                    regua[prioridade] = timedelta(hours=int(horas))
+        except (ValueError, TypeError, AttributeError):
+            pass
+    return regua
+
+
+def prazo_para(prioridade, a_partir=None, client_id=None):
+    return (a_partir or datetime.utcnow()) + regua_do_contrato(client_id)[prioridade]
+
+
+def _pausar(ch, agora):
+    """Entrou em "Aguardando": o relógio do prazo para (D8)."""
+    ch.pausado_desde = agora
+
+
+def _retomar_relogio(ch, agora):
+    """Saiu de "Aguardando": o tempo parado empurra o prazo para frente."""
+    if ch.pausado_desde is None:
+        return
+    parado = max(timedelta(0), agora - ch.pausado_desde)
+    ch.pausa_total_seg = (ch.pausa_total_seg or 0) + int(parado.total_seconds())
+    if ch.prazo is not None:
+        ch.prazo = ch.prazo + parado
+        _prazo_mudou(ch, agora)
+    ch.pausado_desde = None
+
+
+def _prazo_mudou(ch, agora):
+    """O prazo andou para frente: os avisos de prazo valem de novo."""
+    if ch.prazo is not None and ch.prazo > agora:
+        ch.aviso_vencendo_em = None
+        ch.aviso_vencido_em = None
 
 
 def _travar_contrato(client_id):
@@ -264,7 +306,7 @@ def abrir(user, client_id, titulo, descricao='', local='', categoria='outro',
                  titulo=titulo[:TITULO_MAX], descricao=(descricao or '').strip() or None,
                  local=(local or '').strip()[:200] or None, categoria=categoria,
                  prioridade=prioridade, status=ABERTO, solicitante_id=user.id,
-                 prazo=prazo_para(prioridade, agora), origem=origem,
+                 prazo=prazo_para(prioridade, agora, client_id), origem=origem,
                  origem_id=origem_id, aberto_em=agora)
     db.session.add(ch)
     db.session.flush()
@@ -482,7 +524,10 @@ def executar(user, ch, acao, form):
         # urgente um chamado de três dias o põe atrasado na hora — e é
         # verdade, ele está.
         ch.prioridade = nova
-        ch.prazo = prazo_para(nova, ch.aberto_em)
+        # As pausas já encerradas continuam valendo (D8).
+        ch.prazo = prazo_para(nova, ch.aberto_em, ch.client_id) + \
+            timedelta(seconds=ch.pausa_total_seg or 0)
+        _prazo_mudou(ch, agora)
         _evento(ch, 'prioridade', user,
                 f'Prioridade {PRIORIDADES[nova].lower()}' + (f' — {texto}' if texto else ''))
         # Quem atende precisa saber que a régua mudou: o urgente que ninguém
@@ -506,15 +551,19 @@ def executar(user, ch, acao, form):
         _exigir(texto, 'Diga o que está faltando (peça, terceiro, acesso…).', 400)
         ch.status = AGUARDANDO
         ch.motivo_espera = texto[:300]
-        _evento(ch, 'aguardando', user, texto)
+        _pausar(ch, agora)
+        _evento(ch, 'aguardando', user, texto + ' — o prazo fica parado enquanto espera.')
 
     elif acao == 'retomar':
         ch.status = EM_ATENDIMENTO
         ch.motivo_espera = None
-        _evento(ch, 'retomado', user, texto or None)
+        _retomar_relogio(ch, agora)
+        _evento(ch, 'retomado', user, (texto + ' — ' if texto else '') +
+                f'novo prazo: {_prazo_txt(ch)}.')
 
     elif acao == 'resolver':
         _exigir(texto, 'Descreva o que foi feito.', 400)
+        _retomar_relogio(ch, agora)
         ch.status = RESOLVIDO
         ch.solucao = texto
         ch.resolvido_em = agora
@@ -545,6 +594,7 @@ def executar(user, ch, acao, form):
 
     elif acao == 'cancelar':
         _exigir(texto, 'Diga por que o chamado está sendo cancelado.', 400)
+        _retomar_relogio(ch, agora)
         ch.status = CANCELADO
         ch.cancelado_em = agora
         _evento(ch, 'cancelado', user, texto)
@@ -576,6 +626,7 @@ def indicadores(client_ids, dias=30, agora=None):
         base = base.filter(Chamado.client_id.in_(client_ids or [-1]))
     abertos = base.filter(Chamado.status.in_(STATUS_EM_ABERTO)).all()
     atrasados = [c for c in abertos if c.atrasado(agora)]
+    aguardando = sum(1 for c in abertos if c.status == AGUARDANDO)
     aguardando_conf = base.filter(Chamado.status == RESOLVIDO).count()
     desde = agora - timedelta(days=dias)
     resolvidos = base.filter(Chamado.resolvido_em.isnot(None),
@@ -585,9 +636,62 @@ def indicadores(client_ids, dias=30, agora=None):
     return {
         'em_aberto': len(abertos),
         'atrasados': len(atrasados),
+        'aguardando': aguardando,
         'aguardando_confirmacao': aguardando_conf,
         'resolvidos': len(resolvidos),
         'pct_no_prazo': round(100.0 * len(no_prazo) / len(resolvidos), 1) if resolvidos else None,
         'horas_medias': round(sum(horas) / len(horas), 1) if horas else None,
         'dias': dias,
     }
+
+
+# ── Avisos de prazo (Fase 5) ─────────────────────────────────────────────
+
+ANTECEDENCIA_MAX = timedelta(hours=2)
+ANTECEDENCIA_MIN = timedelta(minutes=30)
+# Venceu há mais que isto (chamado antigo, agendador parado): marca como
+# avisado sem disparar — senão o primeiro rodar despeja um aviso por chamado
+# velho de uma vez.
+VENCIDO_HA_MUITO = timedelta(hours=24)
+
+
+def _antecedencia(ch):
+    """Quanto antes avisar: um quarto do prazo, entre 30 min e 2 h."""
+    total = (ch.prazo - ch.aberto_em) if ch.prazo and ch.aberto_em else ANTECEDENCIA_MAX
+    return min(ANTECEDENCIA_MAX, max(ANTECEDENCIA_MIN, total / 4))
+
+
+def avisar_prazos(agora=None):
+    """Vence em breve: avisa quem atende. Venceu: avisa quem atende e a gestão.
+    Cada aviso uma vez só; em "Aguardando" o relógio está parado (D8)."""
+    from facilities import tempo
+    from facilities.core import push
+    from facilities.chamados.models import STATUS_CONTA_PRAZO
+    agora = agora or datetime.utcnow()
+    n = 0
+    for ch in Chamado.query.filter(Chamado.status.in_(STATUS_CONTA_PRAZO),
+                                   Chamado.prazo.isnot(None),
+                                   Chamado.aviso_vencido_em.is_(None)).all():
+        link = f'/chamados/{ch.id}'
+        quem = {ch.responsavel_id} if ch.responsavel_id else gestores_do_contrato(ch.client_id)
+        if agora - ch.prazo > VENCIDO_HA_MUITO:
+            ch.aviso_vencido_em = agora
+            ch.aviso_vencendo_em = ch.aviso_vencendo_em or agora
+        elif agora > ch.prazo:
+            todos = quem | gestores_do_contrato(ch.client_id)
+            # O push vai só a quem o sino aceitou (ativo, com o local na carteira).
+            avisados = _avisar(todos, ch, f'Prazo vencido: {ch.titulo}',
+                               f'{ch.numero} venceu às {tempo.fmt(ch.prazo, "%d/%m %H:%M")}.')
+            push.avisar(avisados, f'Prazo vencido: {ch.numero}', ch.titulo, link,
+                        marca=f'prazo-{ch.id}')
+            ch.aviso_vencido_em = agora
+            ch.aviso_vencendo_em = ch.aviso_vencendo_em or agora
+            n += 1
+        elif ch.aviso_vencendo_em is None and ch.prazo - agora <= _antecedencia(ch):
+            avisados = _avisar(quem, ch, f'Vence às {tempo.fmt(ch.prazo, "%H:%M")}: {ch.titulo}',
+                               f'{ch.numero} · prioridade {ch.prioridade_rotulo.lower()}.')
+            push.avisar(avisados, f'Vence às {tempo.fmt(ch.prazo, "%H:%M")}: {ch.numero}',
+                        ch.titulo, link, marca=f'prazo-{ch.id}')
+            ch.aviso_vencendo_em = agora
+            n += 1
+    return n

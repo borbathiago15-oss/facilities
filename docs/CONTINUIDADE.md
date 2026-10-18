@@ -116,6 +116,20 @@ Pontos de atenção:
   banco e os backups como se protege as senhas.
 - O agendador precisa rodar a cada 5 minutos (ver README, Produção).
 
+## Fase 5 (18/10/2026)
+
+| O que entrou | Onde |
+|---|---|
+| Plano preventivo e ciclos (uma ordem por plano + vencimento; agendador parado não despeja ordens velhas) | `facilities/preventiva/` |
+| Checklist da preventiva no aplicativo (`chamado_id` na execução) resolve a ordem | `rotas/servico.py`, `static/js/rotas-turno.js` |
+| D8: "Aguardando" para o relógio do prazo; a pausa empurra o prazo ao sair | `chamados/servico.py` (`_pausar`, `_retomar_relogio`) |
+| D9: régua de prazo por cliente (horas por prioridade); vale só para chamado aberto depois | `Contratante.prazos_chamado_json`, `regua_do_contrato` |
+| Aviso de prazo (sino + celular) antes e no vencimento, uma vez só; vencido há mais de 24 h não dispara | `chamados.servico.avisar_prazos` (no agendador) |
+| Painel de demandas | `facilities/demandas.py`, `/demandas/` |
+
+Migração `d4057ab57d72`: só acrescenta (2 tabelas, 6 colunas). Os prazos dos
+chamados já abertos não mudam.
+
 ## Pendências conhecidas (próximos passos sugeridos)
 
 1. **Hospedagem e deploy** — decidir onde roda (o Dockerfile serve para

@@ -67,8 +67,11 @@ STATUS = {
     FECHADO: 'Fechado',
     CANCELADO: 'Cancelado',
 }
-# Ainda nas mãos da operação: conta para prazo e para "em aberto".
+# Ainda nas mãos da operação: conta para "em aberto".
 STATUS_EM_ABERTO = (ABERTO, EM_ATENDIMENTO, AGUARDANDO)
+# O relógio do prazo só anda nestes (D8): em "Aguardando" (peça, terceiro)
+# ele PARA, e o tempo parado é somado ao prazo quando o chamado volta.
+STATUS_CONTA_PRAZO = (ABERTO, EM_ATENDIMENTO)
 STATUS_ENCERRADOS = (FECHADO, CANCELADO)
 
 ORIGEM_MANUAL = 'manual'
@@ -79,6 +82,9 @@ ORIGEM_PENDENCIA = 'pendencia'
 # não conformidade (ou tarefa) vira UM chamado.
 ORIGEM_NAO_CONFORMIDADE = 'nao_conformidade'
 ORIGEM_TAREFA_ROTA = 'tarefa_rota'
+# Fase 5: a ordem de serviço gerada por um plano preventivo (origem_id é o
+# ciclo, ``preventiva_ordens.id``: um ciclo vira UMA OS).
+ORIGEM_PREVENTIVA = 'preventiva'
 # Quem entra no índice único de origem (``uq_chamados_origem_viva``): o
 # chamado que veio de outro registro e não foi cancelado. A migração inicial
 # repete este texto À MÃO — e o ``flask db check`` NÃO compara a condição de
@@ -112,6 +118,13 @@ class Chamado(db.Model):
     resolvido_em = db.Column(db.DateTime, nullable=True)
     fechado_em = db.Column(db.DateTime, nullable=True)
     cancelado_em = db.Column(db.DateTime, nullable=True)
+    # D8: quando entrou em "Aguardando" (relógio parado) e quanto já ficou
+    # parado no total. O prazo gravado já inclui as pausas encerradas.
+    pausado_desde = db.Column(db.DateTime, nullable=True)
+    pausa_total_seg = db.Column(db.Integer, nullable=False, default=0, server_default='0')
+    # Avisos de prazo já mandados (Fase 5): "vence em breve" e "venceu".
+    aviso_vencendo_em = db.Column(db.DateTime, nullable=True)
+    aviso_vencido_em = db.Column(db.DateTime, nullable=True)
     atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     __table_args__ = (
@@ -146,8 +159,10 @@ class Chamado(db.Model):
         return self.status in STATUS_EM_ABERTO
 
     def atrasado(self, agora=None):
+        """Passou do prazo com o relógio andando. Em "Aguardando" o relógio
+        está parado (D8): não conta como atrasado enquanto espera."""
         agora = agora or datetime.utcnow()
-        return bool(self.em_aberto and self.prazo and agora > self.prazo)
+        return bool(self.status in STATUS_CONTA_PRAZO and self.prazo and agora > self.prazo)
 
     @property
     def status_rotulo(self):

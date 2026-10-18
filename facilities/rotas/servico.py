@@ -454,10 +454,14 @@ def rodar(origem='comando', agora_utc=None):
     db.session.add(reg)
     db.session.flush()
     try:
+        from facilities.chamados.servico import avisar_prazos
+        from facilities.preventiva.servico import gerar_ordens
         from facilities.rotas import presenca
         reg.tarefas_geradas = gerar(hoje) + gerar(hoje + timedelta(days=1))
+        gerar_ordens(hoje, agora_utc)
         avisar_tarefas(agora_utc)
         presenca.avisar_e_fechar(agora_utc)
+        avisar_prazos(agora_utc)
         reg.tarefas_perdidas = fechar_perdidas(agora_utc)
         reg.ok = True
     except Exception as erro:            # registra e repassa: quem chamou decide
@@ -652,7 +656,37 @@ def registrar_execucao(user, dados, fotos, agora_utc=None):
         raise RegraDaRota('Este ponto foi desativado. Avise a gestão.', 409)
 
     tarefa = None
-    if dados.get('tarefa_id'):
+    chamado = None
+    if dados.get('chamado_id'):
+        # Fase 5: o checklist da preventiva, no ponto do plano.
+        from facilities.chamados.models import STATUS_EM_ABERTO, Chamado
+        from facilities.chamados.servico import pode_agir
+        from facilities.preventiva.servico import ordem_do_chamado
+        bruto = str(dados.get('chamado_id')).strip()
+        chamado = db.session.get(Chamado, int(bruto)) if bruto.isdigit() else None
+        ordem = ordem_do_chamado(chamado)
+        if ordem is None or chamado.client_id != ponto.client_id:
+            raise RegraDaRota('Ordem de serviço preventiva não encontrada.', 404)
+        if not pode_agir(user, chamado):
+            raise RegraDaRota('Você não pode atender esta ordem de serviço.', 403)
+        if ordem.plano.ponto_id != ponto.id:
+            raise RegraDaRota(f'Este QR é de outro ponto. A preventiva é em '
+                              f'"{ordem.plano.ponto.nome}".', 409)
+        if chamado.status not in STATUS_EM_ABERTO:
+            raise RegraDaRota(f'A ordem {chamado.numero} já foi resolvida.', 409)
+        # Como na atividade extra: vale a versão que a pessoa viu na tela,
+        # se ainda for do checklist do plano (ela pode ter ficado sem sinal).
+        from facilities.rotas.models import ChecklistVersao
+        versao = ordem.plano.modelo.versao_atual
+        vista = str(dados.get('versao_id') or '').strip()
+        if vista.isdigit():
+            v = db.session.get(ChecklistVersao, int(vista))
+            if v is not None and v.modelo_id == ordem.plano.modelo_id:
+                versao = v
+        if versao is None:
+            raise RegraDaRota('O checklist desta preventiva não está publicado. Avise a gestão.',
+                              409)
+    elif dados.get('tarefa_id'):
         tarefa = db.session.get(TarefaDia, int(dados['tarefa_id']))
         if tarefa is None or tarefa.client_id != ponto.client_id:
             raise RegraDaRota('Tarefa não encontrada.', 404)
@@ -712,8 +746,10 @@ def registrar_execucao(user, dados, fotos, agora_utc=None):
         raise RegraDaRota('Tire a foto de DEPOIS.')
 
     ex = Execucao(tarefa_id=tarefa.id if tarefa else None, client_id=ponto.client_id,
+                  chamado_id=chamado.id if chamado else None,
                   ponto_id=ponto.id, versao_id=versao.id, user_id=user.id,
-                  extra=tarefa is None, lido_em=lido, iniciada_em=lido, concluida_em=concluida,
+                  extra=tarefa is None and chamado is None,
+                  lido_em=lido, iniciada_em=lido, concluida_em=concluida,
                   sem_sinal=sem_sinal, recebida_em=agora_utc,
                   respostas_json=json.dumps(limpas, ensure_ascii=False),
                   observacao=(dados.get('observacao') or '').strip()[:2000] or None,
@@ -737,6 +773,9 @@ def registrar_execucao(user, dados, fotos, agora_utc=None):
         db.session.add(NaoConformidade(execucao_id=ex.id, client_id=ex.client_id,
                                        item_codigo=item['codigo'], item_texto=item['texto'],
                                        resposta=limpas.get(item['codigo'])))
+    if chamado is not None:
+        from facilities.preventiva.servico import resolver_pela_execucao
+        resolver_pela_execucao(chamado, user, ex, agora_utc)
     if tarefa is not None:
         tarefa.status = (CONCLUIDA_NO_PRAZO if lido <= tarefa.previsto_para + tol
                          else CONCLUIDA_COM_ATRASO)

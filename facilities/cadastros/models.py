@@ -111,6 +111,9 @@ class Contratante(db.Model):
     # Prazo de atendimento da ocorrência do QR público, em minutos, por tipo
     # (Q2: configurável por cliente; sem valor, a ocorrência fica sem prazo).
     prazos_ocorrencia_json = db.Column(db.Text)
+    # Régua de prazo dos chamados deste cliente, em horas por prioridade (D9).
+    # Vazio = a régua padrão (urgente 4 h, alta 24 h, média 72 h, baixa 7 dias).
+    prazos_chamado_json = db.Column(db.Text)
 
     empresa = db.relationship('Empresa')
     gerente = db.relationship('User', foreign_keys=[gerente_id])
