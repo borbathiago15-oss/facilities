@@ -271,9 +271,20 @@ def execucoes_do_local(client_id, agora=None):
             .order_by(Execucao.concluida_em.desc()).limit(EXECUCOES_NA_TELA).all())
 
 
-def quem_fez(execucao, local):
-    """R5: a função; o nome só com o interruptor do cliente ligado."""
-    pessoa = execucao.pessoa
+def visitas_do_local(client_id, agora=None):
+    """Fase 10: as visitas de supervisão FEITAS nos últimos 30 dias."""
+    from facilities.visitas.models import FEITA, Visita
+    agora = agora or datetime.utcnow()
+    corte = agora - timedelta(days=DIAS_DOS_CHECKLISTS)
+    return (Visita.query.filter(Visita.client_id == client_id, Visita.status == FEITA,
+                                Visita.feita_em >= corte)
+            .order_by(Visita.feita_em.desc()).limit(EXECUCOES_NA_TELA).all())
+
+
+def quem_fez(registro, local):
+    """R5: a função; o nome só com o interruptor do cliente ligado. Serve à
+    execução do checklist (``pessoa``) e à visita (``quem_fez``)."""
+    pessoa = getattr(registro, 'pessoa', None) or getattr(registro, 'quem_fez', None)
     if pessoa is None:
         return '—'
     c = local.contratante

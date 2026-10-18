@@ -2,7 +2,7 @@
 
 * Equipe de hoje: marca a falta da Ana, registra que a Mariana cobriu por
   atestado — as tarefas da rota do posto deixam de ser da Ana;
-* Visita de supervisão: abre a visita do dia, responde e registra.
+* Visita de supervisão: abre a visita do dia, responde, anexa uma foto e registra.
 """
 from conftest import abrir_contexto, entrar
 
@@ -46,9 +46,16 @@ def test_sueli_faz_a_visita_de_supervisao(servidor, navegador, perfil):
         pg.get_by_role('link', name='Visitas de supervisão').click()
         pg.get_by_role('link', name='Visita semanal').click()
         pg.locator('label.fc-opcao', has_text='Sim').click()
+        # Fase 10: uma foto livre da visita (reduzida no aparelho antes de subir).
+        import os
+        foto = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'facilities',
+                            'static', 'pwa', 'icone-192.png')
+        pg.set_input_files('#f_livre', foto)
         pg.get_by_role('button', name='Registrar a visita').click()
         pg.wait_for_selector('text=Tudo conforme')
         assert servidor['sql']("SELECT status, n_nao_conformes FROM visitas") == [('feita', 0)]
+        assert servidor['sql']("SELECT momento FROM visita_fotos") == [('livre',)]
+        assert pg.locator('img.fc-miniatura').count() == 1
         _sem_rolagem_lateral(pg)
     finally:
         b.close()

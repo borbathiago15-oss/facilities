@@ -2,8 +2,9 @@
 
 * Programação: checklist publicado DO LOCAL, a cada 1 a 365 dias, com um
   supervisor (ou vazio: qualquer supervisor ou gestor do local).
-* O checklist de visita não pode pedir foto obrigatória por enquanto: a
-  visita é lançada numa tela simples do aplicativo, sem câmera.
+* Fotos (Fase 10): a visita obedece ao que o checklist pede (antes, depois,
+  por item) e aceita até 5 fotos livres. Com não conformidade, as fotos vão
+  para o chamado como foto de "antes" (o problema).
 * Agendador: chegou a data, abre a visita e avisa quem faz (sino e celular).
   Ficou parado e perdeu datas? Abre UMA e pula para a próxima futura.
 * Feita a visita, o que vier não conforme abre UM chamado (F6-3), com os
@@ -15,7 +16,7 @@ from datetime import datetime, time, timedelta
 from facilities import tempo
 from facilities.extensions import db
 from facilities.core.models import PERFIS_DE_GESTAO, User
-from facilities.visitas.models import FEITA, PREVISTA, Visita, VisitaProgramada
+from facilities.visitas.models import FEITA, PREVISTA, Visita, VisitaFoto, VisitaProgramada
 
 PERFIS_QUE_VISITAM = ('supervisor',) + tuple(PERFIS_DE_GESTAO)
 
@@ -32,10 +33,8 @@ def _id(dados, campo):
     return int(bruto) if bruto.isdigit() else 0
 
 
-def pede_foto(versao):
-    from facilities.rotas.servico import itens_da_versao
-    return bool(versao.exige_foto_antes or versao.exige_foto_depois
-                or any(i.get('exige_foto') for i in itens_da_versao(versao)))
+FOTOS_LIVRES = 5
+FOTOS_POR_CAMPO = 5
 
 
 def supervisores_do_local(local_id):
@@ -61,9 +60,6 @@ def salvar_programada(local, prog, dados, autor):
     if modelo is None or modelo.client_id != local.id or not modelo.is_active \
             or modelo.versao_atual is None:
         raise RegraDaVisita('Escolha um checklist publicado deste local.')
-    if pede_foto(modelo.versao_atual):
-        raise RegraDaVisita('Este checklist pede foto obrigatória; a visita ainda não tira '
-                            'foto. Escolha outro ou tire a obrigatoriedade da foto.')
     bruto = str(dados.get('intervalo_dias') or '').strip()
     if not bruto.isdigit() or not 1 <= int(bruto) <= 365:
         raise RegraDaVisita('A cada quantos dias: de 1 a 365.')
@@ -145,7 +141,56 @@ def abertas(client_ids, user=None):
     return lista
 
 
-def registrar(user, visita, respostas, observacao='', agora_utc=None):
+def _ler_fotos(fotos):
+    """Confere TODAS as fotos antes de gravar qualquer coisa → {campo: [(dados, ext, mime)]}."""
+    from facilities.rotas.servico import RegraDaRota, ler_imagem
+    lidas = {}
+    for campo, arquivos in (fotos or {}).items():
+        limite = FOTOS_LIVRES if campo == 'livre' else FOTOS_POR_CAMPO
+        arquivos = [a for a in arquivos if a and getattr(a, 'filename', '')]
+        if campo == 'livre' and len(arquivos) > FOTOS_LIVRES:
+            raise RegraDaVisita(f'No máximo {FOTOS_LIVRES} fotos livres por visita.')
+        try:
+            lidas[campo] = [ler_imagem(a) for a in arquivos[:limite]]
+        except RegraDaRota as erro:
+            raise RegraDaVisita(erro.mensagem)
+    return {k: v for k, v in lidas.items() if v}
+
+
+def _guardar_fotos(visita, lidas):
+    import uuid
+    from facilities.core.anexos import storage
+    gravadas = []
+    for campo, lista in lidas.items():
+        if campo in ('antes', 'depois', 'livre'):
+            momento, item = campo, None
+        elif campo.startswith('item:'):
+            momento, item = 'item', campo.split(':', 1)[1][:60]
+        else:
+            continue
+        for dados, ext, mime in lista:
+            chave = f'visitas/{visita.id}/{uuid.uuid4().hex}.{ext}'
+            storage().save(chave, dados, mime)
+            f = VisitaFoto(visita_id=visita.id, momento=momento, item_codigo=item, mime=mime,
+                           tamanho=len(dados), storage_key=chave)
+            db.session.add(f)
+            gravadas.append(f)
+    db.session.flush()
+    return gravadas
+
+
+def _fotos_no_chamado(chamado, fotos, user):
+    """As fotos da visita viram fotos de "antes" do chamado (o mesmo arquivo)."""
+    from facilities.chamados.models import ChamadoAnexo
+    for f in fotos:
+        ext = f.storage_key.rsplit('.', 1)[-1]
+        db.session.add(ChamadoAnexo(chamado_id=chamado.id, nome=f'visita-{f.id}.{ext}',
+                                    mime=f.mime, tamanho=f.tamanho, storage_key=f.storage_key,
+                                    momento='antes', uploaded_by=user.id))
+
+
+def registrar(user, visita, respostas, observacao='', agora_utc=None, fotos=None):
+    """``fotos``: {'antes': [arq], 'depois': [arq], 'item:<código>': [arq], 'livre': [arq]}."""
     from facilities.chamados import servico as chamados
     from facilities.chamados.models import ORIGEM_VISITA
     from facilities.rotas.servico import RegraDaRota, conferir_respostas, itens_da_versao
@@ -158,20 +203,24 @@ def registrar(user, visita, respostas, observacao='', agora_utc=None):
     versao = visita.programada.modelo.versao_atual
     if versao is None:
         raise RegraDaVisita('O checklist da visita não está publicado. Avise a gestão.', 409)
-    if pede_foto(versao):
-        raise RegraDaVisita('O checklist passou a pedir foto obrigatória; a visita ainda não '
-                            'tira foto. Avise a gestão.', 409)
+    lidas = _ler_fotos(fotos)
     itens = itens_da_versao(versao)
+    por_item = {k.split(':', 1)[1]: v for k, v in lidas.items() if k.startswith('item:')}
     try:
-        limpas, ncs = conferir_respostas(itens, respostas or {}, {})
+        limpas, ncs = conferir_respostas(itens, respostas or {}, por_item)
     except RegraDaRota as erro:
         raise RegraDaVisita(erro.mensagem)
+    if versao.exige_foto_antes and not lidas.get('antes'):
+        raise RegraDaVisita('Tire a foto de ANTES.')
+    if versao.exige_foto_depois and not lidas.get('depois'):
+        raise RegraDaVisita('Tire a foto de DEPOIS.')
     visita.status = FEITA
     visita.feita_por, visita.feita_em = user.id, agora_utc
     visita.versao_id = versao.id
     visita.respostas_json = json.dumps(limpas, ensure_ascii=False)
     visita.observacao = (observacao or '').strip()[:2000] or None
     visita.n_nao_conformes = len(ncs)
+    gravadas = _guardar_fotos(visita, lidas)
     if ncs:
         lista = '; '.join(f'"{i["texto"]}": {limpas.get(i["codigo"], "—")}' for i in ncs)
         ch = chamados.abrir(
@@ -183,6 +232,8 @@ def registrar(user, visita, respostas, observacao='', agora_utc=None):
                        + (f' Observação: {visita.observacao}' if visita.observacao else '')),
             origem=ORIGEM_VISITA, origem_id=visita.id)
         visita.chamado_id = ch.id
+        db.session.flush()
+        _fotos_no_chamado(ch, gravadas, user)
     db.session.flush()
     return visita
 

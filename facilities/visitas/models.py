@@ -70,6 +70,7 @@ class Visita(db.Model):
     quem_fez = db.relationship('User', foreign_keys=[feita_por])
     versao = db.relationship('ChecklistVersao')
     chamado = db.relationship('Chamado')
+    fotos = db.relationship('VisitaFoto', backref='visita', order_by='VisitaFoto.id')
 
     __table_args__ = (db.UniqueConstraint('programada_id', 'vencimento',
                                           name='uq_visitas_programada_venc'),)
@@ -79,4 +80,28 @@ class Visita(db.Model):
         return SITUACOES_VISITA.get(self.status, self.status)
 
 
-MODELOS_EM_ORDEM_DE_LIMPEZA = (Visita, VisitaProgramada)
+# Fase 10: o que a foto mostra — o que o checklist pede (antes, depois, por
+# item) e as livres do supervisor.
+MOMENTOS_DA_FOTO = {'antes': 'Antes', 'depois': 'Depois', 'item': 'Do item',
+                    'livre': 'Da visita'}
+
+
+class VisitaFoto(db.Model):
+    """Foto da visita de supervisão (Fase 10). Não se edita nem se apaga."""
+    __tablename__ = 'visita_fotos'
+    id = db.Column(db.Integer, primary_key=True)
+    visita_id = db.Column(db.Integer, db.ForeignKey('visitas.id', ondelete='RESTRICT'),
+                          nullable=False, index=True)
+    momento = db.Column(db.String(10), nullable=False)
+    item_codigo = db.Column(db.String(60))
+    mime = db.Column(db.String(100))
+    tamanho = db.Column(db.Integer)
+    storage_key = db.Column(db.String(300), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    @property
+    def momento_rotulo(self):
+        return MOMENTOS_DA_FOTO.get(self.momento, self.momento)
+
+
+MODELOS_EM_ORDEM_DE_LIMPEZA = (VisitaFoto, Visita, VisitaProgramada)

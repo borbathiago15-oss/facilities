@@ -1,6 +1,9 @@
 """Telas das visitas: a gestão programa no site; o supervisor faz a visita no
 aplicativo (``/app/visitas``)."""
-from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
+import io
+
+from flask import (Blueprint, abort, flash, redirect, render_template, request, send_file,
+                   url_for)
 from flask_login import current_user, login_required
 from werkzeug.exceptions import Forbidden
 
@@ -9,7 +12,7 @@ from facilities.extensions import db
 from facilities.core.acesso import clientes_visiveis, require_client
 from facilities.core.models import Client
 from facilities.visitas import servico
-from facilities.visitas.models import PREVISTA, Visita, VisitaProgramada
+from facilities.visitas.models import PREVISTA, Visita, VisitaFoto, VisitaProgramada
 from facilities.visitas.servico import RegraDaVisita
 
 bp = Blueprint('visitas', __name__)
@@ -47,7 +50,7 @@ def local(cid):
     loc = _local(cid)
     modelos = [m for m in ChecklistModelo.query.filter_by(client_id=loc.id, is_active=True)
                .order_by(ChecklistModelo.nome)
-               if m.versao_atual and not servico.pede_foto(m.versao_atual)]
+               if m.versao_atual]
     return render_template(
         'visitas/local.html', local=loc, modelos=modelos,
         programadas=VisitaProgramada.query.filter_by(client_id=loc.id)
@@ -112,7 +115,7 @@ def ver(vid):
     v = _visita(vid)
     versao = v.versao if v.status != PREVISTA else v.programada.modelo.versao_atual
     itens = itens_da_versao(versao) if versao else []
-    return render_template('visitas/app_visita.html', v=v, itens=itens,
+    return render_template('visitas/app_visita.html', v=v, itens=itens, versao=versao,
                            textos={i['codigo']: i['texto'] for i in itens},
                            respostas=servico.respostas_de(v),
                            pode_fazer=v.status == PREVISTA and servico.pode_fazer(current_user, v),
@@ -124,8 +127,11 @@ def ver(vid):
 def fazer(vid):
     v = _visita(vid)
     respostas = {k[2:]: val for k, val in request.form.items() if k.startswith('r_')}
+    # Fase 10: f_antes, f_depois, f_livre e f_item:<código> (o que o checklist pede).
+    fotos = {k[2:]: request.files.getlist(k) for k in request.files if k.startswith('f_')}
     try:
-        servico.registrar(current_user, v, respostas, request.form.get('observacao'))
+        servico.registrar(current_user, v, respostas, request.form.get('observacao'),
+                          fotos=fotos)
         db.session.commit()
     except RegraDaVisita as erro:
         db.session.rollback()
@@ -137,3 +143,16 @@ def fazer(vid):
     else:
         flash('Visita registrada. Tudo conforme.', 'success')
     return redirect(url_for('visitas.ver', vid=v.id))
+
+
+@bp.get('/app/visitas/fotos/<int:vfid>')
+@login_required
+def foto(vfid):
+    from facilities.core.anexos import storage
+    f = db.get_or_404(VisitaFoto, vfid)
+    _visita(f.visita_id)
+    try:
+        dados = storage().load(f.storage_key)
+    except Exception:
+        abort(404)
+    return send_file(io.BytesIO(dados), mimetype=f.mime or 'image/jpeg')
