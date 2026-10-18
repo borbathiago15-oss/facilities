@@ -260,6 +260,26 @@ Rota e checklist simples (18/10/2026), decisões do dono:
 | Roteiro numerado | o "Meu turno" lista as tarefas na ordem dos horários (1, 2, 3…), com a próxima destacada e quantos passos tem cada uma |
 | Modelos prontos de limpeza | banheiro, copa e cozinha, recepção e escritório, vestiário e área externa, com o "como fazer" (`facilities/rotas/biblioteca_pronta.py`); o administrador instala pela biblioteca ou `flask --app facilities semear-checklists`; não duplica |
 
+Relatório do cliente (18/10/2026), decisões do dono — tela + PDF + Excel; o
+do cliente primeiro; fotos em amostra automática que a gestão pode trocar:
+
+* `facilities/relatorios/cliente.py`: os números do mês por local (nota e os
+  4 indicadores contra o mês anterior, rotinas por ambiente, chamados com %
+  no prazo e tempo médio, não conformidades e quantas viraram chamado
+  resolvido, avisos do público, visitas, cobranças) — só leitura, das mesmas
+  regras do painel. Sem custo e sem nome de ninguém da equipe.
+* Fotos: candidatas do mês (checklists, chamados resolvidos, visitas);
+  amostra automática (antes/depois de chamados, uma por ambiente, visitas);
+  a gestão marca outras (até 12).
+* Liberação: só mês fechado e só a gestão; o cliente vê no portal
+  (`/cliente/relatorios`) e baixa PDF/Excel; "recolher" tira do portal.
+* PDF em ReportLab (`relatorios/arquivos.py`, uma página no caso comum);
+  Excel em openpyxl (nova dependência fixada).
+* Migração `3e93dd45f02b`: tabela `relatorios_cliente` (fotos escolhidas,
+  recado, liberação). Os números não são guardados.
+* Próximos: relatório da Gestão (operacional, diário/semanal) e da Diretoria
+  (consolidado, tendência de 6 meses, ranking de locais críticos).
+
 ATENÇÃO: a presença lançada pelo supervisor tem o mesmo risco da D48
 (controle de jornada): validar com RH e jurídico antes do piloto e constar no
 aviso aos colaboradores (D25).

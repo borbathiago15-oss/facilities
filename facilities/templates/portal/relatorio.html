@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% from 'relatorios/_relatorio.html' import corpo %}
+{% block title %}Relatório · {{ d.local.name }}{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item"><a href="{{ url_for('portal.relatorios') }}">Relatórios</a></li><li class="breadcrumb-item active" aria-current="page">{{ d.local.name }}</li>{% endblock %}
+{% block content %}
+<div class="fc-ola"><div>
+  <h1 class="fc-titulo">{{ d.local.name }}</h1>
+  <p class="fc-sub mb-0 text-capitalize">{{ d.nome_do_mes }}</p>
+</div>
+<div class="d-flex flex-wrap gap-2">
+  <a class="btn btn-primary" href="{{ url_for('portal.relatorio_arquivo', cid=d.local.id, mes=mes, formato='pdf') }}"><i class="bi bi-file-earmark-pdf" aria-hidden="true"></i> Baixar PDF</a>
+  <a class="btn btn-outline-primary" href="{{ url_for('portal.relatorio_arquivo', cid=d.local.id, mes=mes, formato='xlsx') }}"><i class="bi bi-file-earmark-spreadsheet" aria-hidden="true"></i> Excel</a>
+</div></div>
+{{ corpo(d, fotos, url_da_foto, portal, registro.recado if registro else None) }}
+{% endblock %}
