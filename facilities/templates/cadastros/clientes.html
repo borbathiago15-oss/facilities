@@ -30,6 +30,11 @@
     </details>
     <div class="col-md-6"><label class="form-label small fw-semibold" for="ppi{{ sfx }}">Prazo do pedido de insumo (horas)</label>
       <input class="form-control" id="ppi{{ sfx }}" name="prazo_pedido_insumo_horas" type="number" min="1" max="720" value="{{ (c.prazo_pedido_insumo_horas or '') if c else '' }}" placeholder="Vazio = 48 h"></div>
+    <div class="col-12"><div class="form-check">
+      <input class="form-check-input" type="checkbox" id="mne{{ sfx }}" name="mostrar_nome_executor" value="1" {% if c and c.mostrar_nome_executor %}checked{% endif %} {% if current_user._effective_role() != 'master' %}disabled{% endif %}>
+      <label class="form-check-label small fw-semibold" for="mne{{ sfx }}">No portal do cliente, mostrar o nome de quem fez o checklist</label>
+      <div class="form-text">Desligado, o cliente vê só a função (ex.: Encarregado / ASG). Só o administrador muda, e só depois do aval do jurídico.</div>
+    </div></div>
     {% set prazos = prazos_de(c) %}
     <details class="col-12"><summary class="small fw-semibold">Prazo de atendimento das ocorrências do QR público (minutos)</summary>
       <p class="form-text">Vazio = sem prazo. O prazo conta da hora em que a pessoa enviou o aviso.</p>

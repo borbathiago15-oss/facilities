@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+{% from 'portal/_nota.html' import situacao_cobranca %}
+{% block title %}Cobranças{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item"><a href="{{ url_for('portal.inicio') }}">Seus locais</a></li><li class="breadcrumb-item active" aria-current="page">Cobranças</li>{% endblock %}
+{% block content %}
+<h1 class="fc-titulo">Cobranças</h1>
+<p class="fc-sub">Peça algo à coordenação do contrato e escolha até quando quer a resposta (no mínimo 24 horas). Quando ela responder, você confirma que ficou bom ou reabre.</p>
+
+{% if locais %}
+<details class="fc-cartao mb-3" {% if not cobrancas or local_escolhido %}open{% endif %}>
+  <summary class="fw-bold">Abrir uma cobrança</summary>
+  <form method="post" action="{{ url_for('portal.abrir_cobranca') }}" class="mt-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="row g-2">
+      <div class="col-md-6"><label class="form-label small fw-semibold" for="cloc">Local</label>
+        <select class="form-select" id="cloc" name="client_id" required>
+          {% if locais|length > 1 %}<option value="">Escolha</option>{% endif %}
+          {% for l in locais %}<option value="{{ l.id }}" {% if local_escolhido == l.id %}selected{% endif %}>{{ l.name }}</option>{% endfor %}
+        </select></div>
+      <div class="col-md-6"><label class="form-label small fw-semibold" for="cprazo">Quero a resposta até</label>
+        <input class="form-control" id="cprazo" name="prazo" type="date" min="{{ minimo.isoformat() }}" required>
+        <div class="form-text">A partir de {{ minimo.strftime('%d/%m/%Y') }}.</div></div>
+      <div class="col-12"><label class="form-label small fw-semibold" for="ctit">Assunto</label>
+        <input class="form-control" id="ctit" name="titulo" maxlength="200" required placeholder="Ex.: Limpeza do banheiro do 2º andar"></div>
+      <div class="col-12"><label class="form-label small fw-semibold" for="ctex">O que precisa ser feito</label>
+        <textarea class="form-control" id="ctex" name="texto" rows="4" maxlength="4000" required></textarea></div>
+    </div>
+    <button class="btn btn-primary fw-bold mt-3" type="submit">Enviar à coordenação</button>
+  </form>
+</details>
+{% endif %}
+
+<div class="fc-cartao p-0">
+  {% for c in cobrancas %}
+  <a class="d-flex flex-wrap gap-2 align-items-center border-bottom px-3 py-2 text-reset text-decoration-none" href="{{ url_for('portal.cobranca', cobid=c.id) }}">
+    {{ situacao_cobranca(c, agora) }}
+    <span class="small fw-semibold">{{ c.numero }}</span>
+    <span class="fw-semibold">{{ c.titulo }}</span>
+    <span class="small text-muted">{{ c.local.name }}</span>
+    <span class="small ms-auto">prazo {{ c.prazo|hora_local('%d/%m/%Y') }}</span>
+  </a>
+  {% else %}
+  <div class="fc-vazio">Nenhuma cobrança ainda.</div>
+  {% endfor %}
+</div>
+{% endblock %}

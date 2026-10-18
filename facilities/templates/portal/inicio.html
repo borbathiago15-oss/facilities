@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% from 'portal/_nota.html' import nota, periodo, situacao_cobranca %}
+{% block title %}Portal do cliente{% endblock %}
+{% block content %}
+<h1 class="fc-titulo">Seus locais</h1>
+<p class="fc-sub">Como está o serviço em cada local: a nota do período, os chamados e as fotos dos checklists. Precisa de algo? Abra uma cobrança e escolha a data em que quer a resposta.</p>
+<a class="btn btn-primary fw-bold mb-3" href="{{ url_for('portal.cobrancas') }}"><i class="bi bi-megaphone"></i> Abrir uma cobrança</a>
+
+{% if cobrancas %}
+<section class="fc-cartao p-0 mb-3" aria-labelledby="tit-cob">
+  <h2 class="h6 fw-bold px-3 pt-3" id="tit-cob">Cobranças em andamento</h2>
+  {% for c in cobrancas %}
+  <a class="d-flex flex-wrap gap-2 align-items-center border-top px-3 py-2 text-reset text-decoration-none" href="{{ url_for('portal.cobranca', cobid=c.id) }}">
+    {{ situacao_cobranca(c, agora) }}
+    <span class="small fw-semibold">{{ c.numero }}</span>
+    <span class="fw-semibold">{{ c.titulo }}</span>
+    <span class="small text-muted">{{ c.local.name }}</span>
+    <span class="small ms-auto">prazo {{ c.prazo|hora_local('%d/%m/%Y') }}</span>
+  </a>
+  {% endfor %}
+</section>
+{% endif %}
+
+{{ periodo(de, ate) }}
+{% if not linhas %}
+<div class="fc-cartao fc-vazio">Nenhum local ligado à sua conta ainda. Fale com o seu gerente na Trino.</div>
+{% else %}
+<div class="fc-cartao p-0">
+  {% for x in linhas %}
+  <a class="d-flex flex-wrap gap-2 align-items-center border-bottom px-3 py-3 text-reset text-decoration-none" href="{{ url_for('portal.local', cid=x.local.id, de=de.isoformat(), ate=ate.isoformat()) }}">
+    <span class="fw-semibold">{{ x.local.name }}</span>
+    {{ nota(x, faixas) }}
+    <span class="small text-muted ms-auto">{{ abertos.get(x.local.id, 0) }} chamado(s) em aberto</span>
+    <i class="bi bi-chevron-right" aria-hidden="true"></i>
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+<p class="small text-muted mt-2">Período de {{ de.strftime('%d/%m/%Y') }} a {{ ate.strftime('%d/%m/%Y') }}. A nota é a média dos indicadores que tiveram movimento no período.</p>
+{% endblock %}

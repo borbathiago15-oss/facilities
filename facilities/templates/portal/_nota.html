@@ -1,0 +1,9 @@
+{% macro nota(x, faixas) %}{% if x.nota is not none %}<span class="badge fc-nota fc-nota-{{ x.faixa }}">{{ '%.1f'|format(x.nota)|replace('.', ',') }} · {{ faixas[x.faixa] }}</span>{% else %}<span class="small text-muted">sem dado no período</span>{% endif %}{% endmacro %}
+{% macro periodo(de, ate) %}
+<form class="d-flex flex-wrap gap-2 mb-3" method="get">
+  <label class="visually-hidden" for="pde">De</label><input class="form-control w-auto" type="date" id="pde" name="de" value="{{ de.isoformat() }}">
+  <label class="visually-hidden" for="pate">Até</label><input class="form-control w-auto" type="date" id="pate" name="ate" value="{{ ate.isoformat() }}">
+  <button class="btn btn-outline-primary" type="submit">Ver o período</button>
+</form>
+{% endmacro %}
+{% macro situacao_cobranca(c, agora) %}<span class="badge {% if c.atrasada(agora) %}fc-dem fc-dem-atrasada{% elif c.status == 'respondida' %}text-bg-primary{% elif c.status == 'fechada' %}text-bg-light{% else %}text-bg-warning{% endif %}">{{ 'Prazo vencido' if c.atrasada(agora) else c.status_rotulo }}</span>{% endmacro %}

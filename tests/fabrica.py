@@ -82,3 +82,30 @@ def estrutura(app_module, nome_local=CONTRATOS_SEMEADOS[0], autor=None):
     return {'local': loc.id, 'empresa': emp.id, 'cliente': cli.id, 'estado': ba.id,
             'setor': setor.id, 'ambiente': amb.id, 'equipamento': eq.id,
             'ponto': ponto.id, 'qr': ponto.codigo_qr}
+
+
+SEGREDO_CLIENTE = 'JBSWY3DPEHPK3PXP'
+
+
+def cliente(app_module, email, contratante_id, segunda_etapa=True):
+    """Conta de cliente (Fase 9B) do contratante, já com a segunda etapa."""
+    from app import User, db
+    uid = pessoa(app_module, email, 'cliente', cliente_id=contratante_id)
+    u = db.session.get(User, uid)
+    u.totp_ativo = segunda_etapa
+    u.totp_segredo = SEGREDO_CLIENTE if segunda_etapa else None
+    u.totp_ultimo_passo = None
+    db.session.commit()
+    return uid
+
+
+def entrar_com_codigo(app_module, email, segredo=SEGREDO_CLIENTE):
+    """Login em duas etapas: senha e o código do aplicativo."""
+    from facilities.core import totp
+    c = app_module.app.test_client()
+    r = c.post('/login', data={'email': email, 'password': SENHA})
+    assert r.status_code == 302 and '/login/codigo' in r.headers['Location'], \
+        r.get_data(as_text=True)[:300]
+    r = c.post('/login/codigo', data={'codigo': totp.codigo(segredo)})
+    assert r.status_code == 302, r.get_data(as_text=True)[:300]
+    return c

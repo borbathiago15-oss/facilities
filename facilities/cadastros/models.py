@@ -117,6 +117,11 @@ class Contratante(db.Model):
     # Prazo para o gestor ver o pedido de insumo do posto, em horas (Fase 7).
     # Vazio = 48 h.
     prazo_pedido_insumo_horas = db.Column(db.Integer)
+    # Portal do cliente (Fase 9B, R5): mostrar ao cliente o NOME de quem fez
+    # o checklist. Desligado = só a função ("Encarregado / ASG"). Só ligar
+    # depois do aval do jurídico (D25).
+    mostrar_nome_executor = db.Column(db.Boolean, default=False, nullable=False,
+                                      server_default=db.false())
 
     empresa = db.relationship('Empresa')
     gerente = db.relationship('User', foreign_keys=[gerente_id])

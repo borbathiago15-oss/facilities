@@ -1,8 +1,8 @@
 """Painel único de demandas (D55, Fase 5): tudo que espera alguém, numa fila
 só — chamados (inclusive os preventivos) e os avisos do público pelo QR.
 Desde a Fase 6, também as visitas de supervisão em aberto; desde a Fase 7,
-os pedidos de insumo. Cobranças do cliente (Fase 9) entram aqui
-quando chegarem.
+os pedidos de insumo; desde a Fase 9B, as cobranças do cliente que esperam a
+coordenação (o prazo é a data que o cliente escolheu).
 
 A fila segue a carteira de quem olha e põe primeiro o que está atrasado.
 """
@@ -18,7 +18,8 @@ from facilities.core.acesso import allowed_client_ids_or_none, clientes_visiveis
 bp = Blueprint('demandas', __name__, url_prefix='/demandas')
 
 TIPOS = {'chamado': 'Chamado', 'preventiva': 'Preventiva', 'publico': 'Aviso do público',
-         'visita': 'Visita de supervisão', 'insumo': 'Pedido de insumo'}
+         'visita': 'Visita de supervisão', 'insumo': 'Pedido de insumo',
+         'cobranca': 'Cobrança do cliente'}
 SITUACOES = {'atrasada': 'Atrasada', 'hoje': 'Vence hoje', 'no_prazo': 'No prazo',
              'parada': 'Aguardando (prazo parado)', 'sem_prazo': 'Sem prazo'}
 ORDEM = {'atrasada': 0, 'hoje': 1, 'no_prazo': 2, 'parada': 3, 'sem_prazo': 4}
@@ -84,6 +85,14 @@ def demandas(client_ids, agora=None, com_visitas=True, com_pedidos=True):
             'client_id': p.client_id, 'responsavel': p.pessoa.name, 'prazo': p.prazo,
             'estado': p.situacao_rotulo, 'situacao': _situacao(p.prazo, agora),
             'link': '/materiais/pedidos'})
+    # Fase 9B: as cobranças do cliente esperando a coordenação.
+    from facilities.portal import servico as portal
+    for cob in portal.em_aberto(ids):
+        itens.append({
+            'tipo': 'cobranca', 'titulo': cob.titulo, 'numero': cob.numero,
+            'local': cob.local.name, 'client_id': cob.client_id, 'responsavel': '',
+            'prazo': cob.prazo, 'estado': cob.status_rotulo,
+            'situacao': _situacao(cob.prazo, agora), 'link': f'/cobrancas/{cob.id}'})
     longe = agora + timedelta(days=3650)
     itens.sort(key=lambda i: (ORDEM[i['situacao']], i['prazo'] or longe))
     return itens

@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block title %}{{ ch.numero }}{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item"><a href="{{ url_for('portal.inicio') }}">Seus locais</a></li><li class="breadcrumb-item"><a href="{{ url_for('portal.local', cid=local.id) }}">{{ local.name }}</a></li><li class="breadcrumb-item active" aria-current="page">{{ ch.numero }}</li>{% endblock %}
+{% block content %}
+<h1 class="fc-titulo">{{ ch.numero }} · {{ ch.titulo }}</h1>
+<div class="fc-cartao fc-estreito">
+  <dl class="row mb-0">
+    <dt class="col-sm-4">Situação</dt><dd class="col-sm-8">{{ 'Atrasado' if ch.atrasado(agora) else ch.status_rotulo }}</dd>
+    <dt class="col-sm-4">Tipo</dt><dd class="col-sm-8">{{ ch.categoria_rotulo }}</dd>
+    {% if ch.local %}<dt class="col-sm-4">Onde</dt><dd class="col-sm-8">{{ ch.local }}</dd>{% endif %}
+    <dt class="col-sm-4">Aberto em</dt><dd class="col-sm-8">{{ ch.aberto_em|hora_local }}</dd>
+    <dt class="col-sm-4">Prazo</dt><dd class="col-sm-8">{{ ch.prazo|hora_local if ch.prazo else 'sem prazo' }}{% if ch.status == 'aguardando' %} <span class="small text-muted">(parado enquanto aguarda peça ou terceiro)</span>{% endif %}</dd>
+    {% if ch.resolvido_em %}<dt class="col-sm-4">Resolvido em</dt><dd class="col-sm-8">{{ ch.resolvido_em|hora_local }}</dd>{% endif %}
+    {% if ch.solucao %}<dt class="col-sm-4">O que foi feito</dt><dd class="col-sm-8">{{ ch.solucao }}</dd>{% endif %}
+  </dl>
+</div>
+{% if fotos %}
+<h2 class="h5 fw-bold mt-4">Fotos</h2>
+<div class="d-flex flex-wrap gap-2">
+  {% for a in fotos %}<figure class="m-0"><a href="{{ url_for('portal.foto_chamado', anexo_id=a.id) }}" target="_blank" rel="noopener"><img class="fc-miniatura" src="{{ url_for('portal.foto_chamado', anexo_id=a.id) }}" alt="Foto {{ 'do serviço feito' if a.momento == 'depois' else 'do problema' }}" loading="lazy"></a>
+    <figcaption class="small text-muted">{{ 'Depois' if a.momento == 'depois' else 'Antes' }}</figcaption></figure>{% endfor %}
+</div>
+{% endif %}
+<p class="mt-3"><a class="btn btn-outline-primary" href="{{ url_for('portal.cobrancas', local=local.id) }}"><i class="bi bi-megaphone"></i> Cobrar este assunto</a></p>
+{% endblock %}

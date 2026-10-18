@@ -1,0 +1,11 @@
+{% macro trilha(cob, autor) %}
+<h2 class="h5 fw-bold mt-4">Histórico</h2>
+<ol class="list-unstyled fc-cartao">
+  {% for e in cob.eventos %}
+  <li class="{% if not loop.first %}border-top pt-2 {% endif %}pb-2">
+    <div class="small text-muted">{{ e.created_at|hora_local }} · {{ autor(e) }} · <span class="fw-semibold">{{ e.tipo_rotulo }}</span>{% if e.tipo in ('aberta', 'reaberta') and e.prazo %} · prazo {{ e.prazo|hora_local('%d/%m/%Y') }}{% endif %}</div>
+    {% if e.texto %}<div class="fc-texto-livre">{{ e.texto }}</div>{% endif %}
+  </li>
+  {% endfor %}
+</ol>
+{% endmacro %}

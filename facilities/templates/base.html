@@ -36,6 +36,14 @@
        vista (antes era uma faixa que rolava de lado, sem aviso, e o módulo
        aberto ficava fora da tela) — ver .fc-nav no app.css. #}
     <nav class="fc-nav" aria-label="Módulos">
+      {% if current_user._effective_role() == 'cliente' %}
+      <a href="{{ url_for('portal.inicio') }}"
+         class="{% if ep in ('portal.inicio', 'portal.local', 'portal.chamado') %}ativo{% endif %}"
+         {% if ep in ('portal.inicio', 'portal.local', 'portal.chamado') %}aria-current="page"{% endif %}>Seus locais</a>
+      <a href="{{ url_for('portal.cobrancas') }}"
+         class="{% if ep in ('portal.cobrancas', 'portal.cobranca') %}ativo{% endif %}"
+         {% if ep in ('portal.cobrancas', 'portal.cobranca') %}aria-current="page"{% endif %}>Cobranças</a>
+      {% endif %}
       {% if current_user.can_view('diario_operacional') %}
       <a href="{{ url_for('diario_operacional.index') }}"
          class="{% if ep.startswith('diario_operacional.') %}ativo{% endif %}"
@@ -51,8 +59,8 @@
          class="{% if ep.startswith('chamados.') %}ativo{% endif %}"
          {% if ep.startswith('chamados.') %}aria-current="page"{% endif %}>Chamados</a>
       <a href="{{ url_for('demandas.painel') }}"
-         class="{% if ep.startswith('demandas.') %}ativo{% endif %}"
-         {% if ep.startswith('demandas.') %}aria-current="page"{% endif %}>Demandas</a>
+         class="{% if ep.startswith('demandas.') or ep.startswith('cobrancas.') %}ativo{% endif %}"
+         {% if ep.startswith('demandas.') or ep.startswith('cobrancas.') %}aria-current="page"{% endif %}>Demandas</a>
       {% endif %}
       {% if current_user._effective_role() in ('master', 'gerente', 'pleno', 'supervisor', 'visualizador') %}
       <a href="{{ url_for('materiais.catalogo') }}"
@@ -89,7 +97,9 @@
           <li><hr class="dropdown-divider"></li>
           <li><a class="dropdown-item" href="{{ url_for('auth.trocar_senha') }}"><i class="bi bi-key"></i> Trocar senha</a></li>
           <li><a class="dropdown-item" href="{{ url_for('auth.seguranca') }}"><i class="bi bi-shield-lock"></i> Segurança da conta</a></li>
+          {% if current_user._effective_role() != 'cliente' %}
           <li><a class="dropdown-item" href="{{ url_for('campo.inicio') }}"><i class="bi bi-phone"></i> Aplicativo de campo</a></li>
+          {% endif %}
           <li>
             <form method="post" action="{{ url_for('auth.logout') }}" class="m-0">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

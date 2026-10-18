@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+{% from 'portal/_nota.html' import nota as badge_nota, periodo %}
+{% block title %}{{ local.name }}{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item"><a href="{{ url_for('portal.inicio') }}">Seus locais</a></li><li class="breadcrumb-item active" aria-current="page">{{ local.name }}</li>{% endblock %}
+{% block content %}
+<h1 class="fc-titulo">{{ local.name }}</h1>
+<p class="fc-sub">Nota do período: {{ badge_nota(nota, faixas) }}</p>
+<a class="btn btn-outline-primary fw-bold mb-3" href="{{ url_for('portal.cobrancas', local=local.id) }}"><i class="bi bi-megaphone"></i> Cobrar algo deste local</a>
+{{ periodo(de, ate) }}
+
+<section class="mb-4" aria-labelledby="tit-ind">
+  <h2 class="h5 fw-bold" id="tit-ind">Indicadores</h2>
+  <div class="d-flex flex-wrap gap-2">
+    {% for k, v in indicadores.items() %}{% set i = nota.indicadores[k] %}
+    <div class="fc-cartao py-2 px-3"><div class="small text-muted">{{ v }}</div>
+      <div class="fs-4 fw-bold">{% if i.pct is not none %}{{ '%.1f'|format(i.pct)|replace('.', ',') }}%{% else %}—{% endif %}</div>
+      <div class="small text-muted">{% if i.base %}{{ i.bom }} de {{ i.base }}{% else %}sem movimento{% endif %}</div></div>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="mb-4" aria-labelledby="tit-ch">
+  <h2 class="h5 fw-bold" id="tit-ch">Chamados</h2>
+  <p class="small text-muted">Os em aberto e os abertos nos últimos 90 dias.</p>
+  <div class="fc-cartao p-0">
+    {% for ch in chamados %}
+    <a class="d-flex flex-wrap gap-2 align-items-center border-bottom px-3 py-2 text-reset text-decoration-none" href="{{ url_for('portal.chamado', chamado_id=ch.id) }}">
+      <span class="small fw-semibold">{{ ch.numero }}</span>
+      <span class="fw-semibold">{{ ch.titulo }}</span>
+      <span class="badge {% if ch.atrasado(agora) %}fc-dem fc-dem-atrasada{% else %}text-bg-light{% endif %}">{{ 'Atrasado' if ch.atrasado(agora) else ch.status_rotulo }}</span>
+      {% if fotos[ch.id] %}<span class="small text-muted"><i class="bi bi-camera" aria-hidden="true"></i> {{ fotos[ch.id]|length }} foto(s)</span>{% endif %}
+      <span class="small ms-auto">{% if ch.resolvido_em %}resolvido {{ ch.resolvido_em|hora_local('%d/%m %H:%M') }}{% elif ch.prazo %}prazo {{ ch.prazo|hora_local('%d/%m %H:%M') }}{% endif %}</span>
+    </a>
+    {% else %}
+    <div class="fc-vazio">Nenhum chamado neste período.</div>
+    {% endfor %}
+  </div>
+</section>
+
+<section aria-labelledby="tit-ex">
+  <h2 class="h5 fw-bold" id="tit-ex">Checklists dos últimos 30 dias</h2>
+  <div class="fc-cartao p-0">
+    {% for ex in execucoes %}
+    <div class="border-bottom px-3 py-2">
+      <div class="d-flex flex-wrap gap-2 align-items-center">
+        <span class="fw-semibold">{{ ex.ponto.ambiente.nome }} · {{ ex.ponto.nome }}</span>
+        <span class="small text-muted">{{ ex.versao.modelo.nome }} · {{ ex.concluida_em|hora_local }} · {{ quem_fez(ex, local) }}</span>
+        {% if ex.n_nao_conformes %}<span class="badge fc-dem fc-dem-atrasada">{{ ex.n_nao_conformes }} item(ns) não conforme(s)</span>{% else %}<span class="badge text-bg-light">Tudo conforme</span>{% endif %}
+      </div>
+      {% if ex.fotos %}
+      <div class="d-flex flex-wrap gap-2 mt-2">
+        {% for f in ex.fotos %}<a href="{{ url_for('portal.foto_checklist', fid=f.id) }}" target="_blank" rel="noopener"><img class="fc-miniatura" src="{{ url_for('portal.foto_checklist', fid=f.id) }}" alt="Foto {{ f.momento }} do checklist" loading="lazy"></a>{% endfor %}
+      </div>
+      {% endif %}
+    </div>
+    {% else %}
+    <div class="fc-vazio">Nenhum checklist feito nos últimos 30 dias.</div>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

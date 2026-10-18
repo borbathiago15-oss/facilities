@@ -136,8 +136,11 @@ def clean_transactional_data(app_module):
         from facilities.visitas import models as visitas_models
         from facilities.materiais import models as materiais_models
         from facilities.integracao import models as integracao_models
+        from facilities.portal import models as portal_models
         app_module.db.session.execute(integracao_models.chave_locais.delete())
-        for model in (integracao_models.MODELOS_EM_ORDEM_DE_LIMPEZA
+        app_module.app.config['CLIENTE_EXTERNO_LIBERADO'] = False
+        for model in (portal_models.MODELOS_EM_ORDEM_DE_LIMPEZA
+                      + integracao_models.MODELOS_EM_ORDEM_DE_LIMPEZA
                       + materiais_models.MODELOS_EM_ORDEM_DE_LIMPEZA
                       + equipes_models.MODELOS_EM_ORDEM_DE_LIMPEZA
                       + visitas_models.MODELOS_EM_ORDEM_DE_LIMPEZA

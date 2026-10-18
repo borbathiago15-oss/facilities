@@ -184,6 +184,12 @@ def salvar_contratante(contratante, dados, autor):
     contratante.prazos_ocorrencia_json = _prazos_de_ocorrencia(dados)
     contratante.prazos_chamado_json = _regua_de_chamado(dados)
     contratante.prazo_pedido_insumo_horas = _prazo_do_pedido(dados)
+    # R5 (Fase 9B): só o administrador liga o nome de quem fez o checklist no
+    # portal — e só depois do aval do jurídico (D25). Para os outros, fica.
+    if autor is not None and autor._effective_role() == 'master':
+        contratante.mostrar_nome_executor = dados.get('mostrar_nome_executor') in ('1', 'on')
+    elif nova:
+        contratante.mostrar_nome_executor = False
     if nova:
         db.session.add(contratante)
     registrar('contratante', contratante, 'criado' if nova else 'alterado', antes, autor)

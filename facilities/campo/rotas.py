@@ -24,6 +24,8 @@ PERFIS_DO_CAMPO = ('encarregado', 'tecnico', 'supervisor')
 
 
 def destino_depois_do_login(user):
+    if user._effective_role() == 'cliente':
+        return url_for('portal.inicio')
     if user._effective_role() in PERFIS_DO_CAMPO:
         return url_for('campo.inicio')
     return url_for('core.inicio')
