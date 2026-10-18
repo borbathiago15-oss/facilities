@@ -18,6 +18,7 @@ quem a criou dizer aqui de onde vem o id.
 import hashlib
 import io
 import json
+from datetime import timedelta
 
 import pytest
 
@@ -184,7 +185,15 @@ def _rotas_de_a(app_module, a, ids):
     from facilities.integracao import servico as integ
     chave, _texto = integ.criar_chave(f'Chave {MARCA}', [a], False, gestor)
     db.session.commit()
-    return {'material': material.id, 'pedido': pedido.id, 'chave': chave.id,'ocorrencia_publica': oc.id, 'presenca': pres.id, 'plano': plano.id,
+    # Fase 9B: uma cobrança do cliente de A, já respondida.
+    from facilities.portal import servico as portal
+    cli_a = fabrica.cliente(app_module, 'cliente.a@gl.com', ids['cliente'])
+    cob = portal.abrir(db.session.get(User, cli_a), {
+        'client_id': str(a), 'titulo': f'Cobrança {MARCA}', 'texto': f'Pedido {MARCA}',
+        'prazo': (tempo.hoje() + timedelta(days=3)).isoformat()})
+    portal.responder(gestor, cob, {'texto': f'Resposta {MARCA}'})
+    db.session.commit()
+    return {'cobranca': cob.id, 'cliente_a': cli_a, 'material': material.id, 'pedido': pedido.id, 'chave': chave.id,'ocorrencia_publica': oc.id, 'presenca': pres.id, 'plano': plano.id,
             'funcionario': func.id, 'posto': posto.id, 'escala_trabalho': esc.id,
             'falta': falta.id, 'programada': prog.id,
             'visita': Visita.query.filter_by(programada_id=prog.id).one().id,
@@ -210,7 +219,8 @@ def _digital(app_module, a):
                 f'SELECT * FROM {t} WHERE client_id = :a'), {'a': a}).fetchall()
             partes.append((t, sorted(tuple(map(str, r)) for r in linhas)))
         for t, fk in (('chamado_eventos', 'chamado_id'), ('diario_operacional_pendencia_eventos',
-                                                          'pendencia_id')):
+                                                          'pendencia_id'),
+                      ('cobranca_eventos', 'cobranca_id')):
             if t in insp.get_table_names():
                 partes.append((t, db.session.execute(text(f'SELECT COUNT(*) FROM {t}')).scalar()))
     return hashlib.sha256(repr(partes).encode()).hexdigest()
@@ -243,6 +253,11 @@ def _valor_do_parametro(nome, ids, entidade=None, endpoint=''):
                     'cid': ids['local']}
         if nome in por_rota:
             return por_rota[nome]
+    if endpoint.startswith(('portal.', 'cobrancas.')):
+        por_portal = {'cid': ids['local'], 'chamado_id': ids['chamado'], 'fid': ids['foto'],
+                      'cobid': ids['cobranca'], 'acao': 'confirmar'}
+        if nome in por_portal:
+            return por_portal[nome]
     mapa = {
         'cid': ids['local'], 'client_id': ids['local'], 'chamado_id': ids['chamado'],
         'turno_id': ids['turno'], 'pending_id': ids['pendencia'], 'tarefa_id': ids['tarefa'],
@@ -267,7 +282,8 @@ def _urls(app_module, ids):
             valores = {}
             for arg in regra.arguments:
                 if arg == 'anexo_id':
-                    v = ids['anexo_chamado'] if regra.endpoint.startswith('chamados.') \
+                    v = ids['anexo_chamado'] \
+                        if regra.endpoint.startswith(('chamados.', 'portal.')) \
                         else ids['anexo_passagem']
                 else:
                     v = _valor_do_parametro(arg, ids, ent, regra.endpoint)
@@ -283,11 +299,33 @@ def _urls(app_module, ids):
 
 @pytest.mark.parametrize('papel', ['pleno', 'supervisor', 'encarregado', 'tecnico'])
 def test_ninguem_de_b_le_ou_altera_a(app_module, local_a, papel):
-    a = local_a['local']
     with app_module.app.app_context():
         email = f'varredura.{papel}@trino.com'
         fabrica.pessoa(app_module, email, papel, locais=['Hospital Norte'])
-    c = fabrica.entrar(app_module, email)
+    _varrer(app_module, local_a, fabrica.entrar(app_module, email), papel)
+
+
+def test_cliente_de_b_nao_le_nem_altera_a(app_module, local_a):
+    """Fase 9B: o cliente de outro contratante, com o portal LIGADO e a
+    segunda etapa feita, passa por todas as rotas — as do portal e as da
+    equipe — com os ids de A."""
+    from app import db
+    from facilities.cadastros import servico as cad
+    app_module.app.config['CLIENTE_EXTERNO_LIBERADO'] = True
+    with app_module.app.app_context():
+        emp = cad.salvar_empresa(None, {'nome': 'Outra empresa'}, None)
+        hn = cad.salvar_contratante(None, {'nome': 'Grupo HN', 'empresa_id': emp.id}, None)
+        db.session.flush()
+        fabrica.local('Hospital Norte').contratante_id = hn.id
+        db.session.commit()
+        fabrica.cliente(app_module, 'cliente.b@hn.com', hn.id)
+    c = fabrica.entrar_com_codigo(app_module, 'cliente.b@hn.com')
+    assert c.get('/cliente/').status_code == 200
+    _varrer(app_module, local_a, c, 'cliente')
+
+
+def _varrer(app_module, local_a, c, papel):
+    a = local_a['local']
     antes = _digital(app_module, a)
     corpo = {'client_id': a, 'configuracao_id': local_a['cfg'], 'titulo': 'Invasão',
              'nome': 'Invasão', 'texto': 'Invasão', 'resposta': 'x',
@@ -304,6 +342,8 @@ def test_ninguem_de_b_le_ou_altera_a(app_module, local_a, papel):
              # Fase 7: material de A, no estoque e no pedido.
              'material_id': local_a['material'], 'quantidade': '1', 'tipo': 'saida',
              'autorizar_negativo': '1',
+             # Fase 9B: a cobrança (prazo) e o comentário de quem confirma.
+             'prazo': (tempo.hoje() + timedelta(days=3)).isoformat(),
              'corpo': json.dumps({'envio_id': f'invasao-{papel}-0001', 'ponto': local_a['qr'],
                                   'tarefa_id': local_a['tarefa_rota'], 'respostas': {},
                                   'sem_sinal': True,
@@ -333,3 +373,11 @@ def test_a_marca_aparece_para_quem_e_de_a(app_module, local_a):
     c = fabrica.entrar(app_module, 'varredura.dono@trino.com')
     assert MARCA in c.get(f"/chamados/{local_a['chamado']}").get_data(as_text=True)
     assert MARCA in c.get(f"/cadastros/locais/{local_a['local']}").get_data(as_text=True)
+
+
+def test_a_marca_aparece_para_o_cliente_de_a(app_module, local_a):
+    """Contraprova da 9B: o cliente de A enxerga a cobrança e o chamado de A."""
+    app_module.app.config['CLIENTE_EXTERNO_LIBERADO'] = True
+    c = fabrica.entrar_com_codigo(app_module, 'cliente.a@gl.com')
+    assert MARCA in c.get(f"/cliente/cobrancas/{local_a['cobranca']}").get_data(as_text=True)
+    assert MARCA in c.get(f"/cliente/chamados/{local_a['chamado']}").get_data(as_text=True)

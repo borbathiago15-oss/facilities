@@ -3,8 +3,9 @@
     python e2e/servidor.py <porta> <arquivo.db>
 
 Semeia um local com estrutura, um ponto com QR conhecido (``QR_DO_TESTE``),
-um modelo de passagem simples e três pessoas: o administrador, a Ana e a
-Mariana (encarregadas do mesmo local, para o teste do celular compartilhado).
+um modelo de passagem simples e as pessoas: o administrador, a Ana e a
+Mariana (encarregadas do mesmo local, para o teste do celular compartilhado),
+o Caio, a Sueli e, desde a Fase 9B, o cliente do local (portal ligado).
 """
 import json
 import os
@@ -21,7 +22,8 @@ SENHA = 'senha12345'
 def montar(caminho_db):
     os.environ.update(DATABASE_URL=f'sqlite:///{caminho_db}', SECRET_KEY='e2e',
                       SESSION_COOKIE_SECURE='0', RATELIMIT_ENABLED='0',
-                      STORAGE_BACKEND='local', UPLOAD_FOLDER=tempfile.mkdtemp())
+                      STORAGE_BACKEND='local', UPLOAD_FOLDER=tempfile.mkdtemp(),
+                      CLIENTE_EXTERNO_LIBERADO='1')
     from facilities import create_app
     from facilities.extensions import db
     app = create_app()
@@ -123,6 +125,16 @@ def montar(caminho_db):
                                                'preco_unitario': '12,90'})
         materiais.movimentar(admin, local, {'material_id': det.id, 'quantidade': '10'},
                              'entrada')
+        # Fase 9B: o cliente do local (Grupo GL), ainda sem a segunda etapa.
+        emp = servico.salvar_empresa(None, {'nome': 'Trino Serviços'}, admin)
+        gl = servico.salvar_contratante(None, {'nome': 'Grupo GL', 'empresa_id': emp.id}, admin)
+        servico.vincular_local(local, {'contratante_id': gl.id,
+                                       'estado_id': Estado.query.filter_by(sigla='BA').one().id},
+                               admin)
+        cli = User(name='Cláudia do Cliente', email='cliente@e2e.test', role='cliente',
+                   cliente_id=gl.id)
+        cli.set_password(SENHA)
+        db.session.add(cli)
         db.session.commit()
     return app
 

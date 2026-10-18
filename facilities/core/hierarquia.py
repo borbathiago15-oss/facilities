@@ -15,6 +15,8 @@ Regras (decisões D44, D46, P9 a P12, P15):
   Ou seja: quem está acima vê tudo o que os de baixo veem.
 * Administrador e quem tem "todos os locais" (a diretoria) não têm carteira:
   veem tudo (``None``).
+* O cliente (Fase 9B) vê os locais ativos do SEU cliente (``cliente_id``) —
+  nunca "todos os locais", mesmo com a caixinha marcada por engano.
 
 A conta é feita uma vez por requisição para quem está logado (``g``).
 """
@@ -64,6 +66,9 @@ def _locais_diretos(user_ids):
 
 def carteira(user):
     """``None`` = vê tudo; senão o conjunto de ids de locais que a pessoa vê."""
+    if user._effective_role() == 'cliente':
+        from facilities.portal.servico import locais_do_cliente
+        return {c.id for c in locais_do_cliente(user)}
     if user._effective_role() == 'master' or getattr(user, 'all_clients', False):
         return None
     if has_request_context():

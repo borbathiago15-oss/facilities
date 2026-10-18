@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% block title %}Cobranças do cliente{% endblock %}
+{% block content %}
+<h1 class="fc-titulo">Cobranças do cliente</h1>
+<p class="fc-sub">O que o cliente pediu pelo portal, com a data que ele escolheu. A coordenação responde; só o cliente encerra ou reabre.</p>
+<div class="d-flex flex-wrap gap-2 mb-3">
+  <a class="btn btn-sm {% if not status %}btn-primary{% else %}btn-outline-primary{% endif %}" href="{{ url_for('cobrancas.lista') }}">Todas</a>
+  {% for k, v in rotulos.items() %}<a class="btn btn-sm {% if status == k %}btn-primary{% else %}btn-outline-primary{% endif %}" href="{{ url_for('cobrancas.lista', status=k) }}">{{ v }}</a>{% endfor %}
+</div>
+<div class="fc-cartao p-0">
+  {% for c in itens %}
+  <a class="d-flex flex-wrap gap-2 align-items-center border-bottom px-3 py-2 text-reset text-decoration-none" href="{{ url_for('cobrancas.ver', cobid=c.id) }}">
+    <span class="badge {% if c.atrasada(agora) %}fc-dem fc-dem-atrasada{% elif c.status == 'aberta' %}text-bg-warning{% else %}text-bg-light{% endif %}">{{ 'Atrasada' if c.atrasada(agora) else c.status_rotulo }}</span>
+    <span class="small fw-semibold">{{ c.numero }}</span>
+    <span class="fw-semibold">{{ c.titulo }}</span>
+    <span class="small text-muted">{{ c.local.name }} · {{ c.autor.name }}</span>
+    <span class="small ms-auto">prazo {{ c.prazo|hora_local('%d/%m/%Y') }}</span>
+  </a>
+  {% else %}
+  <div class="fc-vazio">Nenhuma cobrança aqui.</div>
+  {% endfor %}
+</div>
+{% endblock %}

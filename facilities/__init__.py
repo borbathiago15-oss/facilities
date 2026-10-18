@@ -21,8 +21,9 @@ import secrets
 from datetime import timedelta
 
 import click
-from flask import Flask, jsonify, redirect, request, url_for
-from flask_login import current_user
+from flask import Flask, flash, jsonify, redirect, request, session, url_for
+from flask_login import current_user, logout_user
+from werkzeug.exceptions import Forbidden
 from sqlalchemy.engine import make_url
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -37,6 +38,17 @@ _LIVRES_NA_TROCA = {'auth.trocar_senha', 'auth.logout', 'static', 'core.healthz'
                     'app_instalavel.service_worker', 'app_instalavel.manifesto',
                     'app_instalavel.versao', 'app_instalavel.sessao',
                     'campo.manifesto', 'campo.instalar'}
+
+
+# Fase 9B: o que a conta de cliente abre fora do portal (``portal.*``) — e,
+# antes de ativar a segunda etapa, só isto mais a tela de segurança.
+_LIVRES_SEM_SEGUNDA_ETAPA = {'auth.logout', 'auth.trocar_senha', 'auth.seguranca',
+                             'auth.ativar_codigo', 'static', 'core.healthz',
+                             'app_instalavel.service_worker', 'app_instalavel.manifesto',
+                             'app_instalavel.versao', 'app_instalavel.sessao'}
+_LIVRES_DO_CLIENTE = _LIVRES_SEM_SEGUNDA_ETAPA | {'core.avisos', 'core.abrir_aviso',
+                                                 'core.ler_todos'}
+MSG_SO_DA_EQUIPE = 'Esta parte do sistema é da equipe da Trino. Use o portal do cliente.'
 
 
 CSP = ("default-src 'self'; script-src 'self'; "
@@ -167,6 +179,9 @@ def create_app(config=None):
         # maior. Para valer igual em todos, aponte para um Redis
         # (redis://host:6379) — ver README.
         RATELIMIT_STORAGE_URI=os.environ.get('RATELIMIT_STORAGE_URI', 'memory://'),
+        # Fase 9B: o portal do cliente. Desligado até o jurídico entregar os
+        # termos (Grupo C): a conta de cliente não entra.
+        CLIENTE_EXTERNO_LIBERADO=_flag('CLIENTE_EXTERNO_LIBERADO', False),
     )
     if config:
         app.config.update(config)
@@ -212,6 +227,7 @@ def _modelos(app):
     from facilities.visitas import models as _vis  # noqa: F401
     from facilities.materiais import models as _mat  # noqa: F401
     from facilities.integracao import models as _int  # noqa: F401
+    from facilities.portal import models as _por  # noqa: F401
 
 
 def _rotas(app):
@@ -233,10 +249,11 @@ def _rotas(app):
     from facilities.paineis.telas import bp as paineis_bp
     from facilities.integracao.api import bp as integracao_api_bp
     from facilities.integracao.telas import bp as integracao_bp
+    from facilities.portal.telas import bp as portal_bp, bp_interno as cobrancas_bp
     for bp in (core_bp, auth_bp, admin_bp, app_bp, passagem_bp, chamados_bp, cadastros_bp,
                campo_bp, rotas_bp, publico_bp, preventiva_bp, demandas_bp,
                equipes_bp, visitas_bp, materiais_bp, paineis_bp, integracao_api_bp,
-               integracao_bp):
+               integracao_bp, portal_bp, cobrancas_bp):
         app.register_blueprint(bp)
 
 
@@ -261,6 +278,42 @@ def _sessao(app):
         if request.is_json or '/api/' in request.path or request.method != 'GET':
             return jsonify({'error': 'Sessão expirada. Entre de novo.'}), 401
         return redirect(url_for('auth.login', next=request.full_path.rstrip('?')))
+
+    @app.before_request
+    def _porta_do_cliente():
+        """Fase 9B: a conta de cliente fica no portal — tudo o mais é negado
+        por padrão (rota nova do sistema não se abre ao cliente por descuido).
+        Portal desligado derruba a sessão; sem a segunda etapa, só a tela de
+        segurança."""
+        if not current_user.is_authenticated or current_user._effective_role() != 'cliente':
+            return None
+        from facilities.core.auth import MSG_CLIENTE_SEM_ACESSO
+        from facilities.portal.servico import liberado
+        quer_json = request.is_json or request.method != 'GET'
+        if not liberado() or not current_user.cliente_id:
+            logout_user()
+            session.clear()
+            if quer_json:
+                return jsonify({'error': MSG_CLIENTE_SEM_ACESSO}), 401
+            flash(MSG_CLIENTE_SEM_ACESSO, 'warning')
+            return redirect(url_for('auth.login'))
+        ep = request.endpoint or ''
+        if not current_user.totp_ativo:
+            if ep in _LIVRES_SEM_SEGUNDA_ETAPA:
+                return None
+            msg = ('Para usar o portal, ative antes a segunda etapa do login (o código do '
+                   'aplicativo autenticador).')
+            if quer_json:
+                return jsonify({'error': msg}), 403
+            flash(msg, 'warning')
+            return redirect(url_for('auth.seguranca'))
+        if ep.startswith('portal.') or ep in _LIVRES_DO_CLIENTE:
+            return None
+        if ep == 'core.inicio':
+            return redirect(url_for('portal.inicio'))
+        if quer_json:
+            return jsonify({'error': MSG_SO_DA_EQUIPE}), 403
+        raise Forbidden(MSG_SO_DA_EQUIPE)
 
     @app.before_request
     def _troca_obrigatoria():

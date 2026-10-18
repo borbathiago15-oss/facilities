@@ -17,7 +17,8 @@ continua com a sua própria Passagem; os dois sistemas são independentes.
 | Passagem de Turno | checklist da rotina, pendências que atravessam turnos (contadas por área), ocorrências, tarefas da gestão para o turno, correção de passagem, painel, relatório mensal em PDF, modelos prontos por serviço |
 | Chamados | abrir (com fotos), atribuir a um técnico, prazo pela prioridade (régua própria por cliente, se ele tiver), em espera com o prazo parado, resolver (foto do serviço), confirmar ou reabrir, trilha completa, números de prazo, aviso no sino e no celular antes e no vencimento |
 | Preventiva | plano por ponto/equipamento (checklist, a cada N dias, quantos dias antes abrir, responsável); o agendador abre a ordem de serviço sozinho, sem duplicar; o técnico faz o checklist no aplicativo pelo QR e a ordem fica resolvida |
-| Demandas | painel único do que espera alguém — chamados, preventivas, visitas de supervisão e avisos do público —, pela carteira, com o atrasado primeiro |
+| Demandas | painel único do que espera alguém — chamados, preventivas, visitas de supervisão, pedidos de insumo, avisos do público e cobranças do cliente —, pela carteira, com o atrasado primeiro |
+| Portal do cliente (`/cliente`) | o cliente vê os locais dele: nota e indicadores, chamados (situação, prazo, solução e fotos) e as fotos dos checklists — sem custo nem comentário interno; abre cobrança com a data que escolhe (mínimo 24 h), a coordenação responde e só o cliente encerra ou reabre. Desligado por padrão (`CLIENTE_EXTERNO_LIBERADO`); segunda etapa obrigatória |
 | Equipe do posto | funcionários do local (com ou sem login), postos com horário e rota, escala sem sobreposição; no aplicativo, o supervisor lança quem veio, faltou ou atrasou e quem cobriu a falta (com motivo) — as tarefas da rota passam para quem cobriu; conferência do mês no site |
 | Materiais | catálogo do grupo (preço opcional), estoque por local (entrada, saída, ajuste pela gestão), consumo no aplicativo e na OS, saldo negativo só com o gestor do contrato, pedido de insumo do posto ao gestor (a compra é em outro sistema), custo operacional por local, cliente e estado — nunca alimenta o DRE |
 | Painel | nota por local (média com pesos iguais de aderência à rota, ocorrências no prazo, visitas conformes e chamados no prazo; faixas crítica, atenção e boa) e o que está atrasado; o supervisor vê os locais dele, a gestão e a diretoria por cliente |
@@ -115,8 +116,12 @@ se recusa a rodar se o nome do banco não tiver "test" (`facilities_testes`,
   o pacote `redis` instalado).
 - Cabeçalhos: HSTS (quando o acesso é https ou o cookie é Secure),
   Permissions-Policy (câmera só do próprio sistema), nosniff, X-Frame-Options.
-  Sem Content-Security-Policy por enquanto: as telas têm scripts inline, e
-  uma CSP útil pede nonce em cada um.
+  Content-Security-Policy com `script-src 'self'` (Fase 9A: nenhum script
+  embutido nas telas).
 - `GET /healthz` responde 200 sem login e sem banco (liveness).
+- **Portal do cliente**: `CLIENTE_EXTERNO_LIBERADO=1` deixa a conta de cliente
+  entrar (padrão desligado; ligar só com os termos do jurídico). O cliente
+  ativa a segunda etapa no primeiro acesso, fica preso ao `/cliente` e vê só
+  os locais do cliente ligado à conta. Desligar derruba as sessões abertas.
 - Imagem: `docker build -t facilities .` (fuso `America/Sao_Paulo`). O
   `.dockerignore` deixa de fora `.env`, `instance/`, `.venv`, `.git` e os testes.

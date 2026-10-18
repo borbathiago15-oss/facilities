@@ -110,8 +110,9 @@ Pontos de atenção:
   por turno; 0 desliga.
 - **Prazo padrão da ocorrência pública (Q2)**: decisão pendente do dono;
   enquanto isso, cada cliente configura o seu (vazio = sem prazo).
-- **Nome de quem executou visível ao cliente (R5)**: só quando o cliente
-  externo for liberado (Fase 9), depois do aviso aos colaboradores (D25).
+- **Nome de quem executou visível ao cliente (R5)**: o interruptor existe
+  por cliente (Cadastros › Clientes, só o administrador), desligado. Ligar só
+  depois do aviso aos colaboradores e do aval do jurídico (D25).
 - `totp_segredo` fica em texto no banco (como no Intelligence): proteger o
   banco e os backups como se protege as senhas.
 - O agendador precisa rodar a cada 5 minutos (ver README, Produção).
@@ -184,6 +185,26 @@ e2e reprova qualquer violação de CSP no console. O estilo ainda aceita
 retirada para depois. No e2e, use `esperar()` do conftest em vez de
 `wait_for_function` (que a CSP bloqueia).
 
+Fase 9B (18/10/2026) — portal do cliente e cobrança (`facilities/portal/`):
+
+| Decisão do dono | Como ficou |
+|---|---|
+| F9-1 o que o cliente vê | indicadores (a nota do painel), chamados (situação, prazo, solução, fotos — PDF não) e fotos dos checklists; nada de custo, material, comentário, trilha do chamado ou nome da equipe |
+| F9-2 cobrança | o cliente escolhe a data (fim do dia, no mínimo 24 h, até 6 meses); a coordenação do contrato e o gerente do cliente são avisados (sino e celular); a gestão responde; só o cliente confirma ou reabre (com data nova); a trilha inteira aparece ao cliente, com a equipe como "Coordenação"; entra em Demandas |
+| F9-3 (R5) | fotos sim; quem fez o checklist aparece pela função; o nome só com `contratantes.mostrar_nome_executor` (só o administrador liga, depois da D25) |
+| F9-4 | tudo atrás de `CLIENTE_EXTERNO_LIBERADO` (padrão desligado) até o jurídico entregar o Grupo C |
+
+Travas: o cliente entra só com o portal ligado e com `cliente_id`; sem a
+segunda etapa, só abre a tela de segurança; com ela, só `portal.*`, avisos e a
+própria conta (negação por padrão em `facilities/__init__._porta_do_cliente`:
+rota nova do sistema não se abre ao cliente por descuido). Não desliga a
+segunda etapa. A carteira do cliente são os locais ativos do cliente dele. A
+cobrança tem tabela própria (`cobrancas` + `cobranca_eventos`), e não a
+`DiarioTarefaTurno` da Passagem: aquela exige área, data e turno e é código
+herdado do Intelligence. Migração `801f10ee6552`: 2 tabelas e 1 coluna, só
+acrescenta. A varredura de isolamento roda também com um cliente de outro
+contratante.
+
 ATENÇÃO: a presença lançada pelo supervisor tem o mesmo risco da D48
 (controle de jornada): validar com RH e jurídico antes do piloto e constar no
 aviso aos colaboradores (D25).
@@ -200,8 +221,8 @@ aviso aos colaboradores (D25).
    portados.
 4. ~~Sair não revoga cookies copiados~~ — resolvido na Fase 2 (sair sobe a
    época da sessão, em todos os aparelhos).
-5. **CSP**: as telas usam scripts inline (herança do Trino); uma CSP exigiria
-   tirar o JS inline primeiro.
+5. ~~CSP~~ — feita na Fase 9A para script; falta tirar o `style=` e o
+   `<style>` das telas da Passagem para fechar também o estilo.
 6. **Bloqueio de conta por tentativas** pode ser usado para travar a conta de
    alguém de propósito (é o custo do bloqueio por conta).
 7. **Limite de login com vários workers**: o Flask-Limiter guarda as contagens

@@ -2,7 +2,8 @@
 {% block title %}Demandas{% endblock %}
 {% block content %}
 <h1 class="fc-titulo">Demandas</h1>
-<p class="fc-sub">Tudo que espera alguém, numa fila só: chamados, preventivas e avisos do público pelo QR. O atrasado vem primeiro.</p>
+<p class="fc-sub">Tudo que espera alguém, numa fila só: chamados, preventivas, avisos do público pelo QR, visitas, pedidos de insumo e cobranças do cliente. O atrasado vem primeiro.</p>
+<p class="small"><a href="{{ url_for('cobrancas.lista') }}"><i class="bi bi-megaphone" aria-hidden="true"></i> Todas as cobranças do cliente, inclusive as respondidas e encerradas</a></p>
 <div class="d-flex flex-wrap gap-2 mb-3">
   {% for k, v in situacoes.items() %}
   <a class="fc-cartao py-2 px-3 text-reset text-decoration-none {% if situacao == k %}border-primary{% endif %}" href="{{ url_for('demandas.painel', situacao=k, local=cid, tipo=tipo) }}">

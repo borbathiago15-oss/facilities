@@ -24,8 +24,9 @@ os de baixo veem):
 * ``encarregado``  — Encarregado ou ASG: faz a passagem/checklist e abre chamados.
 * ``tecnico``      — Técnico de manutenção (nível do encarregado): atende os
                      chamados e faz a passagem da equipe dele.
-* ``cliente``      — Usuário do cliente: criado desde já, mas NÃO entra até a
-                     liberação do cliente externo (Fase 9).
+* ``cliente``      — Usuário do cliente: só entra no portal (``/cliente``),
+                     com a segunda etapa, e só com ``CLIENTE_EXTERNO_LIBERADO``
+                     ligado (Fase 9B; padrão desligado).
 """
 import json
 from datetime import datetime
@@ -43,7 +44,7 @@ PERFIS = {
     'supervisor': 'Supervisor',
     'encarregado': 'Encarregado / ASG',
     'tecnico': 'Técnico de manutenção',
-    'cliente': 'Cliente (acesso ainda não liberado)',
+    'cliente': 'Cliente (portal do cliente)',
 }
 
 # Quem age como gestor nos locais que vê (configura, atribui, cobra).
@@ -55,7 +56,8 @@ PERFIS_DE_GESTAO = ('master', 'gerente', 'pleno')
 NIVEL_NA_CADEIA = {'gerente': 1, 'pleno': 2, 'supervisor': 3,
                    'encarregado': 4, 'tecnico': 4}
 
-# O perfil cliente existe desde a Fase 2 e só entra na Fase 9.
+# O perfil cliente existe desde a Fase 2; entra no portal só com
+# CLIENTE_EXTERNO_LIBERADO ligado (Fase 9B).
 PERFIS_SEM_LOGIN = ('cliente',)
 
 # Os módulos com tela. O nome da passagem é o mesmo do Trino

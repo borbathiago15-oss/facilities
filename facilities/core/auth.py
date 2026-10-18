@@ -118,7 +118,9 @@ def login():
                 db.session.commit()
             flash(MSG_LOGIN_RECUSADO, 'danger')
             return render_template('core/login.html', email=email), 401
-        if u.role in PERFIS_SEM_LOGIN:
+        # Fase 9B: o cliente só entra com o portal liberado (padrão: não) e
+        # com o cadastro apontando para um cliente.
+        if u.role in PERFIS_SEM_LOGIN and not (_portal_liberado() and u.cliente_id):
             flash(MSG_CLIENTE_SEM_ACESSO, 'warning')
             return render_template('core/login.html', email=email), 403
         u.failed_login_count = 0
@@ -137,10 +139,18 @@ def login():
     return render_template('core/login.html', email='')
 
 
+def _portal_liberado():
+    from facilities.portal.servico import liberado
+    return liberado()
+
+
 def _concluir_login(u, lembrar, destino):
     """Entra. Sem destino pedido, cada perfil cai na sua porta: o pessoal do
-    posto no aplicativo de campo, a gestão no site (Fase 3)."""
+    posto no aplicativo de campo, a gestão no site (Fase 3), o cliente no
+    portal (Fase 9B) — e o cliente só aceita destino dentro do portal."""
     from facilities.campo.rotas import destino_depois_do_login
+    if u.role == 'cliente' and not (destino or '').startswith('/cliente'):
+        destino = None
     u.last_login_at = datetime.utcnow()
     db.session.commit()
     login_user(u, remember=lembrar)
@@ -248,6 +258,11 @@ def ativar_codigo():
 @login_required
 def desativar_codigo():
     u = current_user._get_current_object()
+    if u.role == 'cliente':
+        # Fase 9B: no portal a segunda etapa é obrigatória.
+        flash('Na conta de cliente a segunda etapa é obrigatória e não pode ser desligada.',
+              'warning')
+        return redirect(url_for('auth.seguranca'))
     if not u.check_password(request.form.get('senha') or ''):
         flash('A senha não confere.', 'danger')
         return redirect(url_for('auth.seguranca'))

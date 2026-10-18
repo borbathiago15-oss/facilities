@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% block title %}{{ cob.numero }}{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item"><a href="{{ url_for('cobrancas.lista') }}">Cobranças do cliente</a></li><li class="breadcrumb-item active" aria-current="page">{{ cob.numero }}</li>{% endblock %}
+{% block content %}
+<h1 class="fc-titulo">{{ cob.numero }} · {{ cob.titulo }}</h1>
+<p class="fc-sub">{{ cob.local.name }} · pedida por {{ cob.autor.name }} · <span class="fw-semibold">{{ 'Atrasada' if cob.atrasada(agora) else cob.status_rotulo }}</span> · prazo {{ cob.prazo|hora_local('%d/%m/%Y') }}{% if cob.reaberturas %} · reaberta {{ cob.reaberturas }} vez(es){% endif %}</p>
+{% if pode_responder %}
+<div class="fc-cartao fc-estreito mb-3">
+  <form method="post" action="{{ url_for('cobrancas.responder', cobid=cob.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label class="form-label small fw-semibold" for="rtex">Resposta para o cliente</label>
+    <textarea class="form-control mb-2" id="rtex" name="texto" rows="4" maxlength="4000" required></textarea>
+    <p class="form-text">O cliente vê o texto assinado como "Coordenação", sem o seu nome.</p>
+    <button class="btn btn-primary fw-bold" type="submit">Responder</button>
+  </form>
+</div>
+{% elif cob.status == 'aberta' %}
+<div class="alert alert-info">Quem responde é a coordenação do contrato.</div>
+{% elif cob.status == 'respondida' %}
+<div class="alert alert-info">Respondida. Esperando o cliente confirmar ou reabrir.</div>
+{% endif %}
+<h2 class="h5 fw-bold mt-4">Histórico</h2>
+<ol class="list-unstyled fc-cartao">
+  {% for e in cob.eventos %}
+  <li class="{% if not loop.first %}border-top pt-2 {% endif %}pb-2">
+    <div class="small text-muted">{{ e.created_at|hora_local }} · {{ e.autor.name }} · <span class="fw-semibold">{{ e.tipo_rotulo }}</span>{% if e.tipo in ('aberta', 'reaberta') and e.prazo %} · prazo {{ e.prazo|hora_local('%d/%m/%Y') }}{% endif %}</div>
+    {% if e.texto %}<div class="fc-texto-livre">{{ e.texto }}</div>{% endif %}
+  </li>
+  {% endfor %}
+</ol>
+{% endblock %}

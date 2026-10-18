@@ -177,6 +177,17 @@ SEMENTES = [
     "INSERT INTO integracao_acessos (chave_id,em,rota,parametros,status,itens,ip) "
     "SELECT id,now(),'nota','ate=2026-10-17&de=2026-10-01',200,1,'10.0.0.1' "
     "FROM integracao_chaves",
+    # Fase 9B: uma cobrança do cliente com a trilha, e o interruptor do nome ligado.
+    "UPDATE contratantes SET mostrar_nome_executor=true",
+    "INSERT INTO cobrancas (client_id,titulo,texto,prazo,status,autor_id,criada_em,"
+    "respondida_em,reaberturas) SELECT c.id,'Banheiro sujo','Limpar o 2º andar',"
+    "'2026-10-20 02:59','respondida',u.id,now(),now(),1 FROM clients c, users u "
+    "WHERE c.name='GL Armazém 1' AND u.email='cli@ensaio'",
+    "INSERT INTO cobranca_eventos (cobranca_id,tipo,texto,prazo,autor_id,created_at) "
+    "SELECT b.id,'aberta',b.texto,b.prazo,b.autor_id,now() FROM cobrancas b",
+    "INSERT INTO cobranca_eventos (cobranca_id,tipo,texto,prazo,autor_id,created_at) "
+    "SELECT b.id,'resposta','Feito às 14h',b.prazo,u.id,now() FROM cobrancas b, users u "
+    "WHERE u.email='gerente@ensaio'",
 ]
 
 
