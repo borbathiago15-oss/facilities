@@ -218,6 +218,21 @@ A foto é reduzida no aparelho (`data-foto-leve` em `foto-leve.js`, que também
 segura o envio até terminar). A tela da visita continua pedindo sinal.
 Migração `418d47bbc506`: 1 tabela, só acrescenta.
 
+Visual (18/10/2026) — padrão do Trino Intelligence, analisado com a base de
+design (ui-ux-pro-max: navegação, toque de 44 px, contraste, foco visível,
+sem rolagem lateral, movimento reduzido):
+
+| Decisão do dono | Como ficou |
+|---|---|
+| Menu do site | lateral escuro (`templates/_menu.html`), grupos Hoje · Operação · Recursos · Configuração em `<details>` (abrem sem script); "Rotina dos locais" entrou no menu (antes Rotas, Preventiva, Equipe e Visitas só se achavam por dentro de Cadastros); no celular vira gaveta (`base.js`) |
+| Login | `core/_porta.html` (login e código): painel preto da marca com a faixa de quatro cores e o formulário claro; no celular, só o formulário; mostrar a senha e "Entrando…" em `static/js/porta.js` |
+| Início | "o que espera você hoje": números clicáveis que abrem a fila de Demandas já filtrada, os 6 itens mais urgentes e os atalhos do perfil |
+
+O aplicativo de campo mantém a navegação embaixo. As cores continuam só nos
+tokens do `app.css` (os mesmos do Intelligence). A paleta sugerida pela base
+de design (verde, fonte serifada) foi descartada: a identidade é a do Trino.
+`e2e/test_visual.py` confere login, gaveta e ausência de rolagem lateral.
+
 ATENÇÃO: a presença lançada pelo supervisor tem o mesmo risco da D48
 (controle de jornada): validar com RH e jurídico antes do piloto e constar no
 aviso aos colaboradores (D25).

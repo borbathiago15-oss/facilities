@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b0d0f">
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='pwa/icone-192.png') }}">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <title>{% block aba %}Entrar{% endblock %} — {{ NOME_DO_SISTEMA }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap-icons/bootstrap-icons.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+</head>
+{#- A porta do sistema (login e código da segunda etapa) — o desenho do login
+    do Trino Intelligence: à esquerda a moldura preta com a marca, à direita o
+    formulário numa tela clara. No celular, só o formulário, com a logo. -#}
+<body class="fc-porta">
+<section class="fc-porta-marca" aria-label="Trino Facilities">
+  <div class="fc-porta-marca-in">
+    <p class="fc-porta-kicker"><img src="{{ url_for('static', filename='pwa/icone-192.png') }}" alt="" width="32" height="32"> Grupo Trino · Facilities</p>
+    <h2 class="fc-porta-titulo">O posto em ordem, <em>todo dia</em>.</h2>
+    <p class="fc-porta-lead">Rotas pelo QR, chamados no prazo, passagem de turno e a nota de cada local — do celular de quem está no posto à mesa da diretoria.</p>
+    <ul class="fc-porta-lista">
+      <li><i class="bi bi-qr-code-scan" aria-hidden="true"></i><span><b>Rotas e checklists</b> com hora, foto e QR do ponto</span></li>
+      <li><i class="bi bi-tools" aria-hidden="true"></i><span><b>Chamados</b> com prazo, foto do antes e do depois</span></li>
+      <li><i class="bi bi-journal-text" aria-hidden="true"></i><span><b>Passagem de turno</b> sem papel, do posto à gestão</span></li>
+      <li><i class="bi bi-speedometer2" aria-hidden="true"></i><span><b>Nota por local</b> para a gestão e para o cliente</span></li>
+    </ul>
+  </div>
+  <p class="fc-porta-lema">Transformando o dia a dia do posto em resultado.</p>
+</section>
+<main class="fc-porta-form">
+  <div class="fc-porta-caixa">
+    <img class="fc-porta-logo" src="{{ url_for('static', filename='marca/trino-facilities.png') }}"
+         alt="Trino Facilities — Gestão de instalações e serviços" width="900" height="267">
+    {% with mensagens = get_flashed_messages(with_categories=true) %}
+      {% for categoria, texto in mensagens %}
+      <div class="alert alert-{{ 'danger' if categoria == 'error' else categoria }} py-2 small" role="alert">{{ texto }}</div>
+      {% endfor %}
+    {% endwith %}
+    {% block formulario %}{% endblock %}
+  </div>
+  <p class="fc-porta-rodape">Trino Facilities · Grupo Trino</p>
+</main>
+<script src="{{ url_for('static', filename='js/app-instalavel.js') }}"></script>
+<script src="{{ url_for('static', filename='js/porta.js') }}"></script>
+</body>
+</html>

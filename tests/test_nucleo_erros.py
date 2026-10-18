@@ -43,7 +43,7 @@ def test_404_navegando_e_pagina_em_portugues_com_o_menu(auth_client):
     html = r.get_data(as_text=True)
     assert r.status_code == 404 and r.mimetype == 'text/html'
     assert 'Página não encontrada' in html and 'Voltar ao início' in html
-    assert 'class="fc-topo"' in html                   # o menu do sistema
+    assert 'class="fc-lateral"' in html                # o menu do sistema
     _sem_ingles(html)
 
 
@@ -60,7 +60,7 @@ def test_404_pedido_por_fetch_e_json_mesmo_fora_de_api(auth_client):
 
 def test_arquivo_estatico_que_falta_nao_monta_a_tela(auth_client):
     r = auth_client.get('/static/nao-existe.js', headers=NAVEGANDO)
-    assert r.status_code == 404 and 'fc-topo' not in r.get_data(as_text=True)
+    assert r.status_code == 404 and 'fc-lateral' not in r.get_data(as_text=True)
 
 
 # ── 403 ───────────────────────────────────────────────────────────────────
@@ -83,7 +83,7 @@ def test_403_navegando_e_pagina_em_portugues_com_o_motivo(app_module):
     html = r.get_data(as_text=True)
     assert r.status_code == 403 and r.mimetype == 'text/html'
     assert 'Sem acesso' in html and FORA_DOS_CONTRATOS in html
-    assert 'class="fc-topo"' in html
+    assert 'class="fc-lateral"' in html
     _sem_ingles(html)
 
 

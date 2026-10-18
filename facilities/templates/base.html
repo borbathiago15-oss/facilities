@@ -11,6 +11,7 @@
   {% endif %}
   <meta name="app-versao" content="{{ versao_do_app() }}">
   <meta name="theme-color" content="#0b0d0f">
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='pwa/icone-192.png') }}">
   <link rel="manifest" href="{% block manifesto %}/manifest.webmanifest{% endblock %}">
   <link rel="apple-touch-icon" href="{{ url_for('static', filename='pwa/apple-touch-icon.png') }}">
   <title>{% block title %}Início{% endblock %} — {{ NOME_DO_SISTEMA }}</title>
@@ -22,99 +23,14 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
   {% block head %}{% endblock %}
 </head>
-<body class="{% block corpo_classe %}{% endblock %}" {% block corpo_dados %}{% endblock %}>
+<body class="{% block corpo_classe %}{% if current_user.is_authenticated %}fc-com-menu{% endif %}{% endblock %}" {% block corpo_dados %}{% endblock %}>
 {% block topo %}
-{% if current_user.is_authenticated %}
-<header class="fc-topo">
-  <div class="fc-topo-in">
-    <a class="fc-marca" href="{{ url_for('core.inicio') }}">
-      <img src="{{ url_for('static', filename='pwa/icone-192.png') }}" alt="">
-      <span>Facilities <small>Grupo Trino</small></span>
-    </a>
-    {% set ep = request.endpoint or '' %}
-    {# No celular o menu desce para uma segunda linha, com TODOS os módulos à
-       vista (antes era uma faixa que rolava de lado, sem aviso, e o módulo
-       aberto ficava fora da tela) — ver .fc-nav no app.css. #}
-    <nav class="fc-nav" aria-label="Módulos">
-      {% if current_user._effective_role() == 'cliente' %}
-      <a href="{{ url_for('portal.inicio') }}"
-         class="{% if ep in ('portal.inicio', 'portal.local', 'portal.chamado') %}ativo{% endif %}"
-         {% if ep in ('portal.inicio', 'portal.local', 'portal.chamado') %}aria-current="page"{% endif %}>Seus locais</a>
-      <a href="{{ url_for('portal.cobrancas') }}"
-         class="{% if ep in ('portal.cobrancas', 'portal.cobranca') %}ativo{% endif %}"
-         {% if ep in ('portal.cobrancas', 'portal.cobranca') %}aria-current="page"{% endif %}>Cobranças</a>
-      {% endif %}
-      {% if current_user.can_view('diario_operacional') %}
-      <a href="{{ url_for('diario_operacional.index') }}"
-         class="{% if ep.startswith('diario_operacional.') %}ativo{% endif %}"
-         {% if ep.startswith('diario_operacional.') %}aria-current="page"{% endif %}><span class="fc-rot-longo">Passagem de Turno</span><span class="fc-rot-curto">Passagem</span></a>
-      {% endif %}
-      {% if current_user._effective_role() in ('master', 'gerente', 'pleno', 'supervisor', 'visualizador') %}
-      <a href="{{ url_for('paineis.painel') }}"
-         class="{% if ep.startswith('paineis.') %}ativo{% endif %}"
-         {% if ep.startswith('paineis.') %}aria-current="page"{% endif %}>Painel</a>
-      {% endif %}
-      {% if current_user.can_view('chamados') %}
-      <a href="{{ url_for('chamados.index') }}"
-         class="{% if ep.startswith('chamados.') %}ativo{% endif %}"
-         {% if ep.startswith('chamados.') %}aria-current="page"{% endif %}>Chamados</a>
-      <a href="{{ url_for('demandas.painel') }}"
-         class="{% if ep.startswith('demandas.') or ep.startswith('cobrancas.') %}ativo{% endif %}"
-         {% if ep.startswith('demandas.') or ep.startswith('cobrancas.') %}aria-current="page"{% endif %}>Demandas</a>
-      {% endif %}
-      {% if current_user._effective_role() in ('master', 'gerente', 'pleno', 'supervisor', 'visualizador') %}
-      <a href="{{ url_for('materiais.catalogo') }}"
-         class="{% if ep.startswith('materiais.') %}ativo{% endif %}"
-         {% if ep.startswith('materiais.') %}aria-current="page"{% endif %}>Materiais</a>
-      {% endif %}
-      {% if current_user.e_gestao() or current_user._effective_role() == 'visualizador' %}
-      <a href="{{ url_for('cadastros.inicio') }}"
-         class="{% if ep.startswith('cadastros.') %}ativo{% endif %}"
-         {% if ep.startswith('cadastros.') %}aria-current="page"{% endif %}>Cadastros</a>
-      {% endif %}
-      {% if current_user._effective_role() == 'master' %}
-      <a href="{{ url_for('admin.contratos') }}"
-         class="{% if ep == 'admin.contratos' %}ativo{% endif %}"
-         {% if ep == 'admin.contratos' %}aria-current="page"{% endif %}>Locais</a>
-      <a href="{{ url_for('admin.usuarios') }}"
-         class="{% if ep == 'admin.usuarios' %}ativo{% endif %}"
-         {% if ep == 'admin.usuarios' %}aria-current="page"{% endif %}>Pessoas</a>
-      <a href="{{ url_for('integracao.chaves') }}"
-         class="{% if ep.startswith('integracao.') %}ativo{% endif %}"
-         {% if ep.startswith('integracao.') %}aria-current="page"{% endif %}>Integração</a>
-      {% endif %}
-    </nav>
-    <div class="fc-direita">
-      <a class="fc-sino" href="{{ url_for('core.avisos') }}" aria-label="Avisos{% if avisos_nao_lidos %}: {{ avisos_nao_lidos }} não lido(s){% endif %}">
-        <i class="bi bi-bell"></i>{% if avisos_nao_lidos %}<span class="n">{{ avisos_nao_lidos if avisos_nao_lidos < 100 else '99+' }}</span>{% endif %}
-      </a>
-      <div class="dropdown fc-usuario">
-        <button class="dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-          <i class="bi bi-person-circle"></i> <span class="d-none d-sm-inline">{{ current_user.name.split(' ')[0] }}</span>
-        </button>
-        <ul class="dropdown-menu dropdown-menu-end">
-          <li><span class="dropdown-item-text small text-muted">{{ current_user.name }}<br>{{ current_user.perfil_rotulo }}</span></li>
-          <li><hr class="dropdown-divider"></li>
-          <li><a class="dropdown-item" href="{{ url_for('auth.trocar_senha') }}"><i class="bi bi-key"></i> Trocar senha</a></li>
-          <li><a class="dropdown-item" href="{{ url_for('auth.seguranca') }}"><i class="bi bi-shield-lock"></i> Segurança da conta</a></li>
-          {% if current_user._effective_role() != 'cliente' %}
-          <li><a class="dropdown-item" href="{{ url_for('campo.inicio') }}"><i class="bi bi-phone"></i> Aplicativo de campo</a></li>
-          {% endif %}
-          <li>
-            <form method="post" action="{{ url_for('auth.logout') }}" class="m-0">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button class="dropdown-item" type="submit"><i class="bi bi-box-arrow-right"></i> Sair</button>
-            </form>
-          </li>
-        </ul>
-      </div>
-    </div>
-  </div>
-</header>
-{% endif %}
+{# O menu lateral (moldura preta, padrão do Trino Intelligence) e a barra do
+   topo: _menu.html. O aplicativo de campo troca este bloco pelo dele. #}
+{% if current_user.is_authenticated %}{% include '_menu.html' %}{% endif %}
 {% endblock %}
 
-<main class="fc-conteudo">
+<main class="fc-conteudo" id="conteudo">
   {% if self.breadcrumb()|trim %}
   <nav aria-label="breadcrumb"><ol class="breadcrumb">{% block breadcrumb %}{% endblock %}</ol></nav>
   {% endif %}

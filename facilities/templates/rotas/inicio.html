@@ -1,26 +1,27 @@
 {% extends 'base.html' %}
-{% block title %}Rotas{% endblock %}
+{% block title %}Rotina dos locais{% endblock %}
 {% block content %}
-<h1 class="fc-titulo">Rotas e checklists</h1>
-<p class="fc-sub">Cada local tem as suas rotas: por turno, com os pontos, os checklists e os horários. O sistema gera as tarefas do dia, e o pessoal do posto executa pelo aplicativo, lendo o QR.</p>
-<div class="d-flex flex-wrap gap-2 mb-3">
-  <a class="btn btn-outline-primary btn-sm" href="{{ url_for('rotas.biblioteca') }}"><i class="bi bi-book"></i> Biblioteca de checklists da Trino</a>
-</div>
-<div class="fc-cartao p-0">
-  {% for l in locais %}
-  <div class="d-flex flex-wrap gap-2 align-items-center border-bottom px-3 py-2">
-    <strong>{{ l.name }}</strong>
-    {% if l.contratante %}<span class="small text-muted">{{ l.contratante.nome }}</span>{% endif %}
-    <span class="ms-auto d-flex gap-2">
-      <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('rotas.dia', cid=l.id) }}"><i class="bi bi-calendar-check"></i> Hoje</a>
-      <a class="btn btn-sm btn-outline-primary" href="{{ url_for('rotas.local', cid=l.id) }}">Rotas e checklists</a>
-      <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('preventiva.local', cid=l.id) }}"><i class="bi bi-calendar2-week"></i> Preventivas</a>
-      <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('equipes.local', cid=l.id) }}"><i class="bi bi-people"></i> Equipe</a>
-      <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('visitas.local', cid=l.id) }}"><i class="bi bi-clipboard-check"></i> Visitas</a>
-    </span>
+<div class="fc-ola">
+  <div>
+    <h1 class="fc-titulo">Rotina dos locais</h1>
+    <p class="fc-sub mb-0">Tudo o que se repete em cada local: as rotas e os checklists do dia, as preventivas, a equipe do posto e as visitas de supervisão. O pessoal do posto executa pelo aplicativo, lendo o QR.</p>
   </div>
+  <a class="btn btn-outline-primary" href="{{ url_for('rotas.biblioteca') }}"><i class="bi bi-book" aria-hidden="true"></i> Biblioteca de checklists da Trino</a>
+</div>
+<div class="fc-locais">
+  {% for l in locais %}
+  <section class="fc-cartao fc-local" aria-labelledby="loc-{{ l.id }}">
+    <h2 class="fc-local-nome" id="loc-{{ l.id }}">{{ l.name }}{% if l.contratante %} <small>{{ l.contratante.nome }}</small>{% endif %}</h2>
+    <div class="fc-local-acoes">
+      <a class="fc-local-acao" href="{{ url_for('rotas.dia', cid=l.id) }}"><i class="bi bi-calendar-check" aria-hidden="true"></i>Hoje</a>
+      <a class="fc-local-acao" href="{{ url_for('rotas.local', cid=l.id) }}"><i class="bi bi-signpost-split" aria-hidden="true"></i>Rotas e checklists</a>
+      <a class="fc-local-acao" href="{{ url_for('preventiva.local', cid=l.id) }}"><i class="bi bi-calendar2-week" aria-hidden="true"></i>Preventivas</a>
+      <a class="fc-local-acao" href="{{ url_for('equipes.local', cid=l.id) }}"><i class="bi bi-people" aria-hidden="true"></i>Equipe</a>
+      <a class="fc-local-acao" href="{{ url_for('visitas.local', cid=l.id) }}"><i class="bi bi-clipboard-check" aria-hidden="true"></i>Visitas</a>
+    </div>
+  </section>
   {% else %}
-  <div class="fc-vazio">Nenhum local na sua carteira.</div>
+  <div class="fc-cartao fc-vazio">Nenhum local na sua carteira.</div>
   {% endfor %}
 </div>
 {% endblock %}

@@ -269,14 +269,30 @@ console.log(JSON.stringify(enviados));
     assert json.loads(saida.stdout) == ['TOKEN', 'TOKEN', None, None, None]
 
 
-def test_menu_tem_rotulo_curto_e_marca_o_modulo_aberto(auth_client):
+def test_menu_lateral_agrupa_os_modulos_e_marca_o_aberto(auth_client):
+    """O menu lateral (padrão do Trino Intelligence): grupos Hoje, Operação,
+    Recursos e Configuração; o módulo aberto marcado (e o grupo dele aberto)."""
     html = auth_client.get('/chamados/').get_data(as_text=True)
-    nav = re.search(r'<nav class="fc-nav".*?</nav>', html, re.S).group(0)
-    # "Contratos" virou "Locais" na Fase 1 (cliente → local), e entrou "Cadastros".
-    for modulo in ('Chamados', 'Cadastros', 'Locais', 'Pessoas'):
-        assert f'>{modulo}</a>' in nav
-    assert '<span class="fc-rot-curto">Passagem</span>' in nav
-    assert re.search(r'class="ativo"\s+aria-current="page">Chamados</a>', nav)
+    nav = re.search(r'<nav class="fc-lat-nav".*?</nav>', html, re.S).group(0)
+    for grupo in ('Hoje', 'Operação', 'Recursos', 'Configuração'):
+        assert f'>{grupo}<' in nav
+    for modulo in ('Início', 'Painel', 'Demandas', 'Chamados', 'Passagem de turno',
+                   'Rotina dos locais', 'Materiais e estoque', 'Cadastros', 'Locais', 'Pessoas'):
+        assert f'<span>{modulo}</span>' in nav, modulo
+    assert re.search(r'class="fc-lat-item ativo"[^>]*aria-current="page">\s*'
+                     r'<i class="bi bi-tools"[^>]*></i><span>Chamados</span>', nav)
+    assert re.search(r'<details class="fc-lat-grupo" open>\s*<summary[^>]*>Operação', nav)
+
+
+def test_menu_do_encarregado_so_mostra_o_que_ele_abre(app_module):
+    from tests import fabrica
+    with app_module.app.app_context():
+        fabrica.pessoa(app_module, 'menu.enc@trino.com', 'encarregado', locais=['Shopping Centro'])
+    html = fabrica.entrar(app_module, 'menu.enc@trino.com').get('/chamados/').get_data(as_text=True)
+    nav = re.search(r'<nav class="fc-lat-nav".*?</nav>', html, re.S).group(0)
+    assert '<span>Chamados</span>' in nav and '<span>Passagem de turno</span>' in nav
+    for escondido in ('Painel', 'Rotina dos locais', 'Materiais e estoque', 'Cadastros', 'Pessoas'):
+        assert f'<span>{escondido}</span>' not in nav, escondido
 
 
 def _css():
@@ -290,11 +306,12 @@ def _bloco_720(css):
     return '\n'.join(blocos)
 
 
-def test_css_menu_do_celular_mostra_todos_os_modulos():
-    bloco = _bloco_720(_css())
-    regra = re.search(r'\.fc-nav \{([^}]*)\}', bloco).group(1)
-    assert 'display: grid' in regra and 'overflow: visible' in regra
-    assert '.fc-rot-curto { display: inline; }' in bloco
+def test_css_menu_do_celular_vira_gaveta():
+    """Abaixo de 992px o menu sai da tela e entra pela gaveta (botão "Menu")."""
+    blocos = '\n'.join(re.findall(r'@media \(max-width: 991\.98px\) \{(.*?)\n\}', _css(), re.S))
+    assert re.search(r'\.fc-lateral \{[^}]*transform: translateX\(-100%\)', blocos)
+    assert '.fc-menu-aberto .fc-lateral { transform: none; }' in blocos
+    assert re.search(r'\.fc-barra-menu, \.fc-barra-marca \{ display: inline-flex; \}', blocos)
 
 
 def test_css_abas_dos_chamados_quebram_linha_no_celular():

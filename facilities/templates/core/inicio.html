@@ -1,21 +1,59 @@
 {% extends 'base.html' %}
 {% block title %}Início{% endblock %}
 {% block content %}
-<h1 class="fc-titulo">Olá, {{ current_user.name.split(' ')[0] }}</h1>
-<p class="fc-sub">{{ current_user.perfil_rotulo }}{% if current_user._effective_role() != 'master' and not current_user.all_clients %} · {{ current_user.clients|length }} contrato(s){% endif %}</p>
-{% if modulos %}
+<div class="fc-ola">
+  <div>
+    <h1 class="fc-titulo">Olá, {{ current_user.name.split(' ')[0] }}</h1>
+    <p class="fc-sub mb-0">{{ tempo.agora().strftime('%d/%m/%Y') }} · {{ current_user.perfil_rotulo }}{% if current_user._effective_role() != 'master' and not current_user.all_clients %} · {{ current_user.clients|length }} local(is) na sua carteira{% endif %}</p>
+  </div>
+  {% if current_user.can_access('chamados') %}<a class="btn btn-primary fw-bold" href="{{ url_for('chamados.novo') }}"><i class="bi bi-plus-lg" aria-hidden="true"></i> Abrir chamado</a>{% endif %}
+</div>
+
+{% if numeros %}
+<h2 class="fc-secao">O que espera você hoje</h2>
+<div class="fc-numeros">
+  {% for x in numeros %}
+  <a class="fc-numero fc-numero-{{ x.tom }}{% if not x.n %} zerado{% endif %}" href="{{ x.url }}">
+    <i class="bi {{ x.icone }}" aria-hidden="true"></i>
+    <span class="fc-numero-n">{{ x.n }}</span>
+    <span class="fc-numero-r">{{ x.rotulo }}</span>
+  </a>
+  {% endfor %}
+</div>
+
+<section class="fc-cartao p-0 mt-3" aria-labelledby="tit-primeiro">
+  <div class="d-flex align-items-center justify-content-between px-3 pt-3 pb-2">
+    <h2 class="h6 fw-bold m-0" id="tit-primeiro">Para resolver primeiro</h2>
+    <a class="small fw-semibold" href="{{ url_for('demandas.painel') }}">Ver a fila inteira <i class="bi bi-arrow-right" aria-hidden="true"></i></a>
+  </div>
+  {% for i in primeiro %}
+  <a class="fc-fila-item" href="{{ i.link }}">
+    <span class="badge fc-dem fc-dem-{{ i.situacao }}">{{ situacoes[i.situacao] }}</span>
+    <span class="fc-fila-tit"><span class="small text-muted">{{ tipos[i.tipo] }}{% if i.numero %} · {{ i.numero }}{% endif %}</span>{{ i.titulo }}</span>
+    <span class="small text-muted fc-fila-local">{{ i.local }}</span>
+    <span class="small fc-fila-prazo">{% if i.prazo %}{{ i.prazo|hora_local('%d/%m %H:%M') }}{% endif %}</span>
+  </a>
+  {% else %}
+  <div class="fc-vazio"><i class="bi bi-check2-circle fs-3 d-block mb-1 text-success" aria-hidden="true"></i>Nada esperando. Tudo em dia.</div>
+  {% endfor %}
+</section>
+{% endif %}
+
+{% if atalhos %}
+<h2 class="fc-secao">Atalhos</h2>
 <div class="fc-modulos">
-  {% for m in modulos %}
+  {% for m in atalhos %}
   <a class="fc-cartao fc-modulo" href="{{ m.url }}">
-    <i class="bi {{ m.icone }}"></i>
-    <h2>{{ m.nome }}</h2>
+    <i class="bi {{ m.icone }}" aria-hidden="true"></i>
+    <h3>{{ m.nome }}</h3>
     <p>{{ m.texto }}</p>
   </a>
   {% endfor %}
 </div>
-{% else %}
+{% elif not numeros %}
 <div class="fc-cartao fc-vazio">Seu perfil ainda não tem módulo liberado. Fale com o administrador.</div>
 {% endif %}
+
 {% if current_user._effective_role() == 'master' %}
 <div class="fc-cartao mt-3">
   <h2 class="h6 fw-bold mb-2">Primeiros passos do administrador</h2>

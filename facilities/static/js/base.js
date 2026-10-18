@@ -88,3 +88,34 @@ window.esc = function (s) {
   caixa.appendChild(fechar);
   lugar.appendChild(caixa);
 })();
+/* Menu lateral no celular (gaveta): o botão "Menu" abre; o fundo escuro, o
+   Esc e a escolha de um item fecham. No PC o menu fica sempre à mostra. */
+(function () {
+  const botao = document.querySelector('[data-menu-abrir]');
+  const menu = document.getElementById('fc-lateral');
+  const fundo = document.querySelector('[data-menu-fechar]');
+  if (!botao || !menu || !fundo) return;
+  function abrir(sim) {
+    document.body.classList.toggle('fc-menu-aberto', sim);
+    botao.setAttribute('aria-expanded', sim ? 'true' : 'false');
+    fundo.hidden = !sim;
+    if (sim) {
+      const primeiro = menu.querySelector('.fc-lat-item.ativo, .fc-lat-item');
+      if (primeiro) primeiro.focus();
+    }
+  }
+  botao.addEventListener('click', function () {
+    abrir(!document.body.classList.contains('fc-menu-aberto'));
+  });
+  fundo.addEventListener('click', function () { abrir(false); });
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape' && document.body.classList.contains('fc-menu-aberto')) {
+      abrir(false);
+      botao.focus();
+    }
+  });
+  menu.addEventListener('click', function (ev) {
+    if (ev.target.closest('.fc-lat-item')) abrir(false);
+  });
+})();
+
