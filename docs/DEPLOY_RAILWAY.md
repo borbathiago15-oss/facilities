@@ -1,7 +1,9 @@
 # Publicar o Trino Facilities no Railway
 
 Guia do primeiro deploy (decisão D2, 18/10/2026: Railway, plano Hobby, anexos
-num volume do Railway). Tudo é feito no painel do Railway, a partir do
+num volume do Railway). **O Railway é o ambiente de TESTES e de
+aperfeiçoamento**; a produção virá depois, com o banco migrado (ver "Migrar
+para a produção", no fim). Tudo é feito no painel do Railway, a partir do
 repositório do GitHub; nenhum segredo passa pelo repositório.
 
 ## O desenho
@@ -103,6 +105,15 @@ Onde os dados ficam, e o que apaga:
     * em *agendador › Deployments*, ver uma rodada a cada 5 minutos com
       "N tarefa(s) gerada(s)".
 
+## Enquanto for ambiente de testes
+
+* Use dados de teste ou de um local piloto. Cadastrar colaboradores reais
+  (nome, presença, fotos) já é tratamento de dado pessoal (LGPD): avise as
+  pessoas antes.
+* A presença aleatória pode ficar ligada numa rota de teste, para ver o fluxo;
+  nas rotas com gente de verdade, siga a regra abaixo.
+* O backup diário custa quase nada e protege o que for testado; mantenha.
+
 ## Antes do piloto (decisões que não são de infraestrutura)
 
 * **Presença aleatória (D48):** toda rota nasce com 2 confirmações por turno.
@@ -124,3 +135,32 @@ repositório).
 Plano Hobby: assinatura mínima mensal + uso. Quatro serviços, dois deles
 (agendador e backup) só existem durante a rodada. Acompanhe *Usage* nas
 primeiras semanas.
+
+## Migrar para a produção (depois)
+
+O sistema não depende do Railway: é a mesma imagem Docker, um Postgres e a
+pasta dos anexos. Para levar o que foi feito nos testes para a produção:
+
+1. **Congelar:** avisar os usuários e parar o `web` e o `agendador` no
+   Railway (ninguém grava durante a cópia).
+2. **Banco:** `pg_dump "$DATABASE_URL" -Fc -f facilities.dump` (o próprio
+   serviço `backup` já gera esse arquivo) e, no destino,
+   `pg_restore --no-owner -d "$NOVO_DATABASE_URL" facilities.dump`. O
+   Postgres do destino precisa ser da MESMA versão principal ou mais nova. A
+   versão das migrações vai junto (tabela `alembic_version`): ao subir, o app
+   só aplica o que faltar.
+3. **Anexos:** copiar a pasta `/data/uploads` do volume para o destino,
+   mantendo os caminhos (os registros guardam o caminho relativo, ex.
+   `execucoes/12/ab3f….jpg`). Para o Cloudflare R2: a mesma árvore vira as
+   chaves do bucket (`rclone copy /data/uploads r2:<bucket>`), e o app passa a
+   usar `STORAGE_BACKEND=r2` + as variáveis `R2_*`.
+4. **Variáveis:** `SECRET_KEY` nova só derruba as sessões (todos entram de
+   novo). Mantenha as MESMAS chaves `VAPID_*`, senão os celulares precisam
+   aceitar os avisos de novo. Os códigos da segunda etapa vão no banco e
+   continuam valendo.
+5. **Conferir:** `flask --app facilities db current` igual à última revisão,
+   login, uma foto antiga abrindo, uma rodada do agendador.
+6. **Recomeçar do zero em vez de migrar** também é uma opção válida: subir a
+   produção vazia e cadastrar só o que é real, deixando o Railway como
+   ambiente de testes permanente.
+
