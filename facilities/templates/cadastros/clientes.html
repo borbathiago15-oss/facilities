@@ -18,6 +18,16 @@
         <option value="">Sem gerente ainda</option>
         {% for g in gerentes %}<option value="{{ g.id }}" {% if c and c.gerente_id == g.id %}selected{% endif %}>{{ g.name }}</option>{% endfor %}
       </select></div>
+    {% set regua = regua_de(c) %}
+    <details class="col-12"><summary class="small fw-semibold">Prazo dos chamados deste cliente (horas)</summary>
+      <p class="form-text">Vazio = a régua padrão. Vale para os chamados abertos daqui em diante; o prazo de quem já abriu não muda.</p>
+      <div class="row g-2">
+        {% for k, v in prioridades.items() %}
+        <div class="col-6 col-md-3"><label class="form-label small" for="rg{{ sfx }}{{ k }}">{{ v }} (padrão {{ regua_padrao[k] }} h)</label>
+          <input class="form-control form-control-sm" id="rg{{ sfx }}{{ k }}" name="regua_{{ k }}" type="number" min="1" max="2160" value="{{ regua.get(k, '') }}"></div>
+        {% endfor %}
+      </div>
+    </details>
     {% set prazos = prazos_de(c) %}
     <details class="col-12"><summary class="small fw-semibold">Prazo de atendimento das ocorrências do QR público (minutos)</summary>
       <p class="form-text">Vazio = sem prazo. O prazo conta da hora em que a pessoa enviou o aviso.</p>

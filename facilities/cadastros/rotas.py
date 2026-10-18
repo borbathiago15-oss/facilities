@@ -123,10 +123,14 @@ def ativo_empresa(eid):
 def clientes():
     lista = (Contratante.query.order_by(Contratante.is_active.desc(), Contratante.nome).all())
     from facilities.rotas.models import TIPOS_OCORRENCIA_PUBLICA
+    from facilities.chamados.models import PRAZO_POR_PRIORIDADE, PRIORIDADES
     return render_template('cadastros/clientes.html', clientes=lista,
                            empresas=Empresa.query.order_by(Empresa.nome).all(),
                            gerentes=servico.gerentes_possiveis(),
-                           tipos_ocorrencia=TIPOS_OCORRENCIA_PUBLICA, prazos_de=servico.prazos_de)
+                           tipos_ocorrencia=TIPOS_OCORRENCIA_PUBLICA, prazos_de=servico.prazos_de,
+                           regua_de=servico.regua_de, prioridades=PRIORIDADES,
+                           regua_padrao={k: int(v.total_seconds() // 3600)
+                                         for k, v in PRAZO_POR_PRIORIDADE.items()})
 
 
 @bp.post('/cadastros/clientes')

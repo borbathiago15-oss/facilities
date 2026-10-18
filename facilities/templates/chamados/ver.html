@@ -24,8 +24,11 @@
     <div><dt>Responsável</dt><dd>{{ ch.responsavel.name if ch.responsavel else '—' }}</dd></div>
     <div><dt>Prazo</dt><dd>{{ ch.prazo|hora_local if ch.prazo else '—' }}</dd></div>
     {% if ch.origem == 'ocorrencia' %}<div><dt>Origem</dt><dd>Ocorrência da passagem de turno</dd></div>{% endif %}
+    {% if ch.origem == 'preventiva' %}<div><dt>Origem</dt><dd>Manutenção preventiva programada</dd></div>{% endif %}
+    {% if ch.pausa_total_seg %}<div><dt>Tempo parado</dt><dd>{{ (ch.pausa_total_seg // 3600) }} h {{ (ch.pausa_total_seg % 3600) // 60 }} min aguardando (somado ao prazo)</dd></div>{% endif %}
   </dl>
   {% if ch.descricao %}<p class="ch-desc">{{ ch.descricao }}</p>{% endif %}
+  {% if ch.origem == 'preventiva' and ch.status in ('aberto', 'em_atendimento') %}<div class="alert alert-info py-2 small">Para fazer esta preventiva: no aplicativo, abra <b>Meu turno</b>, leia o QR do ponto e toque em <b>Fazer a preventiva</b>. Ao terminar o checklist, a ordem fica resolvida.</div>{% endif %}
   {% if ch.status == 'aguardando' and ch.motivo_espera %}<div class="alert alert-warning py-2 small mb-0"><b>Aguardando:</b> {{ ch.motivo_espera }}</div>{% endif %}
   {% if ch.solucao and ch.status in ('resolvido', 'fechado') %}<div class="alert alert-success py-2 small mb-0"><b>O que foi feito:</b> {{ ch.solucao }}</div>{% endif %}
 </div>

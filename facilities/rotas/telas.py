@@ -476,6 +476,27 @@ def _dados_do_turno(locais):
         if m.versao_atual:
             versoes[m.versao_atual.id] = m.versao_atual
 
+    # Fase 5: as ordens preventivas em aberto que a pessoa pode atender.
+    from facilities.chamados.models import ORIGEM_PREVENTIVA, STATUS_EM_ABERTO, Chamado
+    from facilities.chamados.servico import pode_agir
+    from facilities.preventiva.servico import ordem_do_chamado
+    preventivas = []
+    for ch in (Chamado.query.filter(Chamado.client_id.in_(ids or [-1]),
+                                    Chamado.origem == ORIGEM_PREVENTIVA,
+                                    Chamado.status.in_(STATUS_EM_ABERTO))
+               .order_by(Chamado.prazo)):
+        ordem = ordem_do_chamado(ch)
+        versao = ordem.plano.modelo.versao_atual if ordem else None
+        if versao is None or not pode_agir(current_user, ch):
+            continue
+        versoes[versao.id] = versao
+        preventivas.append({
+            'id': ch.id, 'numero': ch.numero, 'titulo': ordem.plano.nome,
+            'ponto': ordem.plano.ponto.codigo_qr, 'ponto_nome': ordem.plano.ponto.nome,
+            'ambiente': ordem.plano.ponto.ambiente.nome, 'versao': versao.id,
+            'vence': ordem.vencimento.strftime('%d/%m'),
+            'atrasada': ch.atrasado(agora), 'minha': ch.responsavel_id == current_user.id})
+
     def v_json(v):
         return {'id': v.id, 'modelo': v.modelo.nome, 'numero': v.numero,
                 'procedimento': v.modelo.descricao or '', 'itens': servico.itens_da_versao(v),
@@ -498,6 +519,7 @@ def _dados_do_turno(locais):
                             'extras': [m.versao_atual.id for m in modelos
                                        if m.client_id == p.client_id and m.versao_atual]}
                    for codigo, p in pontos.items()},
+        'preventivas': preventivas,
         'motivos': MOTIVOS_NAO_REALIZADA,
         'situacoes': SITUACOES,
         # Fase 4B: o que o público avisou pelo QR e ainda não foi resolvido.
@@ -554,7 +576,9 @@ def api_execucao():
         return _api_erro(erro)
     t = ex.tarefa
     return jsonify({'id': ex.id, 'nova': nova, 'status': t.status if t else 'extra',
-                    'situacao': SITUACOES.get(t.status) if t else 'Atividade extra',
+                    'situacao': SITUACOES.get(t.status) if t else (
+                        'Preventiva feita — a ordem ficou resolvida' if ex.chamado_id
+                        else 'Atividade extra'),
                     'nao_conformes': ex.n_nao_conformes}), 201 if nova else 200
 
 

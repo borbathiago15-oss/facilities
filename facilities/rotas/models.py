@@ -225,6 +225,9 @@ class Execucao(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     tarefa_id = db.Column(db.Integer, db.ForeignKey('tarefas_dia.id', ondelete='RESTRICT'),
                           nullable=True, index=True)     # nulo = atividade extra (D53)
+    # Fase 5: o checklist de uma ordem de serviço preventiva.
+    chamado_id = db.Column(db.Integer, db.ForeignKey('chamados.id', ondelete='RESTRICT'),
+                           nullable=True, index=True)
     client_id = db.Column(db.Integer, db.ForeignKey('clients.id', ondelete='RESTRICT'),
                           nullable=False, index=True)
     ponto_id = db.Column(db.Integer, db.ForeignKey('pontos_inspecao.id', ondelete='RESTRICT'),

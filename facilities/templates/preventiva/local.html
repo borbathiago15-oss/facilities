@@ -1,0 +1,85 @@
+{% extends 'base.html' %}
+{% block title %}{{ local.name }} — preventivas{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item"><a href="{{ url_for('rotas.local', cid=local.id) }}">{{ local.name }}</a></li><li class="breadcrumb-item active" aria-current="page">Preventivas</li>{% endblock %}
+{% macro campos(p, sufixo) %}
+<div class="row g-2">
+  <div class="col-md-6"><label class="form-label small" for="nome{{ sufixo }}">Nome do plano</label>
+    <input class="form-control" id="nome{{ sufixo }}" name="nome" required maxlength="150" value="{{ p.nome if p else '' }}" placeholder="Ex.: Limpeza do filtro do ar-condicionado"></div>
+  <div class="col-md-6"><label class="form-label small" for="ponto{{ sufixo }}">Onde o técnico lê o QR</label>
+    <select class="form-select" id="ponto{{ sufixo }}" name="ponto_id" required>{% for pt in pontos %}<option value="{{ pt.id }}" {% if p and p.ponto_id == pt.id %}selected{% endif %}>{{ pt.ambiente.nome }} · {{ pt.nome }}</option>{% endfor %}</select></div>
+  <div class="col-md-6"><label class="form-label small" for="modelo{{ sufixo }}">Checklist que ele vai fazer</label>
+    <select class="form-select" id="modelo{{ sufixo }}" name="modelo_id" required>{% for m in modelos %}<option value="{{ m.id }}" {% if p and p.modelo_id == m.id %}selected{% endif %}>{{ m.nome }}</option>{% endfor %}</select></div>
+  <div class="col-md-6"><label class="form-label small" for="eq{{ sufixo }}">Equipamento (opcional)</label>
+    <select class="form-select" id="eq{{ sufixo }}" name="equipamento_id"><option value="">Nenhum</option>{% for e in equipamentos %}<option value="{{ e.id }}" {% if p and p.equipamento_id == e.id %}selected{% endif %}>{{ e.nome }}</option>{% endfor %}</select></div>
+  <div class="col-6 col-md-3"><label class="form-label small" for="int{{ sufixo }}">A cada quantos dias</label>
+    <input class="form-control" id="int{{ sufixo }}" name="intervalo_dias" type="number" min="1" max="730" required value="{{ p.intervalo_dias if p else 30 }}"></div>
+  <div class="col-6 col-md-3"><label class="form-label small" for="prox{{ sufixo }}">Próximo vencimento</label>
+    <input class="form-control" id="prox{{ sufixo }}" name="proxima_em" type="date" required value="{{ p.proxima_em.isoformat() if p else hoje }}"></div>
+  <div class="col-6 col-md-3"><label class="form-label small" for="ant{{ sufixo }}">Abrir quantos dias antes</label>
+    <input class="form-control" id="ant{{ sufixo }}" name="antecedencia_dias" type="number" min="0" max="60" value="{{ p.antecedencia_dias if p else 0 }}"></div>
+  <div class="col-6 col-md-3"><label class="form-label small" for="pri{{ sufixo }}">Prioridade</label>
+    <select class="form-select" id="pri{{ sufixo }}" name="prioridade">{% for k, v in prioridades.items() %}<option value="{{ k }}" {% if (p.prioridade if p else 'media') == k %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></div>
+  <div class="col-md-6"><label class="form-label small" for="resp{{ sufixo }}">Técnico responsável</label>
+    <select class="form-select" id="resp{{ sufixo }}" name="responsavel_id"><option value="">Sem responsável (avisa a gestão)</option>{% for t in tecnicos %}<option value="{{ t.id }}" {% if p and p.responsavel_id == t.id %}selected{% endif %}>{{ t.name }}</option>{% endfor %}</select></div>
+</div>
+{% endmacro %}
+{% block content %}
+<h1 class="fc-titulo">Preventivas · {{ local.name }}</h1>
+<p class="fc-sub">O que se faz de tempos em tempos, sem esperar quebrar. Na data, o sistema abre a ordem de serviço sozinho; o técnico lê o QR do ponto e faz o checklist no aplicativo.</p>
+
+{% if pode_montar and not (pontos and modelos) %}
+<div class="alert alert-warning">Para cadastrar um plano, o local precisa de pelo menos um ponto com QR e um checklist publicado.
+  <a href="{{ url_for('cadastros.local', cid=local.id) }}">Pontos do local</a> · <a href="{{ url_for('rotas.local', cid=local.id) }}">Checklists</a></div>
+{% endif %}
+
+<section class="fc-cartao mb-3" aria-labelledby="tit-planos">
+  <h2 class="h6 fw-bold" id="tit-planos"><i class="bi bi-calendar2-week"></i> Planos deste local</h2>
+  {% for p in planos %}
+  <div class="border-top py-2">
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+      <span class="fw-semibold">{{ p.nome }}</span>
+      {% if not p.is_active %}<span class="badge text-bg-secondary">desativado</span>{% endif %}
+      <span class="small text-muted">{{ p.ponto.ambiente.nome }} · {{ p.ponto.nome }}{% if p.equipamento %} · {{ p.equipamento.nome }}{% endif %} · a cada {{ p.intervalo_dias }} dia(s)</span>
+      {% if p.is_active %}<span class="small ms-auto">próximo vencimento <strong>{{ p.proxima_em.strftime('%d/%m/%Y') }}</strong></span>{% endif %}
+    </div>
+    <div class="small text-muted">Checklist: {{ p.modelo.nome }} · {{ prioridades[p.prioridade] }} · {{ p.responsavel.name if p.responsavel else 'sem responsável' }}</div>
+    {% if p.ciclos %}
+    <ul class="list-unstyled small mb-1 mt-1">
+      {% for c in p.ciclos[:3] %}
+      <li>Venceu {{ c.vencimento.strftime('%d/%m/%Y') }} ·
+        {% if c.chamado %}<a href="{{ url_for('chamados.ver', chamado_id=c.chamado.id) }}">{{ c.chamado.numero }}</a> — {{ c.chamado.status_rotulo }}{% else %}sem ordem{% endif %}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    {% if pode_montar %}
+    <details class="mt-1">
+      <summary class="small fw-semibold">Editar</summary>
+      <form method="post" action="{{ url_for('preventiva.editar', pid=p.id) }}" class="mt-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {{ campos(p, p.id) }}
+        <button class="btn btn-primary btn-sm fw-bold mt-2" type="submit">Salvar</button>
+      </form>
+      <form method="post" action="{{ url_for('preventiva.editar', pid=p.id) }}" class="mt-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="ativo" value="{{ '0' if p.is_active else '1' }}">
+        <button class="btn btn-outline-secondary btn-sm" type="submit">{{ 'Desativar plano' if p.is_active else 'Reativar plano' }}</button>
+      </form>
+    </details>
+    {% endif %}
+  </div>
+  {% else %}
+  <p class="small text-muted">Nenhum plano preventivo ainda.</p>
+  {% endfor %}
+</section>
+
+{% if pode_montar and pontos and modelos %}
+<section class="fc-cartao" aria-labelledby="tit-novo">
+  <h2 class="h6 fw-bold" id="tit-novo"><i class="bi bi-plus-circle"></i> Novo plano</h2>
+  <form method="post" action="{{ url_for('preventiva.criar', cid=local.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {{ campos(None, 'novo') }}
+    <button class="btn btn-primary fw-bold mt-2" type="submit">Cadastrar plano</button>
+  </form>
+</section>
+{% endif %}
+{% endblock %}

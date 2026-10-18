@@ -125,6 +125,10 @@
       var sb = ordem[situacao(b).cod] !== undefined ? ordem[situacao(b).cod] : 4;
       return sa - sb || Date.parse(a.previsto) - Date.parse(b.previsto);
     });
+    if ((dados.preventivas || []).length) {
+      caixaItens.appendChild(el('div', {classe: 'alert alert-info',
+        texto: dados.preventivas.length + ' preventiva(s) em aberto. Leia o QR do ponto para fazer o checklist.'}));
+    }
     if ((dados.ocorrencias || []).length) {
       caixaItens.appendChild(el('div', {classe: 'alert alert-warning',
         texto: dados.ocorrencias.length + ' aviso(s) do público esperando. Leia o QR do local para atender.'}));
@@ -174,6 +178,8 @@
     }
     var avisos = (dados.ocorrencias || []).filter(function (o) { return o.ponto === codigo; });
     if (avisos.length) secPonto.appendChild(cartaoOcorrencias(avisos));
+    var prevs = (dados.preventivas || []).filter(function (x) { return x.ponto === codigo; });
+    if (prevs.length) secPonto.appendChild(cartaoPreventivas(prevs));
     var doPonto = dados.tarefas.filter(function (t) { return t.ponto === codigo; });
     var cartao = el('div', {classe: 'fc-cartao mb-3'},
       [el('h2', {classe: 'h6 fw-bold', texto: 'Tarefas deste ponto hoje'})]);
@@ -198,6 +204,25 @@
     secPonto.appendChild(el('button', {type: 'button', classe: 'btn btn-outline-secondary w-100',
       onclick: function () { history.replaceState(null, '', '/app/turno'); mostrarLista(); }},
       ['Ver o turno inteiro']));
+  }
+
+  // ── Preventivas deste ponto (Fase 5) ──────────────────────────────────
+  function cartaoPreventivas(lista) {
+    var cartao = el('div', {classe: 'fc-cartao mb-3 border-primary'},
+      [el('h2', {classe: 'h6 fw-bold', texto: 'Preventiva a fazer aqui'})]);
+    lista.forEach(function (x) {
+      cartao.appendChild(el('div', {classe: 'fc-app-item'}, [
+        el('div', {classe: 'd-flex align-items-center gap-2'}, [
+          el('span', {classe: 'fw-semibold', texto: x.titulo}),
+          x.atrasada ? el('span', {classe: 'badge fc-sit fc-sit-atrasada', texto: 'Atrasada'}) : null,
+          x.minha ? el('span', {classe: 'badge text-bg-light', texto: 'Sua'}) : null]),
+        el('span', {classe: 'small text-muted',
+                    texto: x.numero + ' · vence ' + x.vence + ' · ' + (dados.versoes[x.versao] || {}).modelo}),
+        el('button', {type: 'button', classe: 'btn btn-primary fc-app-acao w-100 mt-2',
+          onclick: function () { abrirExecucao(null, dados.versoes[x.versao], x); }},
+          [el('i', {classe: 'bi bi-tools'}), ' Fazer a preventiva'])]));
+    });
+    return cartao;
   }
 
   // ── Avisos do público pelo QR (Fase 4B) ───────────────────────────────
@@ -317,7 +342,7 @@
     });
   }
 
-  function abrirExecucao(tarefa, versao) {
+  function abrirExecucao(tarefa, versao, prev) {
     if (!versao) { dizer('Checklist não encontrado. Recarregue com sinal.', 'warning'); return; }
     var codigo = tarefa ? tarefa.ponto : (leitura && leitura.ponto);
     if (!leitura || leitura.ponto !== codigo) lerNoServidor(codigo);
@@ -327,7 +352,7 @@
     dizer('');
     var p = dados.pontos[codigo] || {nome: tarefa ? tarefa.ponto_nome : ''};
     secExec.appendChild(el('h1', {classe: 'fc-titulo', texto: versao.modelo}));
-    secExec.appendChild(el('p', {classe: 'fc-sub', texto: p.nome + (tarefa ? ' · ' + tarefa.hora : ' · atividade extra')}));
+    secExec.appendChild(el('p', {classe: 'fc-sub', texto: p.nome + (tarefa ? ' · ' + tarefa.hora : prev ? ' · preventiva ' + prev.numero : ' · atividade extra')}));
     if (versao.procedimento) {
       secExec.appendChild(el('details', {classe: 'fc-cartao mb-2'}, [
         el('summary', {classe: 'fw-semibold', texto: 'Como fazer (procedimento)'}),
@@ -349,7 +374,7 @@
     aplicarCondicoes(form, versao.itens);
     form.addEventListener('submit', function (ev) {
       ev.preventDefault();
-      enviar(form, tarefa, versao, codigo, inicio, confirmar);
+      enviar(form, tarefa, versao, codigo, inicio, confirmar, prev);
     });
     secExec.appendChild(form);
     window.scrollTo(0, 0);
@@ -374,7 +399,7 @@
     return null;
   }
 
-  function enviar(form, tarefa, versao, codigo, inicio, botao) {
+  function enviar(form, tarefa, versao, codigo, inicio, botao, prev) {
     var erro = faltando(form, versao);
     if (erro) { dizer(erro, 'warning'); return; }
     botao.disabled = true;
@@ -393,6 +418,7 @@
       sem_sinal: !(leitura && leitura.selo)
     };
     if (tarefa) corpo.tarefa_id = tarefa.id; else corpo.versao_id = versao.id;
+    if (prev) corpo.chamado_id = prev.id;
     var entradas = [].slice.call(form.querySelectorAll('[data-foto]'));
     var reduzir = window.TrinoFoto ? window.TrinoFoto.reduzirTodos : function (fs) { return Promise.resolve(fs); };
     Promise.all(entradas.map(function (e) {
@@ -401,7 +427,7 @@
       });
     })).then(function (listas) {
       var fotos = [].concat.apply([], listas);
-      return mandar(corpo, fotos).then(function (res) { concluir(res, tarefa, codigo, corpo, fotos, botao); });
+      return mandar(corpo, fotos).then(function (res) { concluir(res, tarefa, codigo, corpo, fotos, botao, prev); });
     });
   }
 
@@ -422,7 +448,11 @@
       }, function () { return {conexao: true}; });
   }
 
-  function concluir(res, tarefa, codigo, corpo, fotos, botao) {
+  function concluir(res, tarefa, codigo, corpo, fotos, botao, prev) {
+    function tirarPreventiva() {
+      if (!prev) return;
+      dados.preventivas = (dados.preventivas || []).filter(function (x) { return x.id !== prev.id; });
+    }
     if (res.conexao) {
       if (!window.TrinoFila) {
         botao.disabled = false;
@@ -436,6 +466,7 @@
                                  (dados.pontos[codigo] || {}).nome,
                                 corpo: corpo, fotos: fotos}).then(function () {
         if (tarefa) marcarFeita(tarefa.id, 'Guardada no aparelho');
+        tirarPreventiva();
         dizer('Sem sinal: a execução ficou guardada no aparelho e sobe sozinha quando o sinal voltar.', 'warning');
         mostrarLista();
       }, function () {
@@ -450,6 +481,7 @@
       return;
     }
     if (tarefa) { tarefa.status = res.x.status; }
+    tirarPreventiva();
     dizer('Registrado: ' + res.x.situacao + '.' +
           (res.x.nao_conformes ? ' ' + res.x.nao_conformes + ' item(ns) não conforme(s) avisado(s) à gestão.' : ''),
           res.x.nao_conformes ? 'warning' : 'success');

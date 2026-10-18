@@ -7,6 +7,7 @@
 <div class="d-flex flex-wrap gap-2 mb-3">
   <a class="btn btn-primary btn-sm" href="{{ url_for('rotas.dia', cid=local.id) }}"><i class="bi bi-calendar-check"></i> Acompanhar hoje</a>
   <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('cadastros.local', cid=local.id) }}"><i class="bi bi-diagram-3"></i> Pontos e QR do local</a>
+  <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('preventiva.local', cid=local.id) }}"><i class="bi bi-calendar2-week"></i> Preventivas</a>
 </div>
 
 <section class="fc-cartao mb-3" aria-labelledby="tit-ck">

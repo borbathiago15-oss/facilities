@@ -104,6 +104,24 @@ SEMENTES = [
     "INSERT INTO confirmacoes_presenca (rota_id,client_id,user_id,data,pedido_em,prazo_ate,"
     "status,supervisor_avisado) SELECT r.id,r.client_id,u.id,'2026-10-17','2026-10-17 13:00',"
     "'2026-10-17 13:15','confirmada',false FROM rotas r, users u WHERE u.email='sup@ensaio'",
+    # Fase 5: plano preventivo, ciclo, ordem, prazo parado e régua do cliente.
+    "UPDATE contratantes SET prazos_chamado_json='{\"urgente\": 2, \"media\": 48}'",
+    "INSERT INTO planos_preventivos (client_id,nome,ponto_id,equipamento_id,modelo_id,"
+    "intervalo_dias,proxima_em,antecedencia_dias,prioridade,responsavel_id,criado_por,"
+    "is_active,created_at) SELECT p.client_id,'Filtro do secador',p.id,p.equipamento_id,m.id,"
+    "30,'2026-11-17',2,'media',s.id,g.id,true,now() FROM pontos_inspecao p, "
+    "checklist_modelos m, users s, users g WHERE m.client_id IS NOT NULL "
+    "AND s.email='sup@ensaio' AND g.email='gerente@ensaio'",
+    "INSERT INTO preventiva_ordens (plano_id,vencimento,criada_em) "
+    "SELECT id,'2026-10-18',now() FROM planos_preventivos",
+    "INSERT INTO chamados (client_id,titulo,categoria,prioridade,status,solicitante_id,origem,"
+    "origem_id,aberto_em,prazo,pausado_desde,pausa_total_seg,aviso_vencendo_em) "
+    "SELECT pl.client_id,'Preventiva: Filtro do secador','equipamento','media','aguardando',"
+    "pl.criado_por,'preventiva',o.id,'2026-10-16 10:00','2026-10-19 02:59',"
+    "'2026-10-17 10:00',3600,'2026-10-18 01:00' FROM preventiva_ordens o "
+    "JOIN planos_preventivos pl ON pl.id=o.plano_id",
+    "UPDATE preventiva_ordens SET chamado_id=(SELECT max(id) FROM chamados)",
+    "UPDATE execucoes SET chamado_id=(SELECT max(id) FROM chamados)",
 ]
 
 

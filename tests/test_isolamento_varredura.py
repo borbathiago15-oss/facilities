@@ -148,7 +148,15 @@ def _rotas_de_a(app_module, a, ids):
                                prazo_ate=datetime.utcnow() + timedelta(minutes=9))
     db.session.add(pres)
     db.session.commit()
-    return {'ocorrencia_publica': oc.id, 'presenca': pres.id,
+    # Fase 5: um plano preventivo em A, com a ordem já aberta.
+    from facilities.preventiva import servico as prev
+    gestor = User.query.filter_by(email='admin@grupotrino.com.br').one()
+    plano = prev.salvar_plano(loc, None, {
+        'nome': f'Plano {MARCA}', 'ponto_id': ids['ponto'], 'modelo_id': m.id,
+        'intervalo_dias': '30', 'proxima_em': tempo.hoje().isoformat()}, gestor)
+    prev.gerar_ordens(tempo.hoje())
+    db.session.commit()
+    return {'ocorrencia_publica': oc.id, 'presenca': pres.id, 'plano': plano.id,
             'modelo': m.id, 'rota': rota.id, 'item': item.id,
             'escala': RotaEscala.query.filter_by(rota_id=rota.id).one().id,
             'tarefa_rota': tarefa.id, 'execucao': ex.id,
@@ -180,6 +188,8 @@ def _digital(app_module, a):
 def _valor_do_parametro(nome, ids, entidade=None, endpoint=''):
     if endpoint.startswith('publico.') and nome == 'oid':
         return ids['ocorrencia_publica']
+    if endpoint.startswith('preventiva.') and nome == 'pid':
+        return ids['plano']
     if endpoint.startswith('rotas.'):
         por_rota = {'eid': ids['escala'] if 'escala' in endpoint else ids['execucao'],
                     'rid': ids['rota'], 'iid': ids['item'], 'mid': ids['modelo'],

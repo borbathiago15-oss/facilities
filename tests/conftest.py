@@ -129,7 +129,10 @@ def clean_transactional_data(app_module):
         # do filho para o pai. Os estados ficam (são a lista fixa), desativados.
         from facilities.rotas import models as rotas_models
         from facilities.core.models import PushInscricao
-        for model in rotas_models.MODELOS_EM_ORDEM_DE_LIMPEZA + (PushInscricao,):
+        # A preventiva aponta para pontos, checklists e chamados: sai antes.
+        from facilities.preventiva import models as preventiva_models
+        for model in (preventiva_models.MODELOS_EM_ORDEM_DE_LIMPEZA
+                      + rotas_models.MODELOS_EM_ORDEM_DE_LIMPEZA + (PushInscricao,)):
             model.query.delete()
         app_module.app.extensions.pop('facilities_push', None)
         Client.query.update({'contratante_id': None, 'estado_id': None})

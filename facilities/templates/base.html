@@ -45,6 +45,9 @@
       <a href="{{ url_for('chamados.index') }}"
          class="{% if ep.startswith('chamados.') %}ativo{% endif %}"
          {% if ep.startswith('chamados.') %}aria-current="page"{% endif %}>Chamados</a>
+      <a href="{{ url_for('demandas.painel') }}"
+         class="{% if ep.startswith('demandas.') %}ativo{% endif %}"
+         {% if ep.startswith('demandas.') %}aria-current="page"{% endif %}>Demandas</a>
       {% endif %}
       {% if current_user.e_gestao() or current_user._effective_role() == 'visualizador' %}
       <a href="{{ url_for('cadastros.inicio') }}"

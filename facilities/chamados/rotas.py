@@ -17,7 +17,8 @@ from facilities.core.acesso import allowed_client_ids_or_none, clientes_visiveis
 from facilities.core.anexos import ANEXO_ASSINATURA, ANEXO_MAX, ANEXO_TIPOS, storage
 from facilities.chamados import servico
 from facilities.chamados.models import (
-    CATEGORIAS, ORDEM_DA_PRIORIDADE, PRIORIDADES, RESOLVIDO, STATUS, STATUS_EM_ABERTO,
+    CATEGORIAS, ORDEM_DA_PRIORIDADE, PRIORIDADES, RESOLVIDO, STATUS, STATUS_CONTA_PRAZO,
+    STATUS_EM_ABERTO,
     STATUS_ENCERRADOS, Chamado, ChamadoAnexo)
 
 bp = Blueprint('chamados', __name__, url_prefix='/chamados')
@@ -60,7 +61,7 @@ def _ordem_de_urgencia(agora):
     """O que pede ação primeiro: atrasado, depois a prioridade, depois o
     prazo mais próximo — calculado NO BANCO, para valer sobre a lista inteira
     e não sobre um pedaço já cortado."""
-    atrasado = db.case((db.and_(Chamado.status.in_(STATUS_EM_ABERTO),
+    atrasado = db.case((db.and_(Chamado.status.in_(STATUS_CONTA_PRAZO),
                                 Chamado.prazo.isnot(None), Chamado.prazo < agora), 0),
                        else_=1)
     prioridade = db.case(ORDEM_DA_PRIORIDADE, value=Chamado.prioridade, else_=9)
@@ -94,8 +95,9 @@ def index():
         q = q.filter(Chamado.status.in_(STATUS_EM_ABERTO))
         if visao == 'atrasados':
             # O mesmo critério de ``Chamado.atrasado`` (e do cartão do topo),
-            # no SQL.
-            q = q.filter(Chamado.prazo.isnot(None), Chamado.prazo < agora)
+            # no SQL: "Aguardando" tem o relógio parado (D8).
+            q = q.filter(Chamado.status.in_(STATUS_CONTA_PRAZO),
+                         Chamado.prazo.isnot(None), Chamado.prazo < agora)
     elif visao == 'meus':
         q = q.filter(Chamado.status.notin_(('fechado', 'cancelado')),
                      db.or_(Chamado.responsavel_id == current_user.id,
