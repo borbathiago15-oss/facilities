@@ -37,21 +37,73 @@ def healthz():
 @bp.get('/')
 @login_required
 def inicio():
-    modulos = []
+    """O Início: o que espera a pessoa hoje (números que levam à fila de
+    Demandas já filtrada), o que resolver primeiro e os atalhos do perfil."""
+    from facilities.paineis.telas import ve_painel
+    from facilities.rotas.telas import _pode_acompanhar
+    r = current_user._effective_role()
+    atalhos = []
+    if ve_painel(current_user):
+        atalhos.append({'nome': 'Painel', 'icone': 'bi-speedometer2', 'url': url_for('paineis.painel'),
+                        'texto': 'A nota de cada local e o que está atrasado agora.'})
+    if current_user.can_view(MODULO_CHAMADOS):
+        atalhos.append({'nome': 'Chamados', 'icone': 'bi-tools', 'url': url_for('chamados.index'),
+                        'texto': 'Abrir, atribuir, acompanhar o prazo e fechar.'})
     if current_user.can_view(MODULO_PASSAGEM):
-        modulos.append({'nome': 'Passagem de Turno', 'icone': 'bi-journal-text',
+        atalhos.append({'nome': 'Passagem de turno', 'icone': 'bi-journal-text',
                         'url': url_for('diario_operacional.index'),
                         'texto': 'O que o turno fez, o que ficou pendente e o que aconteceu.'})
-    if current_user.can_view(MODULO_CHAMADOS):
-        modulos.append({'nome': 'Chamados', 'icone': 'bi-tools',
-                        'url': url_for('chamados.index'),
-                        'texto': 'Ordens de serviço: abrir, atribuir, acompanhar o prazo e fechar.'})
-    from facilities.paineis.telas import ve_painel
+    if _pode_acompanhar():
+        atalhos.append({'nome': 'Rotina dos locais', 'icone': 'bi-signpost-split',
+                        'url': url_for('rotas.inicio'),
+                        'texto': 'Rotas e checklists, preventivas, equipe e visitas de cada local.'})
     if ve_painel(current_user):
-        modulos.insert(0, {'nome': 'Painel', 'icone': 'bi-speedometer2',
-                           'url': url_for('paineis.painel'),
-                           'texto': 'A nota de cada local e o que está atrasado agora.'})
-    return render_template('core/inicio.html', modulos=modulos)
+        atalhos.append({'nome': 'Materiais e estoque', 'icone': 'bi-box-seam',
+                        'url': url_for('materiais.catalogo'),
+                        'texto': 'Estoque por local, consumo, pedidos de insumo e custo.'})
+    numeros, primeiro = [], []
+    if current_user.can_view(MODULO_CHAMADOS):
+        from facilities import demandas
+        from facilities.core.acesso import allowed_client_ids_or_none
+        from facilities.materiais.servico import ve_custo
+        from facilities.visitas.servico import PERFIS_QUE_VISITAM
+        com_visitas = r in PERFIS_QUE_VISITAM + ('visualizador',)
+        com_pedidos = ve_custo(current_user)
+        itens = demandas.demandas(allowed_client_ids_or_none(), com_visitas=com_visitas,
+                                  com_pedidos=com_pedidos)
+        def conta(**f):
+            return sum(1 for i in itens if all(i[k] == v for k, v in f.items()))
+        numeros = [
+            {'rotulo': 'Atrasadas', 'n': conta(situacao='atrasada'), 'tom': 'perigo',
+             'icone': 'bi-alarm', 'url': url_for('demandas.painel', situacao='atrasada')},
+            {'rotulo': 'Vencem hoje', 'n': conta(situacao='hoje'), 'tom': 'aviso',
+             'icone': 'bi-hourglass-split', 'url': url_for('demandas.painel', situacao='hoje')},
+            {'rotulo': 'Cobranças do cliente', 'n': conta(tipo='cobranca'), 'tom': 'marca',
+             'icone': 'bi-megaphone', 'url': url_for('demandas.painel', tipo='cobranca')},
+            {'rotulo': 'Chamados em aberto', 'n': conta(tipo='chamado') + conta(tipo='preventiva'),
+             'tom': 'info', 'icone': 'bi-tools', 'url': url_for('chamados.index')},
+        ]
+        if com_visitas:
+            numeros.append({'rotulo': 'Visitas a fazer', 'n': conta(tipo='visita'), 'tom': 'info',
+                            'icone': 'bi-clipboard-check',
+                            'url': url_for('demandas.painel', tipo='visita')})
+        if com_pedidos:
+            numeros.append({'rotulo': 'Pedidos de insumo', 'n': conta(tipo='insumo'), 'tom': 'info',
+                            'icone': 'bi-box-seam', 'url': url_for('demandas.painel', tipo='insumo')})
+        primeiro = itens[:6]
+    return render_template('core/inicio.html', atalhos=atalhos, numeros=numeros,
+                           primeiro=primeiro, tipos=_tipos_de_demanda(),
+                           situacoes=_situacoes_de_demanda())
+
+
+def _tipos_de_demanda():
+    from facilities.demandas import TIPOS
+    return TIPOS
+
+
+def _situacoes_de_demanda():
+    from facilities.demandas import SITUACOES
+    return SITUACOES
 
 
 @bp.get('/avisos')

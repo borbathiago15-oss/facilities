@@ -1,0 +1,115 @@
+{#- Menu do site — o mesmo desenho do Trino Intelligence: moldura preta à
+    esquerda, grupos que abrem e fecham, faixa de quatro cores sob a marca e a
+    tela de trabalho clara à direita. No celular o menu vira uma gaveta (botão
+    "Menu"; static/js/base.js). Os grupos são <details>: abrem e fecham sem
+    script, pelo teclado também.
+
+    Cada item aparece só para quem pode abrir a tela — a mesma regra da rota
+    (esconder não é a trava; a trava é a rota). -#}
+{% set ep = request.endpoint or '' %}
+{% set r = current_user._effective_role() %}
+{% set cliente = r == 'cliente' %}
+{% set ve_painel = r in ('master', 'gerente', 'pleno', 'supervisor', 'visualizador') %}
+{% set ve_chamados = current_user.can_view('chamados') %}
+{% set ve_rotina = current_user.e_gestao() or r in ('supervisor', 'visualizador') %}
+{% set ve_cadastros = current_user.e_gestao() or r == 'visualizador' %}
+{% set na_rotina = ep.startswith(('rotas.', 'preventiva.', 'equipes.', 'visitas.')) %}
+{% set na_config = ep.startswith(('cadastros.', 'admin.', 'integracao.')) %}
+
+{% macro item(endpoint, rotulo, icone, ativo=none, url=none) -%}
+{%- set aceso = ativo if ativo is not none else ep == endpoint -%}
+<a class="fc-lat-item{% if aceso %} ativo{% endif %}" href="{{ url or url_for(endpoint) }}"{% if aceso %} aria-current="page"{% endif %}>
+  <i class="bi {{ icone }}" aria-hidden="true"></i><span>{{ rotulo }}</span>
+</a>
+{%- endmacro %}
+
+<a class="fc-pular" href="#conteudo">Pular para o conteúdo</a>
+<aside class="fc-lateral" id="fc-lateral" aria-label="Menu do sistema">
+  <a class="fc-lat-marca" href="{{ url_for('portal.inicio' if cliente else 'core.inicio') }}">
+    <img src="{{ url_for('static', filename='pwa/icone-192.png') }}" alt="" width="36" height="36">
+    <span><b>Trino</b> Facilities<small>{{ 'Portal do cliente' if cliente else 'Grupo Trino' }}</small></span>
+  </a>
+  <nav class="fc-lat-nav" aria-label="Módulos">
+    {% if cliente %}
+    <div class="fc-lat-grupo-fixo">
+      <span class="fc-lat-titulo">Portal</span>
+      {{ item('portal.inicio', 'Seus locais', 'bi-buildings', ep in ('portal.inicio', 'portal.local', 'portal.chamado')) }}
+      {{ item('portal.cobrancas', 'Cobranças', 'bi-megaphone', ep in ('portal.cobrancas', 'portal.cobranca')) }}
+    </div>
+    {% else %}
+    <div class="fc-lat-grupo-fixo">
+      <span class="fc-lat-titulo">Hoje</span>
+      {{ item('core.inicio', 'Início', 'bi-house-door') }}
+      {% if ve_painel %}{{ item('paineis.painel', 'Painel', 'bi-speedometer2') }}{% endif %}
+      {% if ve_chamados %}
+      {{ item('demandas.painel', 'Demandas', 'bi-inboxes', ep.startswith('demandas.')) }}
+      {{ item('cobrancas.lista', 'Cobranças do cliente', 'bi-megaphone', ep.startswith('cobrancas.')) }}
+      {% endif %}
+    </div>
+    {% if ve_chamados or current_user.can_view('diario_operacional') or ve_rotina %}
+    <details class="fc-lat-grupo" {% if not na_config %}open{% endif %}>
+      <summary class="fc-lat-titulo">Operação</summary>
+      {% if ve_chamados %}{{ item('chamados.index', 'Chamados', 'bi-tools', ep.startswith('chamados.')) }}{% endif %}
+      {% if current_user.can_view('diario_operacional') %}{{ item('diario_operacional.index', 'Passagem de turno', 'bi-journal-text', ep.startswith('diario_operacional.')) }}{% endif %}
+      {% if ve_rotina %}{{ item('rotas.inicio', 'Rotina dos locais', 'bi-signpost-split', na_rotina) }}{% endif %}
+    </details>
+    {% endif %}
+    {% if ve_painel %}
+    <details class="fc-lat-grupo" {% if ep.startswith('materiais.') %}open{% endif %}>
+      <summary class="fc-lat-titulo">Recursos</summary>
+      {{ item('materiais.catalogo', 'Materiais e estoque', 'bi-box-seam', ep.startswith('materiais.')) }}
+    </details>
+    {% endif %}
+    {% if ve_cadastros %}
+    <details class="fc-lat-grupo" {% if na_config %}open{% endif %}>
+      <summary class="fc-lat-titulo">Configuração</summary>
+      {{ item('cadastros.inicio', 'Cadastros', 'bi-diagram-3', ep.startswith('cadastros.')) }}
+      {% if r == 'master' %}
+      {{ item('admin.contratos', 'Locais', 'bi-geo-alt') }}
+      {{ item('admin.usuarios', 'Pessoas', 'bi-people') }}
+      {{ item('integracao.chaves', 'Integração', 'bi-plug', ep.startswith('integracao.')) }}
+      {% endif %}
+    </details>
+    {% endif %}
+    <div class="fc-lat-grupo-fixo">
+      {{ item('campo.inicio', 'Aplicativo de campo', 'bi-phone') }}
+    </div>
+    {% endif %}
+  </nav>
+  <div class="fc-lat-rodape">O posto em ordem, todo dia.</div>
+</aside>
+<div class="fc-lat-fundo" data-menu-fechar hidden></div>
+
+<header class="fc-barra">
+  <button class="fc-barra-menu" type="button" data-menu-abrir aria-controls="fc-lateral" aria-expanded="false">
+    <i class="bi bi-list" aria-hidden="true"></i><span>Menu</span>
+  </button>
+  <a class="fc-barra-marca" href="{{ url_for('portal.inicio' if cliente else 'core.inicio') }}">
+    <img src="{{ url_for('static', filename='pwa/icone-192.png') }}" alt="" width="28" height="28">
+    <span>Trino Facilities</span>
+  </a>
+  <div class="fc-direita">
+    <a class="fc-sino" href="{{ url_for('core.avisos') }}" aria-label="Avisos{% if avisos_nao_lidos %}: {{ avisos_nao_lidos }} não lido(s){% endif %}">
+      <i class="bi bi-bell" aria-hidden="true"></i>{% if avisos_nao_lidos %}<span class="n">{{ avisos_nao_lidos if avisos_nao_lidos < 100 else '99+' }}</span>{% endif %}
+    </a>
+    <div class="dropdown fc-usuario">
+      <button class="dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+        <span class="fc-avatar" aria-hidden="true">{{ current_user.name[:1]|upper }}</span>
+        <span class="d-none d-sm-inline">{{ current_user.name.split(' ')[0] }}</span>
+      </button>
+      <ul class="dropdown-menu dropdown-menu-end">
+        <li><span class="dropdown-item-text small text-muted">{{ current_user.name }}<br>{{ current_user.perfil_rotulo }}</span></li>
+        <li><hr class="dropdown-divider"></li>
+        <li><a class="dropdown-item" href="{{ url_for('auth.trocar_senha') }}"><i class="bi bi-key"></i> Trocar senha</a></li>
+        <li><a class="dropdown-item" href="{{ url_for('auth.seguranca') }}"><i class="bi bi-shield-lock"></i> Segurança da conta</a></li>
+        <li><hr class="dropdown-divider"></li>
+        <li>
+          <form method="post" action="{{ url_for('auth.logout') }}" class="m-0">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="dropdown-item" type="submit"><i class="bi bi-box-arrow-right"></i> Sair</button>
+          </form>
+        </li>
+      </ul>
+    </div>
+  </div>
+</header>

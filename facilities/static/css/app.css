@@ -148,30 +148,97 @@ a { text-decoration: none; }
   --bs-btn-focus-shadow-rgb: 157, 32, 44;
 }
 
-/* ── Moldura ─────────────────────────────────────────────── */
-.fc-topo { background: var(--fundo); color: #fff; position: sticky; top: 0; z-index: 1030; }
-.fc-topo::after { content: ''; display: block; height: 3px; background: var(--faixa-da-marca); }
-.fc-topo-in { display: flex; align-items: center; gap: 14px; height: var(--topbar-h);
-  padding: 0 16px; max-width: 1280px; margin: 0 auto; }
-.fc-marca { display: flex; align-items: center; gap: 10px; color: #fff; font-weight: 800;
-  letter-spacing: .2px; white-space: nowrap; }
-/* O símbolo do grupo (o mesmo ícone do app instalado), sem nome escrito: o
-   logo antigo da pasta img dizia "Trino Intelligence", outro sistema. */
-.fc-marca img { height: 28px; width: 28px; border-radius: 7px; }
-.fc-marca small { color: var(--prata); font-weight: 600; }
-.fc-nav { display: flex; gap: 4px; margin-left: 12px; overflow-x: auto; scrollbar-width: none; }
-.fc-nav a { color: var(--prata); padding: 8px 12px; border-radius: var(--radius-sm);
-  font-weight: 600; font-size: 14px; white-space: nowrap; }
-.fc-nav a:hover, .fc-nav a.ativo { color: #fff; background: var(--fundo-cartao); }
-.fc-rot-curto { display: none; }
-.fc-direita { margin-left: auto; display: flex; align-items: center; gap: 6px; }
-.fc-sino { position: relative; color: #fff; font-size: 20px; padding: 6px 8px; }
-.fc-sino .n { position: absolute; top: 0; right: 0; background: var(--marca); color: #fff;
-  font-size: 11px; font-weight: 700; border-radius: 999px; padding: 1px 6px; }
-.fc-usuario { color: #fff; }
-.fc-usuario .dropdown-toggle { color: #fff; background: transparent; border: 0;
-  font-weight: 600; font-size: 14px; }
-.fc-conteudo { max-width: 1280px; margin: 0 auto; padding: 20px 16px 48px; }
+/* ── Moldura: menu lateral + barra do topo (padrão do Trino Intelligence) ──
+   O preto é a MOLDURA (menu), a tela de trabalho é clara. No PC o menu fica
+   fixo à esquerda; abaixo de 992px vira gaveta (static/js/base.js). */
+.fc-pular { position: absolute; left: -999px; top: 8px; z-index: 2000; background: #fff;
+  color: var(--marca); padding: 8px 12px; border-radius: var(--radius-sm); font-weight: 700; }
+.fc-pular:focus { left: 8px; }
+.fc-lateral { position: fixed; inset: 0 auto 0 0; width: var(--sidebar-w); z-index: 1040;
+  background: var(--fundo); color: var(--prata); display: flex; flex-direction: column;
+  border-right: 1px solid rgba(255,255,255,.06); }
+.fc-lat-marca { display: flex; align-items: center; gap: 12px; padding: 18px 18px 16px;
+  color: #fff; position: relative; text-decoration: none; }
+.fc-lat-marca::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 3px;
+  background: var(--faixa-da-marca); }
+.fc-lat-marca img { width: 36px; height: 36px; border-radius: 9px; background: #fff; padding: 2px; }
+.fc-lat-marca span { font-size: 17px; font-weight: 600; line-height: 1.15; letter-spacing: .2px; }
+.fc-lat-marca b { font-weight: 900; }
+.fc-lat-marca small { display: block; font-size: 11.5px; font-weight: 600; color: var(--prata);
+  letter-spacing: .04em; text-transform: uppercase; margin-top: 2px; }
+.fc-lat-nav { flex: 1; overflow-y: auto; padding: 12px 10px 16px; scrollbar-width: thin; }
+.fc-lat-grupo-fixo, .fc-lat-grupo { margin-bottom: 10px; }
+.fc-lat-titulo { display: flex; align-items: center; justify-content: space-between;
+  font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+  color: #8b95a1; padding: 8px 12px 6px; list-style: none; cursor: default; }
+.fc-lat-grupo > summary { cursor: pointer; border-radius: var(--radius-sm); }
+.fc-lat-grupo > summary::-webkit-details-marker { display: none; }
+.fc-lat-grupo > summary::after { content: '\F282'; font-family: 'bootstrap-icons'; font-size: 11px;
+  transition: transform .2s ease; }
+.fc-lat-grupo[open] > summary::after { transform: rotate(180deg); }
+.fc-lat-grupo > summary:hover { color: #fff; }
+.fc-lat-item { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 8px 12px;
+  border-radius: var(--radius-sm); color: #c8ced6; font-weight: 600; font-size: 14.5px;
+  text-decoration: none; position: relative; transition: background .15s ease, color .15s ease; }
+.fc-lat-item i { font-size: 17px; width: 20px; text-align: center; color: var(--prata); }
+.fc-lat-item:hover { background: var(--fundo-cartao); color: #fff; }
+.fc-lat-item.ativo { background: rgba(157,32,44,.22); color: #fff; }
+.fc-lat-item.ativo::before { content: ''; position: absolute; left: 0; top: 8px; bottom: 8px;
+  width: 3px; border-radius: 0 3px 3px 0; background: var(--marca); }
+.fc-lat-item.ativo i { color: #fff; }
+.fc-lat-item:focus-visible, .fc-lat-grupo > summary:focus-visible, .fc-barra-menu:focus-visible {
+  outline: 2px solid var(--faixa-azul); outline-offset: 2px; }
+.fc-lat-rodape { padding: 14px 18px 18px; font-size: 12px; color: #8b95a1;
+  border-top: 1px solid rgba(255,255,255,.06); }
+.fc-lat-fundo { position: fixed; inset: 0; z-index: 1035; background: rgba(4,6,7,.55); }
+
+.fc-barra { position: sticky; top: 0; z-index: 1030; height: var(--topbar-h);
+  display: flex; align-items: center; gap: 12px; padding: 0 20px;
+  background: rgba(255,255,255,.96); border-bottom: 1px solid var(--linha);
+  backdrop-filter: saturate(1.4) blur(6px); }
+.fc-barra-menu { display: none; align-items: center; gap: 6px; min-height: 44px; padding: 0 12px;
+  border: 1px solid var(--linha); border-radius: var(--radius-sm); background: var(--surface);
+  color: var(--gray-800); font-weight: 600; font-size: 14px; }
+.fc-barra-menu i { font-size: 20px; }
+.fc-barra-marca { display: none; align-items: center; gap: 8px; color: var(--gray-900);
+  font-weight: 800; text-decoration: none; white-space: nowrap; }
+.fc-barra-marca img { border-radius: 7px; }
+.fc-direita { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+.fc-sino { position: relative; color: var(--gray-700); font-size: 20px; display: inline-flex;
+  align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 50%; }
+.fc-sino:hover { background: var(--gray-100); color: var(--gray-900); }
+.fc-sino .n { position: absolute; top: 4px; right: 2px; background: var(--marca); color: #fff;
+  font-size: 11px; font-weight: 700; border-radius: 999px; padding: 1px 6px; line-height: 1.4; }
+.fc-usuario .dropdown-toggle { display: inline-flex; align-items: center; gap: 8px; min-height: 44px;
+  color: var(--gray-800); background: transparent; border: 0; font-weight: 600; font-size: 14px;
+  padding: 0 6px; border-radius: 999px; }
+.fc-usuario .dropdown-toggle:hover { background: var(--gray-100); }
+.fc-avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--marca); color: #fff;
+  display: inline-flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px; }
+
+.fc-conteudo { max-width: 1280px; margin: 0 auto; padding: 24px 20px 48px; }
+.fc-com-menu .fc-barra, .fc-com-menu .fc-conteudo { margin-left: var(--sidebar-w); }
+.fc-com-menu .fc-conteudo { max-width: none; padding-left: max(20px, calc((100vw - var(--sidebar-w) - 1240px) / 2));
+  padding-right: max(20px, calc((100vw - var(--sidebar-w) - 1240px) / 2)); }
+
+@media (max-width: 991.98px) {
+  .fc-com-menu .fc-barra, .fc-com-menu .fc-conteudo { margin-left: 0; }
+  .fc-com-menu .fc-conteudo { padding: 16px 14px 40px; }
+  .fc-barra { padding: 0 12px; }
+  .fc-barra::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 3px;
+    background: var(--faixa-da-marca); }
+  .fc-barra-menu, .fc-barra-marca { display: inline-flex; }
+  .fc-lateral { transform: translateX(-100%); transition: transform .22s ease;
+    width: min(300px, 86vw); box-shadow: var(--shadow-lg); }
+  .fc-menu-aberto .fc-lateral { transform: none; }
+  .fc-menu-aberto { overflow: hidden; }
+}
+@media (max-width: 420px) {
+  .fc-barra-menu span, .fc-barra-marca span { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fc-lateral, .fc-lat-item, .fc-lat-grupo > summary::after { transition: none; }
+}
 .fc-titulo { font-size: 22px; font-weight: 800; margin: 0 0 4px; }
 .fc-sub { color: var(--gray-500); margin: 0 0 18px; }
 .breadcrumb { font-size: 13px; margin-bottom: 10px; }
@@ -183,7 +250,50 @@ a { text-decoration: none; }
 .fc-modulo { display: block; color: inherit; }
 .fc-modulo:hover { border-color: var(--marca); box-shadow: var(--shadow-md); }
 .fc-modulo i { font-size: 28px; color: var(--marca); }
-.fc-modulo h2 { font-size: 18px; font-weight: 800; margin: 8px 0 4px; }
+.fc-modulo h2, .fc-modulo h3 { font-size: 17px; font-weight: 800; margin: 8px 0 4px; color: var(--gray-900); }
+.fc-modulo { transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease; text-decoration: none; }
+.fc-modulo:hover { transform: translateY(-1px); }
+
+/* ── Início: o que espera a pessoa hoje ─────────────────────── */
+.fc-ola { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; justify-content: space-between;
+  margin-bottom: 22px; }
+.fc-secao { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--gray-500); margin: 24px 0 10px; }
+.fc-numeros { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.fc-numero { display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 12px;
+  align-items: center; padding: 14px 16px; border-radius: var(--radius-lg); background: var(--surface);
+  border: 1px solid var(--linha); box-shadow: var(--shadow-xs); color: var(--gray-900); text-decoration: none;
+  border-left: 4px solid var(--tom, var(--gray-300)); transition: box-shadow .15s ease, transform .15s ease; }
+.fc-numero:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); color: var(--gray-900); }
+.fc-numero i { grid-row: 1 / 3; font-size: 22px; width: 42px; height: 42px; border-radius: 10px;
+  display: inline-flex; align-items: center; justify-content: center; color: var(--tom-texto, var(--gray-600));
+  background: var(--tom-fundo, var(--gray-100)); }
+.fc-numero-n { font-size: 28px; font-weight: 900; line-height: 1; letter-spacing: -.5px;
+  font-variant-numeric: tabular-nums; }
+.fc-numero-r { font-size: 13px; font-weight: 600; color: var(--gray-600); }
+.fc-numero-perigo { --tom: var(--perigo-forte); --tom-texto: var(--perigo); --tom-fundo: var(--perigo-fundo); }
+.fc-numero-aviso { --tom: var(--aviso-forte); --tom-texto: var(--aviso); --tom-fundo: var(--aviso-fundo); }
+.fc-numero-marca { --tom: var(--marca); --tom-texto: var(--marca); --tom-fundo: var(--blue-50); }
+.fc-numero-info { --tom: var(--faixa-azul); --tom-texto: var(--info); --tom-fundo: var(--tint-info); }
+.fc-numero.zerado { --tom: var(--gray-300); --tom-texto: var(--gray-500); --tom-fundo: var(--gray-100); }
+.fc-numero.zerado .fc-numero-n { color: var(--gray-500); }
+.fc-fila-item { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 4px 12px;
+  align-items: center; padding: 10px 16px; border-top: 1px solid var(--linha); color: var(--gray-900);
+  text-decoration: none; }
+.fc-fila-item:hover { background: var(--surface-2); color: var(--gray-900); }
+.fc-fila-tit { display: flex; flex-direction: column; font-weight: 600; min-width: 0; }
+.fc-fila-tit, .fc-fila-local { overflow: hidden; text-overflow: ellipsis; }
+.fc-fila-prazo { white-space: nowrap; font-variant-numeric: tabular-nums; }
+@media (max-width: 640px) {
+  .fc-fila-item { grid-template-columns: minmax(0, 1fr) auto; padding: 10px 14px; }
+  .fc-fila-item .badge { grid-column: 1; justify-self: start; }
+  .fc-fila-prazo { grid-column: 2; grid-row: 1; }
+  .fc-fila-tit, .fc-fila-local { grid-column: 1 / -1; }
+  .fc-numeros { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .fc-numero { padding: 12px; column-gap: 10px; }
+  .fc-numero i { width: 36px; height: 36px; font-size: 18px; }
+  .fc-numero-n { font-size: 24px; }
+}
 .fc-modulo p { color: var(--gray-500); margin: 0; font-size: 14px; }
 .fc-tabela { width: 100%; }
 .fc-tabela th { font-size: 12px; text-transform: uppercase; letter-spacing: .4px; color: var(--gray-500); }
@@ -202,18 +312,72 @@ a { text-decoration: none; }
 .fc-erro-codigo { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
   color: var(--gray-500); margin: 0 0 4px; }
 
-/* ── Login ───────────────────────────────────────────────── */
-.fc-login-fundo { min-height: 100vh; background: var(--fundo); display: flex; align-items: center;
-  justify-content: center; padding: 16px; }
-.fc-login { width: 100%; max-width: 400px; background: #fff; border-radius: var(--radius-lg);
-  overflow: hidden; box-shadow: var(--shadow-lg); }
-/* Topo branco: a logo oficial (static/marca/) tem letras escuras sobre branco. */
-.fc-login-topo { background: #fff; padding: 22px; text-align: center; }
-.fc-login-topo::after { content: ''; display: block; height: 3px; margin: 18px -22px -22px;
+/* ── A porta: login e código da segunda etapa (core/_porta.html) ──────
+   O desenho do login do Trino Intelligence: moldura preta com a marca à
+   esquerda e o formulário claro à direita; no celular, só o formulário. */
+.fc-porta { min-height: 100vh; margin: 0; display: grid; grid-template-columns: minmax(0, 1fr) 480px;
+  background: var(--surface-2); }
+.fc-porta-marca { position: relative; overflow: hidden; color: #ececec; display: flex;
+  flex-direction: column; justify-content: space-between; padding: 56px clamp(32px, 6vw, 96px) 40px;
+  background: radial-gradient(900px 560px at 85% -10%, rgba(157,32,44,.28), transparent 60%),
+              radial-gradient(600px 420px at -10% 110%, rgba(103,166,221,.10), transparent 65%),
+              var(--fundo); }
+.fc-porta-marca::before { content: ''; position: absolute; inset: 0; pointer-events: none;
+  background-image: linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px),
+                    linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px);
+  background-size: 52px 52px;
+  -webkit-mask-image: radial-gradient(ellipse 90% 80% at 50% 40%, #000 55%, transparent 100%);
+          mask-image: radial-gradient(ellipse 90% 80% at 50% 40%, #000 55%, transparent 100%); }
+.fc-porta-marca::after { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 4px;
   background: var(--faixa-da-marca); }
-.fc-login-topo h1 { margin: 0; }
-.fc-login-topo img { display: block; width: 100%; max-width: 320px; height: auto; margin: 0 auto; }
-.fc-login-corpo { padding: 22px; }
+.fc-porta-marca-in { position: relative; max-width: 560px; margin: auto 0; }
+.fc-porta-kicker { display: inline-flex; align-items: center; gap: 10px; font-size: 12.5px; font-weight: 700;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--prata); margin: 0 0 22px; }
+.fc-porta-kicker img { border-radius: 8px; background: #fff; padding: 2px; }
+.fc-porta-titulo { font-size: clamp(34px, 3.4vw, 50px); line-height: 1.08; font-weight: 900;
+  letter-spacing: -1px; color: #fff; margin: 0 0 18px; text-wrap: balance; }
+.fc-porta-titulo em { font-style: normal; box-shadow: inset 0 -.14em 0 var(--marca); }
+.fc-porta-lead { font-size: clamp(15px, 1.15vw, 18px); line-height: 1.65; color: rgba(236,236,236,.72);
+  margin: 0 0 28px; }
+.fc-porta-lista { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+.fc-porta-lista li { display: flex; align-items: center; gap: 14px; font-size: 15px; color: rgba(236,236,236,.8); }
+.fc-porta-lista b { color: #fff; font-weight: 700; }
+.fc-porta-lista i { flex: none; width: 40px; height: 40px; border-radius: 10px; display: inline-flex;
+  align-items: center; justify-content: center; font-size: 18px; color: #fff;
+  background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.09); }
+.fc-porta-lista li:nth-child(1) i { box-shadow: inset 3px 0 0 var(--faixa-vermelho); }
+.fc-porta-lista li:nth-child(2) i { box-shadow: inset 3px 0 0 var(--faixa-azul); }
+.fc-porta-lista li:nth-child(3) i { box-shadow: inset 3px 0 0 var(--faixa-laranja); }
+.fc-porta-lista li:nth-child(4) i { box-shadow: inset 3px 0 0 var(--faixa-verde); }
+.fc-porta-lema { position: relative; margin: 32px 0 0; font-size: 12.5px; color: #8b95a1;
+  letter-spacing: .02em; }
+.fc-porta-form { display: flex; flex-direction: column; justify-content: center; align-items: center;
+  padding: 40px 32px 24px; background: var(--surface); }
+.fc-porta-caixa { width: 100%; max-width: 380px; margin: auto 0; }
+.fc-porta-logo { display: block; width: 100%; max-width: 300px; height: auto; margin: 0 auto 28px; }
+.fc-porta-h1 { font-size: 26px; font-weight: 800; letter-spacing: -.4px; margin: 0 0 6px; color: var(--gray-900); }
+.fc-porta-sub { color: var(--gray-600); margin: 0 0 22px; font-size: 15px; }
+.fc-porta .form-control { min-height: 48px; font-size: 16px; }
+.fc-porta .btn-lg { min-height: 50px; }
+.fc-campo { position: relative; }
+.fc-campo > i { position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+  color: var(--gray-500); font-size: 17px; pointer-events: none; }
+.fc-campo > .form-control { padding-left: 42px; }
+.fc-campo > .form-control:has(+ .fc-ver-senha) { padding-right: 52px; }
+.fc-ver-senha { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); width: 44px; height: 44px;
+  border: 0; background: transparent; color: var(--gray-600); border-radius: var(--radius-sm); font-size: 18px; }
+.fc-ver-senha:hover { color: var(--gray-900); background: var(--gray-100); }
+.fc-codigo { letter-spacing: .4em; font-weight: 700; }
+.fc-porta-ajuda { margin: 18px 0 0; font-size: 14px; color: var(--gray-600); }
+.fc-porta-rodape { margin: 24px 0 0; font-size: 12px; color: var(--gray-500); }
+@media (max-width: 991.98px) {
+  .fc-porta { grid-template-columns: 1fr; }
+  .fc-porta-marca { display: none; }
+  .fc-porta-form { position: relative; padding: 32px 18px 20px; min-height: 100vh; }
+  .fc-porta-form::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 4px;
+    background: var(--faixa-da-marca); }
+  .fc-porta-logo { max-width: 260px; }
+}
 
 .faixa-versao { position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 2000;
   background: var(--fundo); color: #fff; border-radius: var(--radius-lg); padding: 12px 14px;
@@ -224,30 +388,8 @@ a { text-decoration: none; }
 .faixa-versao-nao { background: transparent; color: var(--prata); }
 
 @media (max-width: 720px) {
-  .fc-marca small { display: none; }
   .fc-conteudo { padding: 14px 12px 40px; }
-  /* Menu no celular: os módulos descem para uma segunda linha, debaixo da
-     marca, em colunas iguais — TODOS à vista e o aberto destacado. Antes era
-     uma faixa que rolava de lado sem barra nem aviso: a 390px só aparecia
-     "Passagem d", e em Chamados/Contratos/Pessoas o item ativo ficava fora
-     da tela. */
-  .fc-topo-in { flex-wrap: wrap; height: auto; min-height: var(--topbar-h);
-    padding: 6px 12px; row-gap: 4px; column-gap: 10px; }
-  .fc-nav { order: 3; flex: 1 0 100%; margin: 0; overflow: visible;
-    display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px; }
-  .fc-nav a { display: flex; align-items: center; justify-content: center; min-height: 40px;
-    padding: 6px 4px; font-size: 13px; text-align: center;
-    overflow: hidden; text-overflow: ellipsis; }
-  .fc-nav a.ativo { box-shadow: inset 0 -2px 0 var(--marca); }
-  .fc-rot-longo { display: none; }
-  .fc-rot-curto { display: inline; }
-  /* O selo da fila fica logo abaixo do topo, que agora tem duas linhas. */
-  .fila-selo { top: calc(104px + env(safe-area-inset-top, 0px)); }
 }
-@media (max-width: 340px) {
-  .fc-nav a { font-size: 12px; padding: 6px 2px; }
-}
-
 
 /* ── Componentes vindos do Trino Intelligence (Passagem de Turno, fila sem
    internet, cabeçalho de página e tabela que vira cartão no celular) ── */
@@ -532,7 +674,10 @@ body.dark .page-title, body.dark .pg-titulo, body.dark .pg-num-v, body.dark .pg-
 .fc-app .fc-conteudo { padding-bottom: calc(88px + env(safe-area-inset-bottom)); max-width: 720px; }
 .fc-app-topo { position: sticky; top: 0; z-index: 1030; display: flex; align-items: center; gap: 10px;
   height: 56px; padding: 0 12px; background: var(--fundo); color: #fff; }
-.fc-app-topo .fc-marca { color: #fff; }
+.fc-app-topo .fc-marca { display: flex; align-items: center; gap: 10px; color: #fff; font-weight: 800;
+  letter-spacing: .2px; white-space: nowrap; text-decoration: none; }
+.fc-app-topo .fc-marca img { height: 28px; width: 28px; border-radius: 7px; background: #fff; }
+.fc-app-topo .fc-marca small { color: var(--prata); font-weight: 600; }
 .fc-app-pessoa { background: none; border: 0; color: #fff; min-height: 44px; font-weight: 600; }
 .fc-app-rede { background: var(--aviso); color: #fff; border-radius: 999px; padding: 2px 10px;
   font-size: 13px; font-weight: 700; }
@@ -612,3 +757,15 @@ body.dark .page-title, body.dark .pg-titulo, body.dark .pg-num-v, body.dark .pg-
 .fc-nota-atencao { background: var(--aviso); color: #fff; }
 .fc-nota-critica { background: var(--perigo); color: #fff; }
 .dt-tg-botao { min-height: 38px; }
+
+/* ── Rotina dos locais (rotas/inicio.html): um cartão por local ─────── */
+.fc-locais { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); gap: 14px; }
+.fc-local-nome { font-size: 16px; font-weight: 800; margin: 0 0 12px; }
+.fc-local-nome small { font-size: 13px; font-weight: 600; color: var(--gray-500); margin-left: 4px; }
+.fc-local-acoes { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; }
+.fc-local-acao { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  min-height: 72px; padding: 10px 8px; border: 1px solid var(--linha); border-radius: var(--radius-sm);
+  background: var(--surface-2); color: var(--gray-800); font-size: 13.5px; font-weight: 600; text-align: center;
+  text-decoration: none; transition: border-color .15s ease, background .15s ease; }
+.fc-local-acao i { font-size: 20px; color: var(--marca); }
+.fc-local-acao:hover { border-color: var(--marca); background: var(--blue-50); color: var(--gray-900); }
