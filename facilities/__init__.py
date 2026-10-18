@@ -39,6 +39,13 @@ _LIVRES_NA_TROCA = {'auth.trocar_senha', 'auth.logout', 'static', 'core.healthz'
                     'campo.manifesto', 'campo.instalar'}
 
 
+CSP = ("default-src 'self'; script-src 'self'; "
+       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+       "font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; "
+       "media-src 'self' blob:; connect-src 'self'; worker-src 'self'; manifest-src 'self'; "
+       "frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; "
+       "frame-ancestors 'self'")
+
 _SIM = frozenset({'1', 'true', 'yes', 'on', 'sim'})
 _NAO = frozenset({'0', 'false', 'no', 'off', 'nao', 'não'})
 
@@ -279,11 +286,13 @@ def _sessao(app):
         # desenvolvimento local.
         if request.is_secure or app.config.get('SESSION_COOKIE_SECURE'):
             resp.headers.setdefault('Strict-Transport-Security', 'max-age=31536000')
-        # Sem Content-Security-Policy por enquanto, de propósito: o base.html e
-        # as telas da Passagem têm <script> e onclick= inline, e uma CSP que os
-        # aceite ('unsafe-inline') não protege nada. A CSP útil pede nonce em
-        # cada script — trabalho próprio. O enquadramento já é coberto pelo
-        # X-Frame-Options acima.
+        # CSP (Fase 9A): script só dos arquivos do próprio sistema — nada de
+        # <script> embutido nem onclick= (ver static/js/acoes.js). Um texto
+        # injetado numa tela não roda. O estilo ainda aceita 'unsafe-inline'
+        # (as telas da Passagem têm style= e <style>): o risco é bem menor que
+        # o de script e a retirada fica para depois. A fonte Inter vem do
+        # Google Fonts.
+        resp.headers.setdefault('Content-Security-Policy', CSP)
         return resp
 
 

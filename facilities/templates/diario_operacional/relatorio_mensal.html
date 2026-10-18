@@ -78,7 +78,7 @@
       {% if areas %}
       <div class="col-auto">
         <label class="form-label small text-muted mb-1">Área</label>
-        <select class="form-select" name="area_id" onchange="this.form.submit()">
+        <select class="form-select" name="area_id" data-auto-enviar>
           <option value="{{ todas_as_areas }}"
                   {% if area_sel == todas_as_areas %}selected{% endif %}>Todas as áreas</option>
           {% for a in areas %}
@@ -89,7 +89,7 @@
       {% endif %}
       <div class="col-auto">
         <label class="form-label small text-muted mb-1">Mês</label>
-        <select class="form-select" name="mes" onchange="this.form.submit()">
+        <select class="form-select" name="mes" data-auto-enviar>
           {% for n, nome in meses %}
           <option value="{{ n }}" {% if n == mes %}selected{% endif %}>{{ nome }}</option>
           {% endfor %}
@@ -97,7 +97,7 @@
       </div>
       <div class="col-auto">
         <label class="form-label small text-muted mb-1">Ano</label>
-        <select class="form-select" name="ano" onchange="this.form.submit()">
+        <select class="form-select" name="ano" data-auto-enviar>
           {% for a in anos %}
           <option value="{{ a }}" {% if a == ano %}selected{% endif %}>{{ a }}</option>
           {% endfor %}

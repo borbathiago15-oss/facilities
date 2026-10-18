@@ -41,7 +41,7 @@
 
   var BTN_X = '<div class="col-2"><button type="button" class="btn btn-outline-danger w-100" ' +
               'aria-label="Remover este item" title="Remover este item" ' +
-              'onclick="this.closest(\'.config-row\').remove()">×</button></div>';
+              'data-remover=".config-row">×</button></div>';
 
   function addCfgShift(valor) {
     var d = linha('cfg-shifts',
@@ -93,11 +93,11 @@
         '<option value="false">Opcional</option></select></div>' +
       '<div class="col-2 d-flex gap-1">' +
         '<button type="button" class="btn btn-outline-secondary flex-fill" ' +
-          'title="Subir" onclick="moverPergunta(this,-1)">↑</button>' +
+          'title="Subir" data-acao="moverPergunta" data-args="[-1]" data-com-elemento>↑</button>' +
         '<button type="button" class="btn btn-outline-secondary flex-fill" ' +
-          'title="Descer" onclick="moverPergunta(this,1)">↓</button>' +
+          'title="Descer" data-acao="moverPergunta" data-args="[1]" data-com-elemento>↓</button>' +
         '<button type="button" class="btn btn-outline-danger flex-fill" ' +
-          'onclick="this.closest(\'.config-row\').remove()">×</button>' +
+          'data-remover=".config-row">×</button>' +
       '</div>' +
       '<div class="col-12 cfg-p-opcoes-caixa" hidden>' +
         '<textarea class="form-control cfg-p-opcoes" rows="3" ' +
@@ -331,9 +331,9 @@
         '<span class="ar-meta">' + nModelos(a.modelos) + '</span>' +
         '<span class="ar-acoes">' +
         '<button type="button" class="btn btn-sm btn-link p-0" ' +
-          'onclick="renomearArea(' + a.id + ')">renomear</button>' +
+          'data-acao="renomearArea" data-args="[' + Number(a.id) + ']">renomear</button>' +
         '<button type="button" class="btn btn-sm btn-link p-0" ' +
-          'onclick="alternarArea(' + a.id + ')">' +
+          'data-acao="alternarArea" data-args="[' + Number(a.id) + ']">' +
           (a.ativo ? 'desativar' : 'reativar') + '</button>' +
         '</span>' +
       '</div>';
@@ -409,6 +409,14 @@
   window.saveConfig = saveConfig;
   window.abrirModelo = abrirModelo;
   window.novoModelo = novoModelo;
+  window.FC_ACOES = Object.assign(window.FC_ACOES || {}, {
+    novaArea: window.novaArea, renomearArea: window.renomearArea,
+    alternarArea: window.alternarArea, addCfgShift: function () { addCfgShift(); },
+    addCfgPergunta: function () { addCfgPergunta(); },
+    addCfgOccurrence: function () { addCfgOccurrence(); }, saveConfig: saveConfig,
+    abrirModelo: abrirModelo, novoModelo: novoModelo,
+    moverPergunta: function (passo, botao) { moverPergunta(botao, passo); }
+  });
 
   // Abre o modelo pedido pela URL (volta do salvar), ou o primeiro da lista.
   var pedido = Number(raiz.dataset.editar || 0);

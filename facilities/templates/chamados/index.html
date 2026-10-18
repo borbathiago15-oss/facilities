@@ -21,15 +21,15 @@
 </div>
 
 <form class="ch-filtros" method="get">
-  <select class="form-select form-select-sm" name="client_id" onchange="this.form.submit()" aria-label="Contrato">
+  <select class="form-select form-select-sm" name="client_id" data-auto-enviar aria-label="Contrato">
     <option value="">Todos os meus contratos</option>
     {% for c in contratos %}<option value="{{ c.id }}" {% if c.id == client_id %}selected{% endif %}>{{ c.name }}</option>{% endfor %}
   </select>
-  <select class="form-select form-select-sm" name="prioridade" onchange="this.form.submit()" aria-label="Prioridade">
+  <select class="form-select form-select-sm" name="prioridade" data-auto-enviar aria-label="Prioridade">
     <option value="">Toda prioridade</option>
     {% for k, v in prioridades.items() %}<option value="{{ k }}" {% if k == prioridade %}selected{% endif %}>{{ v }}</option>{% endfor %}
   </select>
-  <select class="form-select form-select-sm" name="categoria" onchange="this.form.submit()" aria-label="Categoria">
+  <select class="form-select form-select-sm" name="categoria" data-auto-enviar aria-label="Categoria">
     <option value="">Toda categoria</option>
     {% for k, v in categorias.items() %}<option value="{{ k }}" {% if k == categoria %}selected{% endif %}>{{ v }}</option>{% endfor %}
   </select>

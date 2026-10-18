@@ -7,7 +7,7 @@
 """
 import os
 
-from conftest import abrir_contexto, entrar
+from conftest import abrir_contexto, entrar, esperar
 
 AQUI = os.path.dirname(os.path.abspath(__file__))
 
@@ -63,7 +63,7 @@ def test_sem_sinal_a_execucao_sobe_depois_uma_vez(servidor, navegador, perfil, t
         assert _execucoes(servidor) == []
         ctx.set_offline(False)
         pg.evaluate('window.TrinoFila.enviarAgora()')
-        pg.wait_for_function("!document.querySelector('.fila-selo') || "
+        esperar(pg, "!document.querySelector('.fila-selo') || "
                              "document.querySelector('.fila-selo').hidden", timeout=15000)
         pg.evaluate('window.TrinoFila.enviarAgora()')
         pg.wait_for_timeout(1500)

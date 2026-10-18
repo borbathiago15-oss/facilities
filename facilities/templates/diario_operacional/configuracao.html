@@ -88,7 +88,7 @@
   <form class="row g-2 align-items-end mb-3" method="get">
     <div class="col-lg-5 col-md-7">
       <label class="form-label small text-muted mb-1">Contrato</label>
-      <select class="form-select" name="client_id" onchange="this.form.submit()">
+      <select class="form-select" name="client_id" data-auto-enviar>
         {% for c in clients %}
         <option value="{{ c.id }}" {% if c.id == client_id %}selected{% endif %}>{{ c.name }}</option>
         {% endfor %}
@@ -128,7 +128,7 @@
        data-areas='{{ areas|tojson|safe }}' data-client='{{ client_id }}'>
     <div class="card-header bg-white fw-bold d-flex justify-content-between align-items-center">
       <span>Áreas deste contrato</span>
-      <button class="btn btn-sm btn-outline-primary" type="button" onclick="novaArea()">
+      <button class="btn btn-sm btn-outline-primary" type="button" data-acao="novaArea">
         <i class="bi bi-plus"></i> Nova área</button>
     </div>
     <div class="card-body">
@@ -146,7 +146,7 @@
       <div class="card shadow-sm border-0 h-100">
         <div class="card-header bg-white fw-bold d-flex justify-content-between align-items-center">
           <span>Modelos deste contrato</span>
-          <button class="btn btn-sm btn-outline-primary" onclick="novoModelo()">
+          <button class="btn btn-sm btn-outline-primary" data-acao="novoModelo">
             <i class="bi bi-plus"></i> Novo</button>
         </div>
         <div class="card-body cf-lista" id="cfg-lista">
@@ -159,7 +159,7 @@
              expressão regular — e corrigir o plural do texto quebraria o
              aviso sem ninguém perceber. #}
           <button type="button" class="cf-item" data-id="{{ c.id }}" data-usos="{{ n_usos }}"
-                  onclick="abrirModelo({{ c.id }})">
+                  data-acao="abrirModelo" data-args="[{{ c.id }}]">
             <div class="d-flex justify-content-between align-items-start gap-2">
               <span class="cf-nome">{{ c.nome }}</span>
               <span class="cf-tag {{ 'on' if c.ativo else 'off' }}">
@@ -216,7 +216,7 @@
         <div class="card-header bg-white fw-bold">Turnos</div>
         <div class="card-body">
           <div id="cfg-shifts"></div>
-          <button class="btn btn-sm btn-outline-primary" onclick="addCfgShift()">
+          <button class="btn btn-sm btn-outline-primary" data-acao="addCfgShift">
             Adicionar turno</button>
         </div>
       </div>
@@ -232,7 +232,7 @@
         </div>
         <div class="card-body">
           <div id="cfg-perguntas"></div>
-          <button class="btn btn-sm btn-outline-primary" onclick="addCfgPergunta()">
+          <button class="btn btn-sm btn-outline-primary" data-acao="addCfgPergunta">
             Adicionar pergunta</button>
           <div class="cf-aviso mt-2">
             Só a pergunta <strong>Sim/Não</strong> marcada como obrigatória entra na
@@ -247,14 +247,14 @@
         <div class="card-header bg-white fw-bold">Tipos de ocorrência</div>
         <div class="card-body">
           <div id="cfg-occurrences"></div>
-          <button class="btn btn-sm btn-outline-primary" onclick="addCfgOccurrence()">
+          <button class="btn btn-sm btn-outline-primary" data-acao="addCfgOccurrence">
             Adicionar tipo</button>
         </div>
       </div>
 
       <div class="mt-3 d-flex justify-content-between align-items-center">
         <span class="cf-aviso" id="cfg-editando"></span>
-        <button class="btn btn-primary px-4" onclick="saveConfig()">Salvar modelo</button>
+        <button class="btn btn-primary px-4" data-acao="saveConfig">Salvar modelo</button>
       </div>
     </div>
   </div>

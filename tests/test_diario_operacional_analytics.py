@@ -647,7 +647,7 @@ def test_quem_so_le_nao_abre_chamado(app_module, client, cenario):
     _login(client, email)
     html = client.get(f'/passagem-de-turno/?client_id={cenario["client_id"]}'
                       ).get_data(as_text=True)
-    assert 'dopAbrirChamado(' not in html
+    assert 'data-acao="dopAbrirChamado"' not in html
     r = client.post(f'/passagem-de-turno/api/ocorrencias/{oid}/chamado')
     assert r.status_code == 403
     with app_module.app.app_context():

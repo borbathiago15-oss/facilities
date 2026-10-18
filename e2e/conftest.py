@@ -107,7 +107,21 @@ def abrir_contexto(navegador, perfil, camera_com=None):
     b = p.chromium.launch(executable_path=caminho, args=args)
     ctx = b.new_context(**PERFIS[perfil])
     ctx.grant_permissions(['camera'])
+    # Fase 9A: script embutido bloqueado pela CSP aparece no console — e
+    # reprova o teste (ver ``_sem_violacao_de_csp``).
+    ctx.on('console', lambda m: VIOLACOES_CSP.append(m.text)
+           if 'Content Security Policy' in m.text else None)
     return b, ctx
+
+
+VIOLACOES_CSP = []
+
+
+@pytest.fixture(autouse=True)
+def _sem_violacao_de_csp():
+    VIOLACOES_CSP.clear()
+    yield
+    assert not VIOLACOES_CSP, 'A CSP bloqueou algo na tela: ' + ' | '.join(VIOLACOES_CSP[:3])
 
 
 def entrar(pagina, base, email):
@@ -116,3 +130,19 @@ def entrar(pagina, base, email):
     pagina.fill('input[name=password]', SENHA)
     pagina.click('button[type=submit]')
     pagina.wait_for_load_state('networkidle')
+
+
+def esperar(pagina, expressao, timeout=15000):
+    """Espera ``expressao`` (JavaScript) ficar verdadeira.
+
+    No lugar do ``wait_for_function`` do Playwright: ele compila o texto
+    dentro da página, e a CSP (Fase 9A) bloqueia isso — com razão.
+    ``evaluate`` vai pelo protocolo do navegador, fora da CSP.
+    """
+    import time
+    fim = time.monotonic() + timeout / 1000
+    while time.monotonic() < fim:
+        if pagina.evaluate(expressao):
+            return
+        pagina.wait_for_timeout(150)
+    raise AssertionError(f'Não aconteceu a tempo: {expressao}')

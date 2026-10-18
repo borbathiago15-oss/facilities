@@ -611,3 +611,4 @@ body.dark .page-title, body.dark .pg-titulo, body.dark .pg-num-v, body.dark .pg-
 .fc-nota-boa { background: var(--ok); color: #fff; }
 .fc-nota-atencao { background: var(--aviso); color: #fff; }
 .fc-nota-critica { background: var(--perigo); color: #fff; }
+.dt-tg-botao { min-height: 38px; }
