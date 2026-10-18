@@ -59,8 +59,14 @@ def _hoje_do_posto(locais):
 def inicio():
     from facilities.rotas import ocorrencias
     from facilities.rotas.models import TIPOS_OCORRENCIA_PUBLICA
+    from facilities.equipes.servico import PERFIS_QUE_LANCAM
+    from facilities.visitas import servico as visitas
     locais = clientes_visiveis()
+    lanca = current_user._effective_role() in PERFIS_QUE_LANCAM
     return render_template('campo/inicio.html', locais=locais, **_hoje_do_posto(locais),
+                           lanca_presenca=lanca,
+                           visitas_abertas=len(visitas.abertas([c.id for c in locais],
+                                                               current_user)) if lanca else 0,
                            ocorrencias=ocorrencias.abertas([c.id for c in locais]),
                            tipos_ocorrencia=TIPOS_OCORRENCIA_PUBLICA)
 

@@ -131,7 +131,12 @@ def clean_transactional_data(app_module):
         from facilities.core.models import PushInscricao
         # A preventiva aponta para pontos, checklists e chamados: sai antes.
         from facilities.preventiva import models as preventiva_models
-        for model in (preventiva_models.MODELOS_EM_ORDEM_DE_LIMPEZA
+        # Fase 6: equipe e visitas apontam para rotas, checklists e chamados.
+        from facilities.equipes import models as equipes_models
+        from facilities.visitas import models as visitas_models
+        for model in (equipes_models.MODELOS_EM_ORDEM_DE_LIMPEZA
+                      + visitas_models.MODELOS_EM_ORDEM_DE_LIMPEZA
+                      + preventiva_models.MODELOS_EM_ORDEM_DE_LIMPEZA
                       + rotas_models.MODELOS_EM_ORDEM_DE_LIMPEZA + (PushInscricao,)):
             model.query.delete()
         app_module.app.extensions.pop('facilities_push', None)

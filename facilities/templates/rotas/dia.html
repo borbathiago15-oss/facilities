@@ -70,7 +70,7 @@
   <div class="d-flex flex-wrap gap-2 align-items-center border-bottom px-3 py-2">
     <span class="fw-bold">{{ c.pedido_em|hora_local('%H:%M') }}</span><span>{{ c.pessoa.name }}</span><span class="small text-muted">{{ c.rota.nome }}</span>
     <span class="ms-auto badge {% if c.status == 'confirmada' %}text-bg-success{% elif c.status == 'sem_resposta' %}text-bg-danger{% else %}text-bg-light{% endif %}">
-      {% if c.status == 'confirmada' %}Confirmada às {{ c.respondida_em|hora_local('%H:%M') }}{% elif c.status == 'sem_resposta' %}Sem resposta{% if c.respondida_em %} (respondeu às {{ c.respondida_em|hora_local('%H:%M') }}){% endif %}{% else %}Aguardando{% endif %}</span>
+      {% if c.status == 'confirmada' %}Confirmada às {{ c.respondida_em|hora_local('%H:%M') }}{% elif c.status == 'sem_resposta' %}Sem resposta{% if c.respondida_em %} (respondeu às {{ c.respondida_em|hora_local('%H:%M') }}){% endif %}{% elif c.status == 'dispensada' %}Dispensada (falta lançada){% else %}Aguardando{% endif %}</span>
   </div>
   {% endfor %}
 </div>

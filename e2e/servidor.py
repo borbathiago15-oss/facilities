@@ -39,13 +39,14 @@ def montar(caminho_db):
         for email, nome, papel in (('admin@e2e.test', 'Administrador', 'master'),
                                    ('ana@e2e.test', 'Ana Souza', 'encarregado'),
                                    ('mariana@e2e.test', 'Mariana Lima', 'encarregado'),
-                                   ('caio@e2e.test', 'Caio Técnico', 'tecnico')):
+                                   ('caio@e2e.test', 'Caio Técnico', 'tecnico'),
+                                   ('sueli@e2e.test', 'Sueli Supervisora', 'supervisor')):
             u = User(name=nome, email=email, role=papel)
             u.set_password(SENHA)
             db.session.add(u)
             pessoas[email] = u
         db.session.flush()
-        for email in ('ana@e2e.test', 'mariana@e2e.test', 'caio@e2e.test'):
+        for email in ('ana@e2e.test', 'mariana@e2e.test', 'caio@e2e.test', 'sueli@e2e.test'):
             pessoas[email].clients = [local]
         admin = pessoas['admin@e2e.test']
         setor = servico.salvar_setor(local, None, {'nome': 'Administrativo'}, admin)
@@ -94,6 +95,28 @@ def montar(caminho_db):
             'responsavel_id': pessoas['caio@e2e.test'].id}, admin)
         db.session.flush()
         preventiva.gerar_ordens(tempo.hoje())
+        # Fase 6: a equipe do posto (Ana com login, Mariana sem) e a visita de
+        # supervisão de hoje da Sueli.
+        from facilities.equipes import servico as equipes
+        from facilities.visitas import servico as visitas
+        ana = equipes.salvar_funcionario(local, None, {
+            'nome': 'Ana Souza', 'funcao': 'ASG', 'user_id': pessoas['ana@e2e.test'].id}, admin)
+        equipes.salvar_funcionario(local, None, {'nome': 'Mariana Lima', 'funcao': 'ASG'}, admin)
+        posto = equipes.salvar_posto(local, None, {'nome': 'Limpeza 2º andar — manhã',
+                                                   'hora_inicio': '00:00', 'hora_fim': '23:59',
+                                                   'rota_id': rota.id})
+        equipes.salvar_escala(local, {'funcionario_id': ana.id, 'posto_id': posto.id,
+                                      'dias_semana': '1234567'}, admin)
+        qualidade = rotas.criar_modelo(local.id, {'nome': 'Visita de qualidade'}, admin)
+        rotas.publicar(qualidade, rotas.normalizar_itens([
+            {'texto': 'Uniforme completo?', 'tipo': 'sim_nao', 'obrigatorio': True,
+             'problema_se': 'nao'}]), {}, admin)
+        visitas.salvar_programada(local, None, {
+            'nome': 'Visita semanal', 'modelo_id': qualidade.id, 'intervalo_dias': '7',
+            'proxima_em': tempo.hoje().isoformat(),
+            'supervisor_id': pessoas['sueli@e2e.test'].id}, admin)
+        db.session.flush()
+        visitas.gerar_visitas(tempo.hoje())
         db.session.commit()
     return app
 

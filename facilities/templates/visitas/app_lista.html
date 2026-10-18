@@ -1,0 +1,19 @@
+{% extends 'campo/base_app.html' %}
+{% block title %}Visitas de supervisão{% endblock %}
+{% block content %}
+<h1 class="fc-titulo">Visitas de supervisão</h1>
+<p class="fc-sub">As visitas programadas que estão esperando você. Toque para fazer o checklist.</p>
+<div class="fc-cartao">
+  {% for v in visitas %}
+  <a class="fc-app-item" href="{{ url_for('visitas.ver', vid=v.id) }}">
+    <div class="d-flex align-items-center gap-2">
+      <span class="fw-semibold">{{ v.programada.nome }}</span>
+      {% if v.vencimento < hoje %}<span class="badge fc-sit fc-sit-atrasada">Atrasada</span>{% elif v.vencimento == hoje %}<span class="badge fc-sit fc-sit-no_horario">Hoje</span>{% endif %}
+    </div>
+    <span class="small text-muted">{{ v.local.name }} · até {{ v.vencimento.strftime('%d/%m') }}</span>
+  </a>
+  {% else %}
+  <div class="fc-vazio">Nenhuma visita esperando você.</div>
+  {% endfor %}
+</div>
+{% endblock %}

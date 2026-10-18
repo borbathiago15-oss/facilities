@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+{% block title %}{{ local.name }} — escala do mês{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item"><a href="{{ url_for('equipes.local', cid=local.id) }}">Equipe · {{ local.name }}</a></li><li class="breadcrumb-item active" aria-current="page">Mês</li>{% endblock %}
+{% block content %}
+<h1 class="fc-titulo">Escala e presença · {{ primeiro.strftime('%m/%Y') }}</h1>
+<p class="fc-sub">{{ local.name }}. Cada linha é uma escala; cada coluna, um dia. O ponto cinza é dia escalado ainda sem presença lançada.</p>
+<div class="d-flex flex-wrap gap-2 mb-3">
+  <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('equipes.mes', cid=local.id, m=anterior) }}"><i class="bi bi-chevron-left"></i> Mês anterior</a>
+  <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('equipes.mes', cid=local.id, m=seguinte) }}">Mês seguinte <i class="bi bi-chevron-right"></i></a>
+</div>
+<div class="d-flex flex-wrap gap-2 mb-3">
+  <div class="fc-cartao py-2 px-3"><div class="small text-muted">Dias escalados até hoje</div><div class="fs-4 fw-bold">{{ grade.totais.previstos }}</div></div>
+  <div class="fc-cartao py-2 px-3"><div class="small text-muted">Presença lançada</div><div class="fs-4 fw-bold">{{ grade.totais.lancados }}</div></div>
+  <div class="fc-cartao py-2 px-3"><div class="small text-muted">Faltas</div><div class="fs-4 fw-bold">{{ grade.totais.faltas }}</div></div>
+  <div class="fc-cartao py-2 px-3"><div class="small text-muted">Faltas cobertas</div><div class="fs-4 fw-bold">{{ grade.totais.cobertas }}</div></div>
+</div>
+<p class="small"><span class="fc-pres fc-pres-veio">V</span> veio · <span class="fc-pres fc-pres-atrasou">A</span> atrasou · <span class="fc-pres fc-pres-faltou">F</span> faltou · <span class="fc-pres fc-pres-coberta">C</span> faltou e foi coberta · <span class="fc-pres fc-pres-pendente">·</span> sem lançamento</p>
+<div class="fc-cartao p-0 fc-mes-rolar">
+  <table class="table table-sm mb-0 fc-mes">
+    <caption class="visually-hidden">Escala e presença do mês</caption>
+    <thead><tr><th scope="col">Funcionário · posto</th>{% for d in grade.dias %}<th scope="col" class="text-center">{{ d.day }}</th>{% endfor %}</tr></thead>
+    <tbody>
+      {% for linha in grade.linhas %}
+      <tr>
+        <th scope="row" class="text-nowrap small">{{ linha.escala.funcionario.nome }}<br><span class="text-muted">{{ linha.escala.posto.nome }}</span></th>
+        {% for c in linha.celulas %}
+        <td class="text-center">
+          {% if c.presenca %}
+            {% set p = c.presenca %}
+            {% if p.situacao == 'faltou' and p.cobertura %}<span class="fc-pres fc-pres-coberta" title="Faltou; cobriu {{ p.cobertura.funcionario.nome }} ({{ p.cobertura.motivo }})">C</span>
+            {% elif p.situacao == 'faltou' %}<span class="fc-pres fc-pres-faltou" title="Faltou">F</span>
+            {% elif p.situacao == 'atrasou' %}<span class="fc-pres fc-pres-atrasou" title="Atrasou">A</span>
+            {% else %}<span class="fc-pres fc-pres-veio" title="Veio">V</span>{% endif %}
+          {% elif c.pendente %}<span class="fc-pres fc-pres-pendente" title="Escalado, sem presença lançada">·</span>
+          {% elif c.previsto %}<span class="text-muted small" title="Escalado (dia ainda não chegou)">○</span>
+          {% endif %}
+        </td>
+        {% endfor %}
+      </tr>
+      {% else %}
+      <tr><td colspan="{{ grade.dias|length + 1 }}" class="fc-vazio">Nenhuma escala neste mês.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

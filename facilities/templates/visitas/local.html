@@ -1,0 +1,79 @@
+{% extends 'base.html' %}
+{% block title %}{{ local.name }} — visitas de supervisão{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item"><a href="{{ url_for('rotas.local', cid=local.id) }}">{{ local.name }}</a></li><li class="breadcrumb-item active" aria-current="page">Visitas de supervisão</li>{% endblock %}
+{% macro campos(p, sufixo) %}
+<div class="row g-2">
+  <div class="col-md-6"><label class="form-label small" for="vn{{ sufixo }}">Nome da visita</label>
+    <input class="form-control" id="vn{{ sufixo }}" name="nome" required maxlength="150" value="{{ p.nome if p else '' }}" placeholder="Ex.: Visita semanal de qualidade"></div>
+  <div class="col-md-6"><label class="form-label small" for="vm{{ sufixo }}">Checklist da visita</label>
+    <select class="form-select" id="vm{{ sufixo }}" name="modelo_id" required>{% for m in modelos %}<option value="{{ m.id }}" {% if p and p.modelo_id == m.id %}selected{% endif %}>{{ m.nome }}</option>{% endfor %}</select></div>
+  <div class="col-6 col-md-3"><label class="form-label small" for="vi{{ sufixo }}">A cada quantos dias</label>
+    <input class="form-control" id="vi{{ sufixo }}" name="intervalo_dias" type="number" min="1" max="365" required value="{{ p.intervalo_dias if p else 7 }}"></div>
+  <div class="col-6 col-md-3"><label class="form-label small" for="vp{{ sufixo }}">Próxima visita</label>
+    <input class="form-control" id="vp{{ sufixo }}" name="proxima_em" type="date" required value="{{ p.proxima_em.isoformat() if p else hoje }}"></div>
+  <div class="col-md-6"><label class="form-label small" for="vs{{ sufixo }}">Quem faz</label>
+    <select class="form-select" id="vs{{ sufixo }}" name="supervisor_id"><option value="">Qualquer supervisor do local</option>{% for s in supervisores %}<option value="{{ s.id }}" {% if p and p.supervisor_id == s.id %}selected{% endif %}>{{ s.name }} ({{ s.perfil_rotulo }})</option>{% endfor %}</select></div>
+</div>
+{% endmacro %}
+{% block content %}
+<h1 class="fc-titulo">Visitas de supervisão · {{ local.name }}</h1>
+<p class="fc-sub">Na data, a visita abre sozinha e avisa quem faz. O supervisor faz o checklist no aplicativo; o que estiver não conforme abre um chamado para a gestão.</p>
+
+{% if pode_montar and not modelos %}
+<div class="alert alert-warning">Para programar uma visita, o local precisa de um checklist publicado (sem foto obrigatória). <a href="{{ url_for('rotas.local', cid=local.id) }}">Checklists do local</a></div>
+{% endif %}
+
+<section class="fc-cartao mb-3" aria-labelledby="tit-prog">
+  <h2 class="h6 fw-bold" id="tit-prog"><i class="bi bi-calendar2-week"></i> Programação</h2>
+  {% for p in programadas %}
+  <div class="border-top py-2">
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+      <span class="fw-semibold">{{ p.nome }}</span>
+      {% if not p.is_active %}<span class="badge text-bg-secondary">desativada</span>{% endif %}
+      <span class="small text-muted">{{ p.modelo.nome }} · a cada {{ p.intervalo_dias }} dia(s) · {{ p.supervisor.name if p.supervisor else 'qualquer supervisor' }}</span>
+      {% if p.is_active %}<span class="small ms-auto">próxima <strong>{{ p.proxima_em.strftime('%d/%m/%Y') }}</strong></span>{% endif %}
+    </div>
+    {% if pode_montar %}
+    <details class="mt-1">
+      <summary class="small fw-semibold">Editar</summary>
+      <form method="post" action="{{ url_for('visitas.editar', pid=p.id) }}" class="mt-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {{ campos(p, p.id) }}
+        <button class="btn btn-primary btn-sm fw-bold mt-2" type="submit">Salvar</button>
+      </form>
+      <form method="post" action="{{ url_for('visitas.editar', pid=p.id) }}" class="mt-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="ativo" value="{{ '0' if p.is_active else '1' }}">
+        <button class="btn btn-outline-secondary btn-sm" type="submit">{{ 'Desativar' if p.is_active else 'Reativar' }}</button>
+      </form>
+    </details>
+    {% endif %}
+  </div>
+  {% else %}
+  <p class="small text-muted">Nenhuma visita programada ainda.</p>
+  {% endfor %}
+  {% if pode_montar and modelos %}
+  <details class="mt-2" {% if not programadas %}open{% endif %}>
+    <summary class="fw-semibold">Programar visita</summary>
+    <form method="post" action="{{ url_for('visitas.criar', cid=local.id) }}" class="mt-2">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {{ campos(None, 'nova') }}
+      <button class="btn btn-primary fw-bold mt-2" type="submit">Programar</button>
+    </form>
+  </details>
+  {% endif %}
+</section>
+
+<section class="fc-cartao" aria-labelledby="tit-rec">
+  <h2 class="h6 fw-bold" id="tit-rec"><i class="bi bi-clock-history"></i> Visitas recentes</h2>
+  {% for v in recentes %}
+  <a class="d-flex flex-wrap gap-2 align-items-center border-top py-2 text-reset text-decoration-none" href="{{ url_for('visitas.ver', vid=v.id) }}">
+    <span class="fw-semibold">{{ v.programada.nome }}</span>
+    <span class="small text-muted">até {{ v.vencimento.strftime('%d/%m/%Y') }}{% if v.quem_fez %} · {{ v.quem_fez.name }}{% endif %}</span>
+    <span class="badge {% if v.status == 'feita' and v.n_nao_conformes %}text-bg-warning{% elif v.status == 'feita' %}text-bg-success{% else %}text-bg-light{% endif %} ms-auto">{{ v.situacao_rotulo }}{% if v.n_nao_conformes %} · {{ v.n_nao_conformes }} não conforme(s){% endif %}</span>
+  </a>
+  {% else %}
+  <p class="small text-muted">Nenhuma visita ainda.</p>
+  {% endfor %}
+</section>
+{% endblock %}

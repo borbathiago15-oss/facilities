@@ -1,0 +1,61 @@
+{% extends 'campo/base_app.html' %}
+{% block title %}{{ v.programada.nome }}{% endblock %}
+{% block content %}
+<h1 class="fc-titulo">{{ v.programada.nome }}</h1>
+<p class="fc-sub">{{ v.local.name }} · {{ v.situacao_rotulo }}{% if v.status == 'prevista' %} · até {{ v.vencimento.strftime('%d/%m/%Y') }}{% endif %}</p>
+
+{% if v.status == 'feita' %}
+<div class="fc-cartao mb-3">
+  <p class="mb-1"><b>Feita por</b> {{ v.quem_fez.name if v.quem_fez else '—' }} · {{ v.feita_em|hora_local }}</p>
+  {% if v.chamado %}<p class="mb-1"><b>Não conforme:</b> {{ v.n_nao_conformes }} item(ns) · chamado <a href="{{ url_for('chamados.ver', chamado_id=v.chamado.id) }}">{{ v.chamado.numero }}</a> ({{ v.chamado.status_rotulo }})</p>{% else %}<p class="mb-1 text-success">Tudo conforme.</p>{% endif %}
+  {% if v.observacao %}<p class="mb-0"><b>Observação:</b> {{ v.observacao }}</p>{% endif %}
+</div>
+<div class="fc-cartao">
+  <h2 class="h6 fw-bold">Respostas</h2>
+  {% for it in itens %}
+  <div class="border-top py-2"><div class="small text-muted">{{ it.texto }}</div><div class="fw-semibold">{{ respostas.get(it.codigo, '—') }}</div></div>
+  {% endfor %}
+</div>
+{% elif not pode_fazer %}
+<div class="alert alert-info">Esta visita é de {{ v.supervisor.name if v.supervisor else 'um supervisor do local' }}.</div>
+{% else %}
+<form method="post" action="{{ url_for('visitas.fazer', vid=v.id) }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  {% for it in itens %}
+  {% set nome = 'r_' ~ it.codigo %}
+  <div class="fc-cartao mb-2">
+    {% if it.tipo in ('sim_nao', 'conforme') %}
+    <fieldset>
+      <legend class="fw-semibold fs-6 mb-1">{{ it.texto }}{% if it.obrigatorio %} *{% endif %}</legend>
+      {% if it.mostrar_se %}<div class="form-text mt-0 mb-1">Responda só se "{{ textos.get(it.mostrar_se.codigo, it.mostrar_se.codigo) }}" for "{{ it.mostrar_se.valor }}".</div>{% endif %}
+      <div class="d-flex gap-2">
+        {% for val, rot in ([('sim', 'Sim'), ('nao', 'Não')] if it.tipo == 'sim_nao' else [('conforme', 'Conforme'), ('nao_conforme', 'Não conforme')]) %}
+        <label class="fc-opcao flex-fill" for="{{ nome }}_{{ val }}"><input class="fc-opcao-radio" type="radio" id="{{ nome }}_{{ val }}" name="{{ nome }}" value="{{ val }}"><span>{{ rot }}</span></label>
+        {% endfor %}
+      </div>
+    </fieldset>
+    {% else %}
+    <label class="fw-semibold mb-1" for="{{ nome }}">{{ it.texto }}{% if it.obrigatorio %} *{% endif %}</label>
+    {% if it.mostrar_se %}<div class="form-text mt-0 mb-1">Responda só se "{{ textos.get(it.mostrar_se.codigo, it.mostrar_se.codigo) }}" for "{{ it.mostrar_se.valor }}".</div>{% endif %}
+    {% if it.tipo == 'numero' %}
+    <input class="form-control form-control-lg" id="{{ nome }}" name="{{ nome }}" inputmode="decimal">
+    {% if it.minimo is not none or it.maximo is not none %}<div class="form-text">Aceitável: {% if it.minimo is not none %}de {{ it.minimo }}{% endif %}{% if it.maximo is not none %} até {{ it.maximo }}{% endif %}</div>{% endif %}
+    {% elif it.tipo == 'escolha' %}
+    <select class="form-select form-select-lg" id="{{ nome }}" name="{{ nome }}"><option value="">Escolha</option>{% for o in it.opcoes %}<option value="{{ o }}">{{ o }}</option>{% endfor %}</select>
+    {% elif it.tipo == 'data_hora' %}
+    <input class="form-control form-control-lg" type="datetime-local" id="{{ nome }}" name="{{ nome }}">
+    {% else %}
+    <input class="form-control form-control-lg" id="{{ nome }}" name="{{ nome }}" maxlength="300">
+    {% endif %}
+    {% endif %}
+  </div>
+  {% endfor %}
+  <div class="fc-cartao mb-2">
+    <label class="form-label small fw-semibold" for="obs">Observação (opcional)</label>
+    <textarea class="form-control" id="obs" name="observacao" rows="3" maxlength="2000"></textarea>
+  </div>
+  <button class="btn btn-primary btn-lg w-100 fc-app-acao" type="submit"><i class="bi bi-check-circle"></i> Registrar a visita</button>
+  <p class="small text-muted mt-2">O que estiver não conforme abre um chamado para a gestão do local. Esta tela precisa de sinal.</p>
+</form>
+{% endif %}
+{% endblock %}

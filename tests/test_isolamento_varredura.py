@@ -156,7 +156,25 @@ def _rotas_de_a(app_module, a, ids):
         'intervalo_dias': '30', 'proxima_em': tempo.hoje().isoformat()}, gestor)
     prev.gerar_ordens(tempo.hoje())
     db.session.commit()
+    # Fase 6: equipe (funcionário, posto, escala, falta) e visita de supervisão em A.
+    from facilities.equipes import servico as eq
+    from facilities.visitas import servico as vis
+    func = eq.salvar_funcionario(loc, None, {'nome': f'Funcionária {MARCA}'}, gestor)
+    posto = eq.salvar_posto(loc, None, {'nome': f'Posto {MARCA}', 'hora_inicio': '07:00',
+                                        'hora_fim': '15:00', 'rota_id': str(rota.id)})
+    esc = eq.salvar_escala(loc, {'funcionario_id': func.id, 'posto_id': posto.id,
+                                 'dias_semana': '1234567'}, gestor)
+    falta = eq.registrar_presenca(gestor, esc, tempo.hoje(), 'faltou', f'Falta {MARCA}')
+    prog = vis.salvar_programada(loc, None, {
+        'nome': f'Visita {MARCA}', 'modelo_id': str(m.id), 'intervalo_dias': '7',
+        'proxima_em': tempo.hoje().isoformat()}, gestor)
+    vis.gerar_visitas(tempo.hoje())
+    db.session.commit()
+    from facilities.visitas.models import Visita
     return {'ocorrencia_publica': oc.id, 'presenca': pres.id, 'plano': plano.id,
+            'funcionario': func.id, 'posto': posto.id, 'escala_trabalho': esc.id,
+            'falta': falta.id, 'programada': prog.id,
+            'visita': Visita.query.filter_by(programada_id=prog.id).one().id,
             'modelo': m.id, 'rota': rota.id, 'item': item.id,
             'escala': RotaEscala.query.filter_by(rota_id=rota.id).one().id,
             'tarefa_rota': tarefa.id, 'execucao': ex.id,
@@ -190,6 +208,15 @@ def _valor_do_parametro(nome, ids, entidade=None, endpoint=''):
         return ids['ocorrencia_publica']
     if endpoint.startswith('preventiva.') and nome == 'pid':
         return ids['plano']
+    if endpoint.startswith('equipes.'):
+        por_equipe = {'cid': ids['local'], 'fid': ids['funcionario'], 'pid': ids['posto'],
+                      'eid': ids['escala_trabalho'], 'prid': ids['falta']}
+        if nome in por_equipe:
+            return por_equipe[nome]
+    if endpoint.startswith('visitas.'):
+        por_visita = {'cid': ids['local'], 'pid': ids['programada'], 'vid': ids['visita']}
+        if nome in por_visita:
+            return por_visita[nome]
     if endpoint.startswith('rotas.'):
         por_rota = {'eid': ids['escala'] if 'escala' in endpoint else ids['execucao'],
                     'rid': ids['rota'], 'iid': ids['item'], 'mid': ids['modelo'],
@@ -251,6 +278,10 @@ def test_ninguem_de_b_le_ou_altera_a(app_module, local_a, papel):
              # Fase 4A: o QR e a tarefa de A, no JSON e no "corpo" do aplicativo.
              'ponto': local_a['qr'], 'tarefa_id': local_a['tarefa_rota'],
              'motivo': 'acesso', 'versao_id': '1',
+             # Fase 6: a escala e a falta de A, e quem "cobriria".
+             'escala_id': local_a['escala_trabalho'], 'situacao': 'veio',
+             'funcionario_id': local_a['funcionario'], 'posto_id': local_a['posto'],
+             'r_pergunta': 'sim',
              'corpo': json.dumps({'envio_id': f'invasao-{papel}-0001', 'ponto': local_a['qr'],
                                   'tarefa_id': local_a['tarefa_rota'], 'respostas': {},
                                   'sem_sinal': True,

@@ -122,6 +122,33 @@ SEMENTES = [
     "JOIN planos_preventivos pl ON pl.id=o.plano_id",
     "UPDATE preventiva_ordens SET chamado_id=(SELECT max(id) FROM chamados)",
     "UPDATE execucoes SET chamado_id=(SELECT max(id) FROM chamados)",
+    # Fase 6: funcionários (com e sem login), posto com rota, escala, falta
+    # coberta e visita de supervisão feita.
+    "INSERT INTO funcionarios (client_id,nome,funcao,matricula,user_id,is_active,created_at) "
+    "SELECT c.id,'Ana Souza','ASG','123',u.id,true,now() FROM clients c, users u "
+    "WHERE c.name='GL Armazém 1' AND u.email='sup@ensaio'",
+    "INSERT INTO funcionarios (client_id,nome,funcao,is_active,created_at) "
+    "SELECT id,'Mariana Lima','ASG',true,now() FROM clients WHERE name='GL Armazém 1'",
+    "INSERT INTO postos (client_id,nome,hora_inicio,hora_fim,rota_id,is_active,created_at) "
+    "SELECT r.client_id,'Limpeza T1','07:00','15:00',r.id,true,now() FROM rotas r",
+    "INSERT INTO escalas (client_id,funcionario_id,posto_id,dias_semana,data_inicio,is_active,"
+    "created_at) SELECT p.client_id,f.id,p.id,'12345','2026-10-01',true,now() "
+    "FROM postos p, funcionarios f WHERE f.nome='Ana Souza'",
+    "INSERT INTO presencas (client_id,funcionario_id,posto_id,data,situacao,registrada_por,"
+    "registrada_em) SELECT e.client_id,e.funcionario_id,e.posto_id,'2026-10-16','faltou',u.id,"
+    "now() FROM escalas e, users u WHERE u.email='gerente@ensaio'",
+    "INSERT INTO coberturas (presenca_id,client_id,funcionario_id,motivo,registrada_por,"
+    "registrada_em) SELECT p.id,p.client_id,f.id,'atestado',u.id,now() FROM presencas p, "
+    "funcionarios f, users u WHERE f.nome='Mariana Lima' AND u.email='gerente@ensaio'",
+    "INSERT INTO visitas_programadas (client_id,nome,modelo_id,supervisor_id,intervalo_dias,"
+    "proxima_em,is_active,criado_por,created_at) SELECT m.client_id,'Visita semanal',m.id,s.id,"
+    "7,'2026-10-23',true,g.id,now() FROM checklist_modelos m, users s, users g "
+    "WHERE m.client_id IS NOT NULL AND s.email='sup@ensaio' AND g.email='gerente@ensaio'",
+    "INSERT INTO visitas (programada_id,client_id,vencimento,supervisor_id,status,criada_em,"
+    "feita_por,feita_em,versao_id,respostas_json,n_nao_conformes,chamado_id) SELECT vp.id,"
+    "vp.client_id,'2026-10-16',vp.supervisor_id,'feita',now(),vp.supervisor_id,now(),v.id,"
+    "'{}',1,(SELECT max(id) FROM chamados) FROM visitas_programadas vp JOIN checklist_versoes v "
+    "ON v.modelo_id=vp.modelo_id",
 ]
 
 

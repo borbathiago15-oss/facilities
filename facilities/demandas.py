@@ -1,6 +1,7 @@
 """Painel único de demandas (D55, Fase 5): tudo que espera alguém, numa fila
 só — chamados (inclusive os preventivos) e os avisos do público pelo QR.
-Pedidos de insumo (Fase 7) e cobranças do cliente (Fase 9) entram aqui
+Desde a Fase 6, também as visitas de supervisão em aberto. Pedidos de
+insumo (Fase 7) e cobranças do cliente (Fase 9) entram aqui
 quando chegarem.
 
 A fila segue a carteira de quem olha e põe primeiro o que está atrasado.
@@ -16,7 +17,8 @@ from facilities.core.acesso import allowed_client_ids_or_none, clientes_visiveis
 
 bp = Blueprint('demandas', __name__, url_prefix='/demandas')
 
-TIPOS = {'chamado': 'Chamado', 'preventiva': 'Preventiva', 'publico': 'Aviso do público'}
+TIPOS = {'chamado': 'Chamado', 'preventiva': 'Preventiva', 'publico': 'Aviso do público',
+         'visita': 'Visita de supervisão'}
 SITUACOES = {'atrasada': 'Atrasada', 'hoje': 'Vence hoje', 'no_prazo': 'No prazo',
              'parada': 'Aguardando (prazo parado)', 'sem_prazo': 'Sem prazo'}
 ORDEM = {'atrasada': 0, 'hoje': 1, 'no_prazo': 2, 'parada': 3, 'sem_prazo': 4}
@@ -34,7 +36,7 @@ def _situacao(prazo, agora, parada=False):
     return 'no_prazo'
 
 
-def demandas(client_ids, agora=None):
+def demandas(client_ids, agora=None, com_visitas=True):
     from facilities.chamados.models import (AGUARDANDO, ORIGEM_PREVENTIVA, STATUS_EM_ABERTO,
                                             Chamado)
     from facilities.rotas.models import TIPOS_OCORRENCIA_PUBLICA, SITUACOES_OCORRENCIA
@@ -64,6 +66,16 @@ def demandas(client_ids, agora=None):
             'prazo': oc.prazo, 'estado': SITUACOES_OCORRENCIA[oc.status],
             'situacao': _situacao(oc.prazo, agora),
             'link': f'/rotas/locais/{oc.client_id}/dia'})
+    # Fase 6: as visitas de supervisão ainda não feitas.
+    from facilities.visitas import servico as visitas
+    for v in (visitas.abertas(ids) if com_visitas else []):
+        p = visitas.prazo(v)
+        itens.append({
+            'tipo': 'visita', 'titulo': v.programada.nome, 'numero': '',
+            'local': v.local.name, 'client_id': v.client_id,
+            'responsavel': v.supervisor.name if v.supervisor else '',
+            'prazo': p, 'estado': v.situacao_rotulo, 'situacao': _situacao(p, agora),
+            'link': f'/app/visitas/{v.id}'})
     longe = agora + timedelta(days=3650)
     itens.sort(key=lambda i: (ORDEM[i['situacao']], i['prazo'] or longe))
     return itens
@@ -79,7 +91,9 @@ def painel():
     cid = request.args.get('local', type=int)
     if cid and cid in {c.id for c in locais}:
         ids = [cid]
-    itens = demandas(ids)
+    from facilities.visitas.servico import PERFIS_QUE_VISITAM
+    itens = demandas(ids, com_visitas=current_user._effective_role() in PERFIS_QUE_VISITAM
+                     + ('visualizador',))
     contagem = {s: sum(1 for i in itens if i['situacao'] == s) for s in SITUACOES}
     tipo = request.args.get('tipo') or ''
     situacao = request.args.get('situacao') or ''

@@ -15,6 +15,8 @@
       <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('rotas.dia', cid=l.id) }}"><i class="bi bi-calendar-check"></i> Hoje</a>
       <a class="btn btn-sm btn-outline-primary" href="{{ url_for('rotas.local', cid=l.id) }}">Rotas e checklists</a>
       <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('preventiva.local', cid=l.id) }}"><i class="bi bi-calendar2-week"></i> Preventivas</a>
+      <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('equipes.local', cid=l.id) }}"><i class="bi bi-people"></i> Equipe</a>
+      <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('visitas.local', cid=l.id) }}"><i class="bi bi-clipboard-check"></i> Visitas</a>
     </span>
   </div>
   {% else %}
