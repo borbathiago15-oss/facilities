@@ -40,7 +40,7 @@
   <h2 class="h6 fw-bold text-danger">Não conformidades</h2>
   {% for nc in ex.nao_conformidades %}
   <div class="d-flex flex-wrap gap-2 align-items-center border-top py-2">
-    <span>{{ nc.item_texto }}: <strong>{{ nc.resposta }}</strong></span>
+    <span><span class="badge text-bg-light" title="Use este número no plano de ação do Intelligence">NC-{{ nc.id }}</span> {{ nc.item_texto }}: <strong>{{ nc.resposta }}</strong></span>
     {% if nc.chamado_id %}<a class="ms-auto" href="{{ url_for('chamados.ver', chamado_id=nc.chamado_id) }}">Ver o chamado</a>
     {% else %}
     <form method="post" action="{{ url_for('rotas.chamado_da_nc', nid=nc.id) }}" class="ms-auto m-0">

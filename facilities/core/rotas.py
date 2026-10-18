@@ -46,6 +46,11 @@ def inicio():
         modulos.append({'nome': 'Chamados', 'icone': 'bi-tools',
                         'url': url_for('chamados.index'),
                         'texto': 'Ordens de serviço: abrir, atribuir, acompanhar o prazo e fechar.'})
+    from facilities.paineis.telas import ve_painel
+    if ve_painel(current_user):
+        modulos.insert(0, {'nome': 'Painel', 'icone': 'bi-speedometer2',
+                           'url': url_for('paineis.painel'),
+                           'texto': 'A nota de cada local e o que está atrasado agora.'})
     return render_template('core/inicio.html', modulos=modulos)
 
 

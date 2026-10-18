@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+{% block title %}Painel{% endblock %}
+{% macro tabela(linhas) %}
+<div class="fc-mes-rolar">
+<table class="table table-sm mb-0 align-middle">
+  <thead><tr><th scope="col">Local</th><th scope="col" class="text-center">Nota</th>{% for k, v in indicadores.items() %}<th scope="col" class="text-center small">{{ v }}</th>{% endfor %}<th scope="col" class="text-center small">Atrasado agora</th></tr></thead>
+  <tbody>{% for x in linhas %}
+<tr>
+  <th scope="row" class="small">{{ x.local.name }}</th>
+  <td class="text-center">{% if x.nota is not none %}<span class="badge fc-nota fc-nota-{{ x.faixa }}">{{ '%.1f'|format(x.nota)|replace('.', ',') }} · {{ faixas[x.faixa] }}</span>{% else %}<span class="small text-muted">sem dado</span>{% endif %}</td>
+  {% for k in indicadores %}{% set i = x.indicadores[k] %}
+  <td class="text-center small">{% if i.pct is not none %}{{ '%.1f'|format(i.pct)|replace('.', ',') }}%<br><span class="text-muted">{{ i.bom }} de {{ i.base }}</span>{% else %}<span class="text-muted">—</span>{% endif %}</td>
+  {% endfor %}
+  <td class="text-center">{% if atrasadas.get(x.local.id) %}<a class="badge fc-dem fc-dem-atrasada text-decoration-none" href="{{ url_for('demandas.painel', local=x.local.id, situacao='atrasada') }}">{{ atrasadas[x.local.id] }}</a>{% else %}<span class="small text-muted">0</span>{% endif %}</td>
+</tr>
+  {% endfor %}</tbody>
+</table>
+</div>
+{% endmacro %}
+{% block content %}
+<h1 class="fc-titulo">Painel</h1>
+<p class="fc-sub">A nota de cada local é a média, com pesos iguais, dos indicadores que tiveram movimento no período. Abaixo de {{ faixa_critica }}: crítica; de {{ faixa_critica }} a {{ faixa_boa - 1 }}: atenção; {{ faixa_boa }} ou mais: boa.</p>
+<form class="d-flex flex-wrap gap-2 mb-3" method="get">
+  <label class="visually-hidden" for="pde">De</label><input class="form-control w-auto" type="date" id="pde" name="de" value="{{ de.isoformat() }}">
+  <label class="visually-hidden" for="pate">Até</label><input class="form-control w-auto" type="date" id="pate" name="ate" value="{{ ate.isoformat() }}">
+  <button class="btn btn-outline-primary" type="submit">Ver</button>
+</form>
+<div class="d-flex flex-wrap gap-2 mb-3">
+  <div class="fc-cartao py-2 px-3"><div class="small text-muted">Nota média</div><div class="fs-4 fw-bold">{{ ('%.1f'|format(resumo.media))|replace('.', ',') if resumo.media is not none else '—' }}</div></div>
+  {% for k, v in faixas.items() %}<div class="fc-cartao py-2 px-3"><div class="small text-muted">{{ v }}</div><div class="fs-4 fw-bold">{{ resumo.faixas[k] }}</div></div>{% endfor %}
+  {% if resumo.sem_dado %}<div class="fc-cartao py-2 px-3"><div class="small text-muted">Sem dado</div><div class="fs-4 fw-bold">{{ resumo.sem_dado }}</div></div>{% endif %}
+</div>
+{% if not linhas %}
+<div class="fc-cartao fc-vazio">Nenhum local na sua carteira.</div>
+{% elif grupos %}
+  {% for g in grupos %}
+  <section class="fc-cartao p-0 mb-3" aria-labelledby="tit-g{{ loop.index }}">
+    <h2 class="h6 fw-bold px-3 pt-3" id="tit-g{{ loop.index }}">{{ g.cliente }} <span class="small text-muted fw-normal">· nota média {{ ('%.1f'|format(g.resumo.media))|replace('.', ',') if g.resumo.media is not none else '—' }}</span></h2>
+    {{ tabela(g.linhas) }}
+  </section>
+  {% endfor %}
+{% else %}
+<section class="fc-cartao p-0">{{ tabela(linhas) }}</section>
+{% endif %}
+<p class="small text-muted mt-2">O período vai de {{ de.strftime('%d/%m/%Y') }} a {{ ate.strftime('%d/%m/%Y') }}. Os mesmos números saem pela integração com o Trino Intelligence.</p>
+{% endblock %}

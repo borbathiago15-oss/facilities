@@ -180,8 +180,11 @@ def _rotas_de_a(app_module, a, ids):
     mat.consumir(gestor, loc, {'material_id': str(material.id), 'quantidade': '1',
                                'motivo': f'Consumo {MARCA}'})
     pedido = mat.pedir(gestor, loc, {'texto': f'Pedido {MARCA}'})
+    # Fase 8: uma chave da integração que lê só A.
+    from facilities.integracao import servico as integ
+    chave, _texto = integ.criar_chave(f'Chave {MARCA}', [a], False, gestor)
     db.session.commit()
-    return {'material': material.id, 'pedido': pedido.id,'ocorrencia_publica': oc.id, 'presenca': pres.id, 'plano': plano.id,
+    return {'material': material.id, 'pedido': pedido.id, 'chave': chave.id,'ocorrencia_publica': oc.id, 'presenca': pres.id, 'plano': plano.id,
             'funcionario': func.id, 'posto': posto.id, 'escala_trabalho': esc.id,
             'falta': falta.id, 'programada': prog.id,
             'visita': Visita.query.filter_by(programada_id=prog.id).one().id,
@@ -223,6 +226,8 @@ def _valor_do_parametro(nome, ids, entidade=None, endpoint=''):
                       'eid': ids['escala_trabalho'], 'prid': ids['falta']}
         if nome in por_equipe:
             return por_equipe[nome]
+    if endpoint.startswith('integracao.') and nome == 'kid':
+        return ids['chave']
     if endpoint.startswith('materiais.'):
         por_material = {'cid': ids['local'], 'mid': ids['material'], 'pid': ids['pedido']}
         if nome in por_material:

@@ -41,6 +41,11 @@
          class="{% if ep.startswith('diario_operacional.') %}ativo{% endif %}"
          {% if ep.startswith('diario_operacional.') %}aria-current="page"{% endif %}><span class="fc-rot-longo">Passagem de Turno</span><span class="fc-rot-curto">Passagem</span></a>
       {% endif %}
+      {% if current_user._effective_role() in ('master', 'gerente', 'pleno', 'supervisor', 'visualizador') %}
+      <a href="{{ url_for('paineis.painel') }}"
+         class="{% if ep.startswith('paineis.') %}ativo{% endif %}"
+         {% if ep.startswith('paineis.') %}aria-current="page"{% endif %}>Painel</a>
+      {% endif %}
       {% if current_user.can_view('chamados') %}
       <a href="{{ url_for('chamados.index') }}"
          class="{% if ep.startswith('chamados.') %}ativo{% endif %}"
@@ -66,6 +71,9 @@
       <a href="{{ url_for('admin.usuarios') }}"
          class="{% if ep == 'admin.usuarios' %}ativo{% endif %}"
          {% if ep == 'admin.usuarios' %}aria-current="page"{% endif %}>Pessoas</a>
+      <a href="{{ url_for('integracao.chaves') }}"
+         class="{% if ep.startswith('integracao.') %}ativo{% endif %}"
+         {% if ep.startswith('integracao.') %}aria-current="page"{% endif %}>Integração</a>
       {% endif %}
     </nav>
     <div class="fc-direita">
