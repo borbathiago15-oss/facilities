@@ -605,3 +605,9 @@ body.dark .page-title, body.dark .pg-titulo, body.dark .pg-num-v, body.dark .pg-
 .fc-pres-faltou, .fc-pres-badge.fc-pres-faltou { background: var(--perigo); color: #fff; }
 .fc-pres-coberta { background: var(--info); color: #fff; }
 .fc-pres-pendente { background: var(--gray-100); color: var(--gray-700); }
+
+/* ── Nota por local (Fase 8) ─────────────────────────────────────────── */
+.fc-nota { font-size: .8rem; }
+.fc-nota-boa { background: var(--ok); color: #fff; }
+.fc-nota-atencao { background: var(--aviso); color: #fff; }
+.fc-nota-critica { background: var(--perigo); color: #fff; }

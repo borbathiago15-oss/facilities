@@ -168,6 +168,15 @@ SEMENTES = [
     "criado_em) SELECT c.id,m.id,5,'acabou','2026-10-19 12:00','aberto',u.id,now() "
     "FROM clients c, materiais m, users u WHERE c.name='GL Armazém 1' "
     "AND m.nome='Pano de chão' AND u.email='sup@ensaio'",
+    # Fase 8: uma chave da integração (com local) e um acesso registrado.
+    "INSERT INTO integracao_chaves (nome,prefixo,hash_chave,todos_os_locais,is_active,"
+    "criada_por,criada_em) SELECT 'Intelligence','abcd1234',repeat('a',64),false,true,id,now() "
+    "FROM users WHERE email='gerente@ensaio'",
+    "INSERT INTO integracao_chave_locais (chave_id,client_id) SELECT k.id,c.id "
+    "FROM integracao_chaves k, clients c WHERE c.name='GL Armazém 1'",
+    "INSERT INTO integracao_acessos (chave_id,em,rota,parametros,status,itens,ip) "
+    "SELECT id,now(),'nota','ate=2026-10-17&de=2026-10-01',200,1,'10.0.0.1' "
+    "FROM integracao_chaves",
 ]
 
 

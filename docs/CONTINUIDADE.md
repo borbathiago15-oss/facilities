@@ -160,6 +160,19 @@ Custo operacional = soma dos consumos do período (por local, cliente e estado,
 das mesmas linhas). Migração `7da1bd3b5466`: 4 tabelas e 1 coluna, só
 acrescenta. O catálogo de materiais é do grupo inteiro: qualquer gestor edita.
 
+Fase 8 (18/10/2026) — painéis e integração (`facilities/paineis/`,
+`facilities/integracao/`, `docs/INTEGRACAO.md`):
+
+| Decisão do dono | Como ficou |
+|---|---|
+| F8-1 faixas da nota | < 70 crítica; 70 a < 85 atenção; ≥ 85 boa; indicador sem dado sai da média |
+| F8-2 (D42) plano de ação | por referência: cada não conformidade tem `NC-<id>` (na API e na tela da execução) |
+| F8-3 o que a API entrega | locais, chamados, aderência, não conformidades, visitas e nota — sem custo |
+| F8-4 lado do Intelligence | fica para tarefa no repositório de lá; D34 (`cost_center`) antes do aceite |
+
+Migração `184278e35887`: 3 tabelas (`integracao_chaves`,
+`integracao_chave_locais`, `integracao_acessos`), só acrescenta.
+
 ATENÇÃO: a presença lançada pelo supervisor tem o mesmo risco da D48
 (controle de jornada): validar com RH e jurídico antes do piloto e constar no
 aviso aos colaboradores (D25).

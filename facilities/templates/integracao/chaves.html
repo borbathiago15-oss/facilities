@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% block title %}Integração{% endblock %}
+{% block content %}
+<h1 class="fc-titulo">Integração com o Trino Intelligence</h1>
+<p class="fc-sub">Chaves de servidor da API só de leitura (<code>/api/integracao/v1</code>). Cada chave lê só os locais escolhidos; todo acesso fica registrado. O custo de material não sai pela API.</p>
+{% if nova_chave %}
+<div class="alert alert-warning">
+  <p class="fw-bold mb-1">Chave "{{ nova.nome }}" criada. Copie agora: ela não aparece de novo.</p>
+  <code class="d-block text-break user-select-all">{{ nova_chave }}</code>
+  <p class="small mb-0 mt-1">Guarde no cofre de segredos do Intelligence (variável de ambiente), nunca no código.</p>
+</div>
+{% endif %}
+<section class="fc-cartao mb-3" aria-labelledby="tit-ch">
+  <h2 class="h6 fw-bold" id="tit-ch"><i class="bi bi-key"></i> Chaves</h2>
+  {% for c in chaves %}
+  <div class="d-flex flex-wrap gap-2 align-items-center border-top py-2">
+    <span class="fw-semibold">{{ c.nome }}</span>
+    <code class="small">fac_{{ c.prefixo }}_…</code>
+    <span class="small text-muted">{{ 'todos os locais' if c.todos_os_locais else (c.locais|map(attribute='name')|join(', ')) }} · criada {{ c.criada_em|hora_local('%d/%m/%Y') }}{% if c.ultimo_uso_em %} · último uso {{ c.ultimo_uso_em|hora_local }}{% endif %}</span>
+    {% if c.is_active %}
+    <form method="post" action="{{ url_for('integracao.revogar', kid=c.id) }}" class="ms-auto">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-outline-danger btn-sm" type="submit">Revogar</button>
+    </form>
+    {% else %}<span class="badge text-bg-secondary ms-auto">revogada</span>{% endif %}
+  </div>
+  {% else %}<p class="small text-muted">Nenhuma chave ainda.</p>{% endfor %}
+  <details class="mt-2"><summary class="fw-semibold">Criar chave</summary>
+    <form method="post" action="{{ url_for('integracao.criar') }}" class="mt-2">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label class="form-label small" for="kn">Nome</label>
+      <input class="form-control mb-2" id="kn" name="nome" required maxlength="120" placeholder="Ex.: Trino Intelligence — produção">
+      <label class="d-flex gap-2 mb-2"><input type="checkbox" name="todos" value="1"> Todos os locais (inclusive os cadastrados depois)</label>
+      <fieldset><legend class="form-label small mb-1">Ou só estes locais</legend>
+        <div class="d-flex flex-wrap gap-3">{% for l in locais %}<label class="d-flex gap-1"><input type="checkbox" name="client_id" value="{{ l.id }}"> {{ l.name }}</label>{% endfor %}</div>
+      </fieldset>
+      <button class="btn btn-primary fw-bold mt-2" type="submit">Criar chave</button>
+    </form>
+  </details>
+</section>
+<section class="fc-cartao p-0" aria-labelledby="tit-ac">
+  <h2 class="h6 fw-bold px-3 pt-3" id="tit-ac"><i class="bi bi-clock-history"></i> Últimos acessos</h2>
+  <div class="fc-mes-rolar"><table class="table table-sm mb-0">
+    <thead><tr><th scope="col">Quando</th><th scope="col">Chave</th><th scope="col">Rota</th><th scope="col">Parâmetros</th><th scope="col">Resposta</th><th scope="col" class="text-end">Itens</th></tr></thead>
+    <tbody>{% for a in acessos %}<tr><td class="text-nowrap small">{{ a.em|hora_local }}</td><td class="small">{{ a.chave.nome if a.chave else 'chave inválida' }}</td><td class="small">{{ a.rota }}</td><td class="small">{{ a.parametros or '' }}</td><td class="small">{{ a.status }}</td><td class="text-end small">{{ a.itens if a.itens is not none else '' }}</td></tr>
+    {% else %}<tr><td colspan="6" class="fc-vazio">Nenhum acesso ainda.</td></tr>{% endfor %}</tbody>
+  </table></div>
+</section>
+{% endblock %}
