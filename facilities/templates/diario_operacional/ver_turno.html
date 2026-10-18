@@ -65,7 +65,7 @@
          rota recusa o resto. O botão não aparece para quem não pode: botão
          que aparece e depois recusa ensina a não confiar na tela. #}
       <button type="button" class="btn btn-outline-primary"
-              onclick="vtCorrigir()"><i class="bi bi-pencil"></i> Corrigir</button>
+              data-acao="vtCorrigir"><i class="bi bi-pencil"></i> Corrigir</button>
       {% endif %}
       <a class="btn btn-light"
          href="{{ url_for('diario_operacional.index', client_id=turno.client_id) }}">Voltar</a>
@@ -284,7 +284,7 @@
 </div>
 
 {% if pode_corrigir %}
-<div class="modal fade" id="vt-modal-corrigir" tabindex="-1" aria-hidden="true">
+<div class="modal fade" id="vt-modal-corrigir" tabindex="-1" aria-hidden="true" data-turno-id="{{ turno.id }}">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header">
@@ -327,35 +327,11 @@
         <button type="button" class="btn btn-light" data-bs-dismiss="modal">
           Cancelar</button>
         <button type="button" class="btn btn-primary" id="vt-c-enviar"
-                onclick="vtEnviarCorrecao()">Registrar a correção</button>
+                data-acao="vtEnviarCorrecao">Registrar a correção</button>
       </div>
     </div>
   </div>
 </div>
-<script>
-  var VT_TURNO_ID = {{ turno.id }};
-  function vtCorrigir() {
-    new bootstrap.Modal(document.getElementById('vt-modal-corrigir')).show();
-  }
-  function vtEnviarCorrecao() {
-    var v = function (id) { return document.getElementById(id).value; };
-    if (!v('vt-c-motivo').trim()) {
-      alert('Diga em uma linha o que estava errado.'); return;
-    }
-    var botao = document.getElementById('vt-c-enviar');
-    botao.disabled = true;
-    fetch('/passagem-de-turno/api/turnos/' + VT_TURNO_ID + '/corrigir', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json',
-                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content},
-      body: JSON.stringify({data_turno: v('vt-c-data'), turno: v('vt-c-turno'),
-                            observacao: v('vt-c-obs'), motivo: v('vt-c-motivo')})
-    }).then(function (r) { return r.json().then(function (x) { return {ok: r.ok, x: x}; }); })
-      .then(function (res) {
-        if (!res.ok) { alert(res.x.error || 'Não foi possível corrigir.'); botao.disabled = false; return; }
-        location.reload();
-      }).catch(function () { alert('Falha de rede.'); botao.disabled = false; });
-  }
-</script>
+<script src="{{ url_for('static', filename='js/diario_ver_turno.js') }}"></script>
 {% endif %}
 {% endblock %}

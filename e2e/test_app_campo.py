@@ -9,7 +9,7 @@
 """
 import re
 
-from conftest import abrir_contexto, entrar
+from conftest import abrir_contexto, entrar, esperar
 
 
 def test_cada_um_cai_na_sua_porta(servidor, navegador, perfil):
@@ -50,7 +50,7 @@ def test_qr_de_fora_nao_tira_o_celular_do_sistema(servidor, navegador, perfil):
         pg = ctx.new_page()
         entrar(pg, servidor['base'], 'ana@e2e.test')
         pg.goto(servidor['base'] + '/app/ler-qr')
-        pg.wait_for_function("document.getElementById('fc-leitor-msg').textContent"
+        esperar(pg, "document.getElementById('fc-leitor-msg').textContent"
                              ".includes('não é do Trino Facilities')", timeout=20000)
         assert pg.url.endswith('/app/ler-qr')
     finally:
@@ -77,7 +77,7 @@ def test_sem_sinal_guarda_e_sobe_uma_vez(servidor, navegador, perfil):
         assert _turnos(servidor, 'ana@e2e.test') == []
         ctx.set_offline(False)
         pg.evaluate('window.TrinoFila.enviarAgora()')
-        pg.wait_for_function("!document.querySelector('.fila-selo') || "
+        esperar(pg, "!document.querySelector('.fila-selo') || "
                              "document.querySelector('.fila-selo').hidden", timeout=15000)
         # Mais uma rodada da fila não duplica.
         pg.evaluate('window.TrinoFila.enviarAgora()')
@@ -123,7 +123,7 @@ def test_celular_compartilhado_nao_mistura_os_envios(servidor, navegador, perfil
         pg.wait_for_url('**/login**')
         entrar(pg, servidor['base'], 'ana@e2e.test')
         pg.evaluate('window.TrinoFila.enviarAgora()')
-        pg.wait_for_function("!document.querySelector('.fila-selo') || "
+        esperar(pg, "!document.querySelector('.fila-selo') || "
                              "document.querySelector('.fila-selo').hidden", timeout=15000)
         assert _turnos(servidor, 'ana@e2e.test') == [('1º Turno',)]
         assert _turnos(servidor, 'mariana@e2e.test') == []

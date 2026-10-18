@@ -214,8 +214,8 @@ def test_o_painel_mostra_a_os_no_lugar_do_botao(app_module, mestre, cena):
     html = mestre.get(f'/passagem-de-turno/?client_id={cena["cid"]}').get_data(as_text=True)
     assert f'href="/chamados/{chamado_id}"' in html
     assert f'Ver {numero}' in html
-    assert f'dopAbrirChamado({sem_os}, this)' in html
-    assert f'dopAbrirChamado({com_os}, this)' not in html
+    assert f'data-acao="dopAbrirChamado" data-args="[{sem_os}]"' in html
+    assert f'data-acao="dopAbrirChamado" data-args="[{com_os}]"' not in html
 
     # Chamado cancelado não prende a ocorrência: o botão volta.
     with app_module.app.app_context():
@@ -224,7 +224,7 @@ def test_o_painel_mostra_a_os_no_lugar_do_botao(app_module, mestre, cena):
         app_module.db.session.commit()
     html = mestre.get(f'/passagem-de-turno/?client_id={cena["cid"]}').get_data(as_text=True)
     assert f'Ver {numero}' not in html
-    assert f'dopAbrirChamado({com_os}, this)' in html
+    assert f'data-acao="dopAbrirChamado" data-args="[{com_os}]"' in html
 
 
 def test_a_diretoria_ve_a_os_mas_nao_abre_chamado(app_module, mestre, cena, pessoas):
@@ -266,6 +266,11 @@ def test_ocorrencia_que_nao_existe_e_404_em_json(mestre):
 
 def test_o_botao_do_painel_nao_trava_sem_resposta_json(mestre, cena):
     html = mestre.get(f'/passagem-de-turno/?client_id={cena["cid"]}').get_data(as_text=True)
+    assert 'js/diario_dashboard.js' in html
+    import os
+    caminho = os.path.join(os.path.dirname(__file__), '..', 'facilities', 'static', 'js',
+                           'diario_dashboard.js')
+    html = open(caminho, encoding='utf-8').read()
     funcao = html[html.index('window.dopAbrirChamado'):]
     funcao = funcao[:funcao.index('if (typeof Chart')]
     # A leitura do JSON tem saída de falha, e a falha de rede também: nos

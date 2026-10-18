@@ -204,7 +204,7 @@
         <input type="hidden" id="diario-client" value="{{ clients[0].id }}">
         {% else %}
         <select id="diario-client" class="form-select form-select-sm mt-1"
-                onchange="window.location='{{ url_for('diario_operacional.turno') }}?client_id='+this.value">
+                data-ir-para="{{ url_for('diario_operacional.turno') }}?client_id=">
           {% for c in clients %}
           <option value="{{ c.id }}" {% if c.id == client_id %}selected{% endif %}>{{ c.name }}</option>
           {% endfor %}
@@ -418,9 +418,9 @@
         {% endif %}
         <div class="dt-pend-acoes">
           <button type="button" class="btn btn-sm btn-outline-success"
-                  onclick="resolverPendencia({{ p.id }})">Resolver</button>
+                  data-acao="resolverPendencia" data-args="[{{ p.id }}]">Resolver</button>
           <button type="button" class="btn btn-sm btn-outline-secondary"
-                  onclick="anotarPendencia({{ p.id }})">Continua</button>
+                  data-acao="anotarPendencia" data-args="[{{ p.id }}]">Continua</button>
         </div>
       </div>
       {% endfor %}
@@ -439,7 +439,7 @@
 
   {# ── Painel 2: o que eu ENTREGO ────────────────────────────────────── #}
   <div class="dt-painel" data-painel="passagem" {% if n_pend %}hidden{% endif %}>
-  <form id="diario-form" onsubmit="return false">
+  <form id="diario-form" data-sem-envio>
 
     {# ── O que a gestão pediu PARA ESTE TURNO ───────────────────────────
        Vem ANTES das perguntas do modelo, e a ordem é a decisão: o checklist
@@ -489,7 +489,7 @@
     <div class="card shadow-sm border-0 mb-3">
       <div class="card-body">
         <div id="occurrence-list"></div>
-        <button type="button" class="btn btn-outline-danger" onclick="addOccurrence()">
+        <button type="button" class="btn btn-outline-danger" data-acao="addOccurrence">
           <i class="bi bi-plus-lg"></i> Nova ocorrência</button>
       </div>
     </div>
@@ -499,15 +499,15 @@
     <div class="card shadow-sm border-0 mb-3">
       <div class="card-body">
         <div id="pending-list"></div>
-        <button type="button" class="btn btn-outline-primary" onclick="addPending()">
+        <button type="button" class="btn btn-outline-primary" data-acao="addPending">
           <i class="bi bi-plus-lg"></i> Nova pendência</button>
       </div>
     </div>
 
     <div class="d-flex justify-content-end gap-2 dt-acoes" id="diario-salvar">
-      <button class="btn btn-outline-secondary" type="button" onclick="salvarTurno(false)">
+      <button class="btn btn-outline-secondary" type="button" data-acao="salvarTurno" data-args="[false]">
         Salvar rascunho</button>
-      <button class="btn btn-primary px-4" type="button" onclick="salvarTurno(true)">
+      <button class="btn btn-primary px-4" type="button" data-acao="salvarTurno" data-args="[true]">
         Encerrar turno</button>
     </div>
   </form>

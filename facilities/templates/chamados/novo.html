@@ -60,19 +60,5 @@
 <script id="areas-por-contrato" type="application/json">{{ areas|tojson }}</script>
 {% endblock %}
 {% block scripts %}
-<script>
-(function () {
-  var areas = JSON.parse(document.getElementById('areas-por-contrato').textContent || '{}');
-  var cont = document.getElementById('client_id'), sel = document.getElementById('area_id');
-  function preencher() {
-    var lista = areas[cont.value] || [];
-    sel.innerHTML = '<option value="">—</option>' + lista.map(function (a) {
-      return '<option value="' + a.id + '">' + esc(a.nome) + '</option>';
-    }).join('');
-    sel.disabled = !lista.length;
-  }
-  cont.addEventListener('change', preencher);
-  preencher();
-})();
-</script>
+<script src="{{ url_for('static', filename='js/chamados_novo.js') }}"></script>
 {% endblock %}

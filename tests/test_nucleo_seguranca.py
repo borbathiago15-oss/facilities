@@ -211,16 +211,22 @@ def test_nome_da_pessoa_nao_vira_javascript_no_confirm(app_module, auth_client):
     p.feed(auth_client.get('/admin/usuarios').get_data(as_text=True))
     alvo = [f for f in p.forms if f.get('data-nome') == nome]
     assert alvo, 'o nome deve ir (escapado) no data-nome'
-    # O JS do onsubmit, como o navegador o roda (entidades já desfeitas),
-    # não contém o nome.
-    assert 'alert' not in alvo[0]['onsubmit']
-    assert 'this.dataset.nome' in alvo[0]['onsubmit']
+    # Desde a Fase 9A não há JS no HTML: a pergunta é um texto fixo com
+    # {nome}, que static/js/acoes.js troca pelo data-nome (como texto).
+    assert 'onsubmit' not in alvo[0]
+    assert 'alert' not in alvo[0]['data-confirmar']
+    assert '{nome}' in alvo[0]['data-confirmar']
 
 
 # ── base.html ─────────────────────────────────────────────────────────────
 
 def _scripts_do_base(auth_client):
-    return auth_client.get('/').get_data(as_text=True)
+    # Fase 9A: o script do base.html foi para static/js/base.js (CSP).
+    html = auth_client.get('/').get_data(as_text=True)
+    assert "js/base.js" in html and 'id="fc-aviso-js"' in html
+    with open(os.path.join(RAIZ, 'facilities', 'static', 'js', 'base.js'),
+              encoding='utf-8') as f:
+        return html + f.read()
 
 
 def test_base_liga_os_tooltips(auth_client):
@@ -236,9 +242,9 @@ def test_base_mostra_o_recado_fc_aviso_e_apaga(auth_client):
 
 
 def _wrapper_do_fetch(html):
-    m = re.search(r'/\* CSRF: injeta X-CSRFToken.*?\n</script>', html, re.S)
-    assert m, 'o wrapper do fetch sumiu do base.html'
-    return m.group(0)[:-len('</script>')]
+    m = re.search(r'/\* CSRF: injeta X-CSRFToken.*?\n\}\)\(\);\n', html, re.S)
+    assert m, 'o wrapper do fetch sumiu do base.js'
+    return m.group(0)
 
 
 @pytest.mark.skipif(not shutil.which('node'), reason='sem node para rodar o JS')

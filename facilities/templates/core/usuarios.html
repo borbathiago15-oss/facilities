@@ -87,7 +87,7 @@
        como x'+alert(1)+' virava código). #}
     <form method="post" action="{{ url_for('admin.nova_senha', uid=u.id) }}" class="mt-2 mb-2"
           data-nome="{{ u.name }}"
-          onsubmit="return confirm('Gerar uma senha temporária nova para ' + this.dataset.nome + '? A atual deixa de valer.')">
+          data-confirmar="Gerar uma senha temporária nova para {nome}? A atual deixa de valer.">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button class="btn btn-outline-secondary btn-sm" type="submit"><i class="bi bi-key"></i> Gerar senha temporária</button>
     </form>

@@ -361,12 +361,12 @@
       (t.descricao ? '<div class="small text-muted">' + esc(t.descricao) + '</div>' : '') +
       '<div class="mt-2">' + campo + '</div>' +
       '<div class="d-flex gap-2 mt-2">' +
-      '<button type="button" class="btn btn-sm btn-outline-success dt-tg-fiz" ' +
-      'style="min-height:38px">Fiz</button>' +
+      '<button type="button" class="btn btn-sm btn-outline-success dt-tg-fiz dt-tg-botao">' +
+      'Fiz</button>' +
       // A segunda saída é o ponto: sem ela, quem não conseguiu fazer só teria
       // a opção de mentir ou deixar em branco.
-      '<button type="button" class="btn btn-sm btn-outline-warning dt-tg-pend" ' +
-      'style="min-height:38px">Não deu — vira pendência</button>' +
+      '<button type="button" class="btn btn-sm btn-outline-warning dt-tg-pend dt-tg-botao">' +
+      'Não deu — vira pendência</button>' +
       '</div></div></div>';
   }
 
@@ -490,7 +490,7 @@
     return '<div class="col-md-1 dt-linha-remover"><button type="button" ' +
       'class="btn btn-outline-danger w-100" title="Remover esta linha" ' +
       'aria-label="Remover esta linha" ' +
-      'onclick="this.closest(\'.' + classeDaLinha + '\').remove()">' +
+      'data-remover=".' + classeDaLinha + '">' +
       '<span class="dt-x" aria-hidden="true">×</span>' +
       '<span class="dt-remover-txt">Remover</span></button></div>';
   }
@@ -644,7 +644,7 @@
           'aparelho. Enquanto isso, o aviso no alto da tela mostra o que está ' +
           'guardado.' +
           '<div class="mt-2"><button type="button" class="btn btn-sm btn-outline-secondary" ' +
-          'onclick="location.reload()">Nova passagem</button></div></div>';
+          'data-recarregar>Nova passagem</button></div></div>';
       }
     });
   }
@@ -667,7 +667,7 @@
       (d.turno_id ? ' <a href="/passagem-de-turno/turno/' + Number(d.turno_id) +
                     '">Ver a passagem</a>' : '') +
       '<div class="mt-2"><button type="button" class="btn btn-sm btn-outline-secondary" ' +
-      'onclick="location.reload()">Nova passagem</button></div>';
+      'data-recarregar>Nova passagem</button></div>';
     guardadoAqui = null;
   });
 
@@ -974,4 +974,8 @@
   window.resolverPendencia = resolverPendencia;
   window.anotarPendencia = anotarPendencia;
   window.mostrarPainel = mostrarPainel;
+  window.FC_ACOES = Object.assign(window.FC_ACOES || {}, {
+    addPending: addPending, addOccurrence: addOccurrence, salvarTurno: salvarTurno,
+    resolverPendencia: resolverPendencia, anotarPendencia: anotarPendencia
+  });
 }());

@@ -173,6 +173,17 @@ Fase 8 (18/10/2026) — painéis e integração (`facilities/paineis/`,
 Migração `184278e35887`: 3 tabelas (`integracao_chaves`,
 `integracao_chave_locais`, `integracao_acessos`), só acrescenta.
 
+Fase 9A (18/10/2026) — CSP: `Content-Security-Policy` com `script-src 'self'`
+(sem `'unsafe-inline'`, sem `eval`). Nenhum `<script>` embutido nem `onclick=`
+nas telas: os scripts foram para `static/js/` (`base.js`, `diario_dashboard.js`,
+`diario_ver_turno.js`, `chamados_novo.js`) e as ações viraram atributos
+`data-*` tratados por `static/js/acoes.js` (só função registrada em
+`window.FC_ACOES` é chamada). `tests/test_csp.py` barra script embutido novo; o
+e2e reprova qualquer violação de CSP no console. O estilo ainda aceita
+`'unsafe-inline'` (as telas da Passagem têm `style=` e `<style>`): risco menor,
+retirada para depois. No e2e, use `esperar()` do conftest em vez de
+`wait_for_function` (que a CSP bloqueia).
+
 ATENÇÃO: a presença lançada pelo supervisor tem o mesmo risco da D48
 (controle de jornada): validar com RH e jurídico antes do piloto e constar no
 aviso aos colaboradores (D25).
