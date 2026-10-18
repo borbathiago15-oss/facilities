@@ -210,7 +210,11 @@ def _rotas_de_a(app_module, a, ids):
     relat.salvar_recado(a, mes_rel, f'Recado {MARCA}', gestor)
     relat.liberar(a, mes_rel, gestor)
     db.session.commit()
-    return {'mes_relatorio': mes_rel.strftime('%Y-%m'), 'cobranca': cob.id, 'cliente_a': cli_a, 'foto_visita': foto_visita, 'material': material.id, 'pedido': pedido.id, 'chave': chave.id,'ocorrencia_publica': oc.id, 'presenca': pres.id, 'plano': plano.id,
+    # POP/FIT: um documento do checklist de A, que o cliente de A pode ver.
+    doc = s.anexar_documento(m, Arquivo(b'%PDF-1.4 ' + MARCA.encode(), 'pop.pdf'), gestor)
+    doc.visivel_cliente = True
+    db.session.commit()
+    return {'documento': doc.id, 'mes_relatorio': mes_rel.strftime('%Y-%m'), 'cobranca': cob.id, 'cliente_a': cli_a, 'foto_visita': foto_visita, 'material': material.id, 'pedido': pedido.id, 'chave': chave.id,'ocorrencia_publica': oc.id, 'presenca': pres.id, 'plano': plano.id,
             'funcionario': func.id, 'posto': posto.id, 'escala_trabalho': esc.id,
             'falta': falta.id, 'programada': prog.id,
             'visita': Visita.query.filter_by(programada_id=prog.id).one().id,
@@ -240,6 +244,9 @@ def _digital(app_module, a):
                       ('cobranca_eventos', 'cobranca_id')):
             if t in insp.get_table_names():
                 partes.append((t, db.session.execute(text(f'SELECT COUNT(*) FROM {t}')).scalar()))
+        # POP/FIT: não tem client_id (é filho do checklist); entra linha a linha.
+        partes.append(('checklist_documentos', sorted(tuple(map(str, r)) for r in db.session.execute(
+            text('SELECT * FROM checklist_documentos')).fetchall())))
     return hashlib.sha256(repr(partes).encode()).hexdigest()
 
 
@@ -268,7 +275,8 @@ def _valor_do_parametro(nome, ids, entidade=None, endpoint=''):
         por_rota = {'eid': ids['escala'] if 'escala' in endpoint else ids['execucao'],
                     'rid': ids['rota'], 'iid': ids['item'], 'mid': ids['modelo'],
                     'nid': ids['nc'], 'fid': ids['foto'], 'tid': ids['tarefa_rota'],
-                    'cid': ids['local'], 'vid': ids['versao']}
+                    'cid': ids['local'], 'vid': ids['versao'], 'did': ids['documento'],
+                    'acao': 'retirar'}
         if nome in por_rota:
             return por_rota[nome]
     if endpoint.startswith('relatorios.'):
@@ -280,7 +288,7 @@ def _valor_do_parametro(nome, ids, entidade=None, endpoint=''):
         por_portal = {'cid': ids['local'], 'chamado_id': ids['chamado'], 'fid': ids['foto'],
                       'cobid': ids['cobranca'], 'acao': 'confirmar',
                       'vfid': ids['foto_visita'], 'mes': ids['mes_relatorio'],
-                      'formato': 'pdf'}
+                      'formato': 'pdf', 'did': ids['documento']}
         if nome in por_portal:
             return por_portal[nome]
     mapa = {

@@ -280,6 +280,23 @@ do cliente primeiro; fotos em amostra automática que a gestão pode trocar:
 * Próximos: relatório da Gestão (operacional, diário/semanal) e da Diretoria
   (consolidado, tendência de 6 meses, ranking de locais críticos).
 
+POP/FIT do checklist (18/10/2026), decisões do dono — a gestão escreve o
+resumo; o documento fica no checklist; o cliente só vê o que a gestão marcar:
+
+* O resumo é o procedimento do checklist (`checklist_modelos.descricao`,
+  agora rotulado "Resumo do procedimento (POP/FIT)"); no celular, o bloco
+  "Como fazer (resumo do POP)" mostra o texto e "Ver o POP completo".
+* O documento (PDF, Excel, Word ou imagem; extensão E assinatura conferidas,
+  25 MB, até 10 por checklist) vai em `checklist_documentos`, chave
+  `checklists/<modelo>/docs/<hex>.<ext>`. Retirar só tira de uso
+  (`is_active`): o registro e o arquivo ficam.
+* Download sempre como anexo: `/rotas/documentos/<id>` (do local, pela
+  carteira — o ASG abre pelo aplicativo; da biblioteca, para quem está
+  logado) e `/cliente/documentos/<id>` (só os marcados "Mostrar ao cliente";
+  a página do local no portal lista em "Procedimentos (POP/FIT)").
+* Copiar da biblioteca leva o documento junto (mesmo arquivo, só da equipe).
+* Migração `c8b3aed4b482`: tabela `checklist_documentos`.
+
 ATENÇÃO: a presença lançada pelo supervisor tem o mesmo risco da D48
 (controle de jornada): validar com RH e jurídico antes do piloto e constar no
 aviso aos colaboradores (D25).

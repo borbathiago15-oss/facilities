@@ -382,10 +382,16 @@
     var p = dados.pontos[codigo] || {nome: tarefa ? tarefa.ponto_nome : ''};
     secExec.appendChild(el('h1', {classe: 'fc-titulo', texto: versao.modelo}));
     secExec.appendChild(el('p', {classe: 'fc-sub', texto: p.nome + (tarefa ? ' · ' + tarefa.hora : prev ? ' · preventiva ' + prev.numero : ' · atividade extra')}));
-    if (versao.procedimento) {
-      secExec.appendChild(el('details', {classe: 'fc-cartao mb-2'}, [
-        el('summary', {classe: 'fw-semibold', texto: 'Como fazer (procedimento)'}),
-        el('div', {classe: 'mt-2 fc-texto-livre', texto: versao.procedimento})]));
+    var docs = versao.documentos || [];
+    if (versao.procedimento || docs.length) {
+      // O resumo do POP/FIT, escrito pela gestão; o documento completo abre à parte.
+      secExec.appendChild(el('details', {classe: 'fc-cartao mb-2 fc-procedimento'}, [
+        el('summary', {classe: 'fw-semibold', texto: 'Como fazer (resumo do POP)'}),
+        versao.procedimento ? el('div', {classe: 'mt-2 fc-texto-livre', texto: versao.procedimento}) : null,
+        docs.length ? el('div', {classe: 'mt-2 d-flex flex-wrap gap-2'}, docs.map(function (d) {
+          return el('a', {classe: 'btn btn-sm btn-outline-primary', href: d.url, target: '_blank',
+                          rel: 'noopener', texto: 'Ver o POP completo: ' + d.nome});
+        })) : null]));
     }
     var form = el('form', {novalidate: true});
     if (versao.foto_antes) form.appendChild(el('div', {classe: 'fc-cartao mb-2'}, [campoFoto('antes', 'Foto de ANTES *')]));

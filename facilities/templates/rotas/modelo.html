@@ -4,12 +4,48 @@
 {% block content %}
 <h1 class="fc-titulo">{{ modelo.nome }}</h1>
 <p class="fc-sub">{% if modelo.versao_atual %}Versão publicada: {{ modelo.versao_atual.numero }}, em {{ modelo.versao_atual.publicada_em|hora_local }}.{% else %}Ainda não publicado.{% endif %} {% if modelo.client_id %}Checklist do local {{ modelo.local.name }}.{% else %}Modelo da biblioteca da Trino.{% endif %}</p>
+
+<section class="fc-cartao mb-3" aria-labelledby="tit-docs">
+  <h2 class="h6 fw-bold" id="tit-docs">POP / FIT completo</h2>
+  {% if documentos %}
+  <ul class="list-unstyled mb-2">
+    {% for d in documentos %}
+    <li class="d-flex flex-wrap align-items-center gap-2 border-bottom py-2">
+      <i class="bi bi-file-earmark-text" aria-hidden="true"></i>
+      <a class="fw-semibold" href="{{ url_for('rotas.documento', did=d.id) }}">{{ d.nome }}</a>
+      <span class="small text-muted">{{ d.enviado_em|hora_local('%d/%m/%Y') }}</span>
+      {% if modelo.client_id %}<span class="badge {{ 'text-bg-info' if d.visivel_cliente else 'text-bg-light' }}">{{ 'O cliente vê' if d.visivel_cliente else 'Só a equipe' }}</span>{% endif %}
+      {% if pode_montar %}
+      <span class="ms-auto d-flex gap-2">
+        {% if modelo.client_id %}
+        <form method="post" action="{{ url_for('rotas.acao_documento', did=d.id, acao='interno' if d.visivel_cliente else 'cliente') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm btn-outline-secondary" type="submit">{{ 'Tirar do portal do cliente' if d.visivel_cliente else 'Mostrar ao cliente' }}</button></form>
+        {% endif %}
+        <form method="post" action="{{ url_for('rotas.acao_documento', did=d.id, acao='retirar') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm btn-outline-danger" type="submit">Retirar</button></form>
+      </span>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="small text-muted">Nenhum documento guardado ainda.</p>
+  {% endif %}
+  {% if pode_montar and documentos|length < limite_docs %}
+  <form method="post" action="{{ url_for('rotas.anexar_documento', mid=modelo.id) }}" enctype="multipart/form-data" class="d-flex flex-wrap gap-2 align-items-end">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div><label class="form-label small" for="docarq">Arquivo do POP ou da FIT (PDF, Excel, Word ou imagem)</label>
+      <input class="form-control" type="file" id="docarq" name="arquivo" required accept=".pdf,.xlsx,.xls,.docx,.doc,.jpg,.jpeg,.png,.webp"></div>
+    <button class="btn btn-outline-primary fw-bold" type="submit"><i class="bi bi-paperclip" aria-hidden="true"></i> Guardar documento</button>
+  </form>
+  <p class="small text-muted mt-2 mb-0">{% if modelo.client_id %}O documento é só da equipe. O cliente só vê se você clicar em "Mostrar ao cliente".{% else %}Quem copiar este checklist para um local leva o documento junto.{% endif %}</p>
+  {% endif %}
+</section>
 {% if pode_montar %}
 <form method="post" action="{{ url_for('rotas.publicar', mid=modelo.id) }}" enctype="multipart/form-data">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <div class="fc-cartao mb-3">
-    <label class="form-label small fw-semibold" for="mdesc">Procedimento (aparece para quem lê o QR)</label>
-    <textarea class="form-control mb-2" id="mdesc" name="descricao" rows="3">{{ modelo.descricao or '' }}</textarea>
+    <label class="form-label small fw-semibold" for="mdesc">Resumo do procedimento (POP/FIT)</label>
+    <p class="small text-muted mb-1" id="mdesc-ajuda">Escreva em poucas linhas, com palavras simples, o que o POP ou a FIT pede. É o que aparece no celular de quem faz o checklist. O documento completo você guarda logo abaixo.</p>
+    <textarea class="form-control mb-2" id="mdesc" name="descricao" rows="4" aria-describedby="mdesc-ajuda" placeholder="Ex.: Use luva e placa de piso molhado. Limpe de dentro para fora: pia, vaso, piso. Produto azul para vidro, verde para piso.">{{ modelo.descricao or '' }}</textarea>
     <div class="form-check"><input class="form-check-input" type="checkbox" id="fantes" name="exige_foto_antes" value="1" {% if modelo.exige_foto_antes %}checked{% endif %}><label class="form-check-label" for="fantes">Exigir foto de ANTES</label></div>
     <div class="form-check"><input class="form-check-input" type="checkbox" id="fdepois" name="exige_foto_depois" value="1" {% if modelo.exige_foto_depois %}checked{% endif %}><label class="form-check-label" for="fdepois">Exigir foto de DEPOIS</label></div>
   </div>
