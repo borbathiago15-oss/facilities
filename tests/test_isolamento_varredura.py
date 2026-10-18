@@ -171,7 +171,18 @@ def _rotas_de_a(app_module, a, ids):
         'proxima_em': tempo.hoje().isoformat()}, gestor)
     vis.gerar_visitas(tempo.hoje())
     db.session.commit()
-    from facilities.visitas.models import Visita
+    from facilities.visitas.models import Visita, VisitaFoto
+    # Fase 10: uma visita de A JÁ FEITA, com foto (a outra fica aberta).
+    prog_feita = vis.salvar_programada(loc, None, {
+        'nome': f'Visita feita {MARCA}', 'modelo_id': str(m.id), 'intervalo_dias': '7',
+        'proxima_em': tempo.hoje().isoformat()}, gestor)
+    vis.gerar_visitas(tempo.hoje())
+    feita = Visita.query.filter_by(programada_id=prog_feita.id).one()
+    vis.registrar(gestor, feita, {s.normalizar_itens([{'texto': f'Pergunta {MARCA}'}])[0]
+                                  ['codigo']: 'sim'}, f'Obs {MARCA}',
+                  fotos={'livre': [Arquivo()]})
+    db.session.commit()
+    foto_visita = VisitaFoto.query.filter_by(visita_id=feita.id).one().id
     # Fase 7: estoque, consumo e pedido de insumo em A (o catálogo é do grupo).
     from facilities.materiais import servico as mat
     material = mat.salvar_material(None, {'nome': 'Detergente da varredura', 'unidade': 'L',
@@ -193,7 +204,7 @@ def _rotas_de_a(app_module, a, ids):
         'prazo': (tempo.hoje() + timedelta(days=3)).isoformat()})
     portal.responder(gestor, cob, {'texto': f'Resposta {MARCA}'})
     db.session.commit()
-    return {'cobranca': cob.id, 'cliente_a': cli_a, 'material': material.id, 'pedido': pedido.id, 'chave': chave.id,'ocorrencia_publica': oc.id, 'presenca': pres.id, 'plano': plano.id,
+    return {'cobranca': cob.id, 'cliente_a': cli_a, 'foto_visita': foto_visita, 'material': material.id, 'pedido': pedido.id, 'chave': chave.id,'ocorrencia_publica': oc.id, 'presenca': pres.id, 'plano': plano.id,
             'funcionario': func.id, 'posto': posto.id, 'escala_trabalho': esc.id,
             'falta': falta.id, 'programada': prog.id,
             'visita': Visita.query.filter_by(programada_id=prog.id).one().id,
@@ -243,7 +254,8 @@ def _valor_do_parametro(nome, ids, entidade=None, endpoint=''):
         if nome in por_material:
             return por_material[nome]
     if endpoint.startswith('visitas.'):
-        por_visita = {'cid': ids['local'], 'pid': ids['programada'], 'vid': ids['visita']}
+        por_visita = {'cid': ids['local'], 'pid': ids['programada'], 'vid': ids['visita'],
+                      'vfid': ids['foto_visita']}
         if nome in por_visita:
             return por_visita[nome]
     if endpoint.startswith('rotas.'):
@@ -255,7 +267,8 @@ def _valor_do_parametro(nome, ids, entidade=None, endpoint=''):
             return por_rota[nome]
     if endpoint.startswith(('portal.', 'cobrancas.')):
         por_portal = {'cid': ids['local'], 'chamado_id': ids['chamado'], 'fid': ids['foto'],
-                      'cobid': ids['cobranca'], 'acao': 'confirmar'}
+                      'cobid': ids['cobranca'], 'acao': 'confirmar',
+                      'vfid': ids['foto_visita']}
         if nome in por_portal:
             return por_portal[nome]
     mapa = {

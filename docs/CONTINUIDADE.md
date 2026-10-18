@@ -205,6 +205,19 @@ herdado do Intelligence. Migração `801f10ee6552`: 2 tabelas e 1 coluna, só
 acrescenta. A varredura de isolamento roda também com um cliente de outro
 contratante.
 
+Fase 10 (18/10/2026) — fotos na visita de supervisão (`visita_fotos`):
+
+| Decisão do dono | Como ficou |
+|---|---|
+| Que fotos | as que o checklist pede (antes, depois, por item — obrigatórias) e até 5 livres; caiu a trava "checklist de visita não pode pedir foto" |
+| Chamado | com não conformidade, todas as fotos da visita entram no chamado como foto de "antes" (o mesmo arquivo, sem cópia) |
+| Portal | o cliente vê as visitas feitas nos últimos 30 dias, com fotos; quem fez segue o R5 (função, ou nome com o interruptor) |
+
+A conferência da imagem é a mesma do checklist da rota (`rotas.servico.ler_imagem`).
+A foto é reduzida no aparelho (`data-foto-leve` em `foto-leve.js`, que também
+segura o envio até terminar). A tela da visita continua pedindo sinal.
+Migração `418d47bbc506`: 1 tabela, só acrescenta.
+
 ATENÇÃO: a presença lançada pelo supervisor tem o mesmo risco da D48
 (controle de jornada): validar com RH e jurídico antes do piloto e constar no
 aviso aos colaboradores (D25).

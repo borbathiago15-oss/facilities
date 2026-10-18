@@ -10,6 +10,15 @@
   {% if v.chamado %}<p class="mb-1"><b>Não conforme:</b> {{ v.n_nao_conformes }} item(ns) · chamado <a href="{{ url_for('chamados.ver', chamado_id=v.chamado.id) }}">{{ v.chamado.numero }}</a> ({{ v.chamado.status_rotulo }})</p>{% else %}<p class="mb-1 text-success">Tudo conforme.</p>{% endif %}
   {% if v.observacao %}<p class="mb-0"><b>Observação:</b> {{ v.observacao }}</p>{% endif %}
 </div>
+{% if v.fotos %}
+<div class="fc-cartao mb-3">
+  <h2 class="h6 fw-bold">Fotos</h2>
+  <div class="d-flex flex-wrap gap-2">
+    {% for f in v.fotos %}<figure class="m-0"><a href="{{ url_for('visitas.foto', vfid=f.id) }}" target="_blank" rel="noopener"><img class="fc-miniatura" src="{{ url_for('visitas.foto', vfid=f.id) }}" alt="Foto {{ f.momento_rotulo|lower }}" loading="lazy"></a>
+      <figcaption class="small text-muted">{{ textos.get(f.item_codigo, f.momento_rotulo) if f.momento == 'item' else f.momento_rotulo }}</figcaption></figure>{% endfor %}
+  </div>
+</div>
+{% endif %}
 <div class="fc-cartao">
   <h2 class="h6 fw-bold">Respostas</h2>
   {% for it in itens %}
@@ -19,8 +28,14 @@
 {% elif not pode_fazer %}
 <div class="alert alert-info">Esta visita é de {{ v.supervisor.name if v.supervisor else 'um supervisor do local' }}.</div>
 {% else %}
-<form method="post" action="{{ url_for('visitas.fazer', vid=v.id) }}">
+{% macro campo_foto(nome, rotulo, obrigatoria, varias=false) %}
+  <label class="form-label small fw-semibold" for="{{ nome }}"><i class="bi bi-camera" aria-hidden="true"></i> {{ rotulo }}{% if obrigatoria %} *{% endif %}</label>
+  <input class="form-control" type="file" id="{{ nome }}" name="{{ nome }}" accept="image/*" {% if varias %}multiple{% else %}capture="environment"{% endif %} data-foto-leve {% if obrigatoria %}required{% endif %}>
+  <div class="form-text" data-resumo-de="{{ nome }}"></div>
+{% endmacro %}
+<form method="post" action="{{ url_for('visitas.fazer', vid=v.id) }}" enctype="multipart/form-data">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  {% if versao and versao.exige_foto_antes %}<div class="fc-cartao mb-2">{{ campo_foto('f_antes', 'Foto de antes', true) }}</div>{% endif %}
   {% for it in itens %}
   {% set nome = 'r_' ~ it.codigo %}
   <div class="fc-cartao mb-2">
@@ -48,8 +63,13 @@
     <input class="form-control form-control-lg" id="{{ nome }}" name="{{ nome }}" maxlength="300">
     {% endif %}
     {% endif %}
+    {% if it.exige_foto %}<div class="mt-2">{{ campo_foto('f_item:' ~ it.codigo, 'Foto deste item', not it.mostrar_se) }}</div>{% endif %}
   </div>
   {% endfor %}
+  {% if versao and versao.exige_foto_depois %}<div class="fc-cartao mb-2">{{ campo_foto('f_depois', 'Foto de depois', true) }}</div>{% endif %}
+  <div class="fc-cartao mb-2">
+    {{ campo_foto('f_livre', 'Outras fotos da visita (opcional, até 5)', false, true) }}
+  </div>
   <div class="fc-cartao mb-2">
     <label class="form-label small fw-semibold" for="obs">Observação (opcional)</label>
     <textarea class="form-control" id="obs" name="observacao" rows="3" maxlength="2000"></textarea>

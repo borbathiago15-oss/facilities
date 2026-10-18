@@ -614,8 +614,11 @@ def conferir_respostas(itens, respostas, fotos_por_item):
     return limpas, ncs
 
 
-def _guardar_foto(execucao, arquivo, momento, item_codigo=None):
-    from facilities.core.anexos import ANEXO_ASSINATURA, ANEXO_MAX, ANEXO_TIPOS, storage
+def ler_imagem(arquivo):
+    """Lê e confere a foto (extensão E assinatura, tamanho) → (dados, ext, mime).
+
+    Também usada pela visita de supervisão (Fase 10)."""
+    from facilities.core.anexos import ANEXO_ASSINATURA, ANEXO_MAX, ANEXO_TIPOS
     nome = (getattr(arquivo, 'filename', '') or 'foto.jpg').lower()
     ext = nome.rsplit('.', 1)[-1] if '.' in nome else 'jpg'
     ext = 'jpg' if ext == 'jpeg' else ext
@@ -623,10 +626,16 @@ def _guardar_foto(execucao, arquivo, momento, item_codigo=None):
     if ext not in ('jpg', 'png', 'webp') or not dados or len(dados) > ANEXO_MAX or \
             not any(dados.startswith(a) for a in ANEXO_ASSINATURA[ext]):
         raise RegraDaRota('Uma das fotos não é imagem (ou é grande demais). Tire de novo.')
+    return dados, ext, ANEXO_TIPOS[ext]
+
+
+def _guardar_foto(execucao, arquivo, momento, item_codigo=None):
+    from facilities.core.anexos import storage
+    dados, ext, mime = ler_imagem(arquivo)
     chave = f'execucoes/{execucao.id}/{uuid.uuid4().hex}.{ext}'
-    storage().save(chave, dados, ANEXO_TIPOS[ext])
+    storage().save(chave, dados, mime)
     db.session.add(ExecucaoFoto(execucao_id=execucao.id, momento=momento,
-                                item_codigo=item_codigo, mime=ANEXO_TIPOS[ext],
+                                item_codigo=item_codigo, mime=mime,
                                 tamanho=len(dados), storage_key=chave))
 
 

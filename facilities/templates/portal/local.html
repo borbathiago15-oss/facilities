@@ -58,4 +58,26 @@
     {% endfor %}
   </div>
 </section>
+
+<section class="mt-4" aria-labelledby="tit-vis">
+  <h2 class="h5 fw-bold" id="tit-vis">Visitas de supervisão dos últimos 30 dias</h2>
+  <div class="fc-cartao p-0">
+    {% for v in visitas %}
+    <div class="border-bottom px-3 py-2">
+      <div class="d-flex flex-wrap gap-2 align-items-center">
+        <span class="fw-semibold">{{ v.programada.nome }}</span>
+        <span class="small text-muted">{{ v.feita_em|hora_local }} · {{ quem_fez(v, local) }}</span>
+        {% if v.n_nao_conformes %}<span class="badge fc-dem fc-dem-atrasada">{{ v.n_nao_conformes }} item(ns) não conforme(s)</span>{% else %}<span class="badge text-bg-light">Tudo conforme</span>{% endif %}
+      </div>
+      {% if v.fotos %}
+      <div class="d-flex flex-wrap gap-2 mt-2">
+        {% for f in v.fotos %}<a href="{{ url_for('portal.foto_visita', vfid=f.id) }}" target="_blank" rel="noopener"><img class="fc-miniatura" src="{{ url_for('portal.foto_visita', vfid=f.id) }}" alt="Foto da visita de supervisão" loading="lazy"></a>{% endfor %}
+      </div>
+      {% endif %}
+    </div>
+    {% else %}
+    <div class="fc-vazio">Nenhuma visita de supervisão feita nos últimos 30 dias.</div>
+    {% endfor %}
+  </div>
+</section>
 {% endblock %}

@@ -188,6 +188,10 @@ SEMENTES = [
     "INSERT INTO cobranca_eventos (cobranca_id,tipo,texto,prazo,autor_id,created_at) "
     "SELECT b.id,'resposta','Feito às 14h',b.prazo,u.id,now() FROM cobrancas b, users u "
     "WHERE u.email='gerente@ensaio'",
+    # Fase 10: uma foto livre numa visita de supervisão.
+    "INSERT INTO visita_fotos (visita_id,momento,item_codigo,mime,tamanho,storage_key,"
+    "created_at) SELECT id,'livre',NULL,'image/jpeg',1234,'visitas/1/a.jpg',now() "
+    "FROM visitas",
 ]
 
 

@@ -128,6 +128,27 @@
     return partes.join(' e ') + ' · ' + tamanho;
   }
 
+  // Fase 10: <input type=file data-foto-leve> reduz sozinho ao escolher a foto.
+  // O envio do formulário espera a redução terminar (senão sobe o original).
+  var pendentes = 0;
+  document.addEventListener('change', function (ev) {
+    var alvo = ev.target;
+    if (!alvo || !alvo.matches || !alvo.matches('input[type=file][data-foto-leve]')) { return; }
+    pendentes += 1;
+    prepararEntrada(alvo).then(function (txt) {
+      var aviso = alvo.id && document.querySelector('[data-resumo-de="' + alvo.id + '"]');
+      if (aviso) { aviso.textContent = txt; }
+    }).finally(function () { pendentes -= 1; });
+  });
+  document.addEventListener('submit', function (ev) {
+    var form = ev.target;
+    if (!pendentes || !form.querySelector || !form.querySelector('[data-foto-leve]')) { return; }
+    ev.preventDefault();
+    var espera = setInterval(function () {
+      if (!pendentes) { clearInterval(espera); form.requestSubmit ? form.requestSubmit() : form.submit(); }
+    }, 100);
+  }, true);
+
   window.TrinoFoto = {
     reduzir: reduzir,
     reduzirTodos: reduzirTodos,

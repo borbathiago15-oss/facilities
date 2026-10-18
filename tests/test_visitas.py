@@ -64,8 +64,8 @@ def _avisos(uid):
 def test_programacao_valida(app_module, cena):
     from facilities.visitas.servico import RegraDaVisita
     with app_module.app.app_context():
-        with pytest.raises(RegraDaVisita, match='foto'):
-            _programar(cena, modelo_id=str(cena['modelo_foto']))
+        # Fase 10: checklist que pede foto passou a valer para a visita.
+        assert _programar(cena, modelo_id=str(cena['modelo_foto'])).id
         with pytest.raises(RegraDaVisita, match='não atende'):
             _programar(cena, supervisor_id=str(cena['fora']))
         with pytest.raises(RegraDaVisita, match='365'):

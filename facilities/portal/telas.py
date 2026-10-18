@@ -78,6 +78,7 @@ def local(cid):
                            indicadores=INDICADORES, chamados=chamados,
                            fotos={ch.id: servico.fotos_do_chamado(ch) for ch in chamados},
                            execucoes=servico.execucoes_do_local(loc.id),
+                           visitas=servico.visitas_do_local(loc.id),
                            quem_fez=servico.quem_fez, agora=datetime.utcnow())
 
 
@@ -126,6 +127,18 @@ def foto_checklist(fid):
     if f is None:
         abort(404)
     _local(f.execucao.client_id)
+    return _imagem(f.storage_key, f.mime or 'image/jpeg')
+
+
+@bp.get('/fotos/visita/<int:vfid>')
+@login_required
+def foto_visita(vfid):
+    from facilities.visitas.models import FEITA, VisitaFoto
+    _so_cliente()
+    f = db.session.get(VisitaFoto, vfid)
+    if f is None or f.visita.status != FEITA:
+        abort(404)
+    _local(f.visita.client_id)
     return _imagem(f.storage_key, f.mime or 'image/jpeg')
 
 
