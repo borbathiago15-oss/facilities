@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% block title %}Segurança da conta{% endblock %}
+{% block content %}
+<h1 class="fc-titulo">Segurança da conta</h1>
+<p class="fc-sub">A segunda etapa pede, além da senha, um código de 6 números que muda a cada 30 segundos no seu celular. Com ela, quem descobrir a sua senha ainda não entra.</p>
+
+<div class="fc-cartao fc-estreito">
+{% if current_user.totp_ativo %}
+  <p class="fw-semibold text-success"><i class="bi bi-shield-check"></i> Segunda etapa ativada.</p>
+  <p class="small">Para desligar, confirme a sua senha.</p>
+  <form method="post" action="{{ url_for('auth.desativar_codigo') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label class="form-label small fw-semibold" for="senha">Senha</label>
+    <input class="form-control mb-3" id="senha" name="senha" type="password" autocomplete="current-password" required>
+    <button class="btn btn-outline-danger fw-bold" type="submit">Desativar a segunda etapa</button>
+  </form>
+{% else %}
+  <ol class="small">
+    <li>Instale no celular um aplicativo autenticador (Google Authenticator, Microsoft Authenticator ou outro).</li>
+    <li>No aplicativo, escolha "adicionar conta" e leia o QR abaixo.</li>
+    <li>Digite o código que aparecer e confirme.</li>
+  </ol>
+  <div class="fc-qr-totp" role="img" aria-label="QR para o aplicativo autenticador">{{ novo.qr|safe }}</div>
+  <p class="small text-muted">Sem câmera? Digite no aplicativo esta chave: <code class="user-select-all">{{ novo.segredo }}</code></p>
+  <form method="post" action="{{ url_for('auth.ativar_codigo') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label class="form-label small fw-semibold" for="codigo">Código do aplicativo</label>
+    <input class="form-control mb-3 fs-4 text-center" id="codigo" name="codigo" inputmode="numeric" pattern="[0-9 ]*" maxlength="7" autocomplete="one-time-code" required>
+    <button class="btn btn-primary fw-bold" type="submit">Ativar a segunda etapa</button>
+  </form>
+{% endif %}
+</div>
+{% endblock %}

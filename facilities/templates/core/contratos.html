@@ -1,26 +1,37 @@
 {% extends 'base.html' %}
-{% block title %}Contratos{% endblock %}
+{% block title %}Locais{% endblock %}
 {% macro campos(c) %}
   <div class="row g-2">
-    <div class="col-md-6"><label class="form-label small fw-semibold">Nome do contrato</label>
-      <input class="form-control" name="name" value="{{ c.name if c else '' }}" required maxlength="120" placeholder="Ex.: Shopping Centro — Limpeza e Portaria"></div>
-    <div class="col-md-3"><label class="form-label small fw-semibold">Centro de custo</label>
+    <div class="col-md-6"><label class="form-label small fw-semibold">Nome do local</label>
+      <input class="form-control" name="name" value="{{ c.name if c else '' }}" required maxlength="120" placeholder="Ex.: GL — Armazém 1 (Simões Filho)"></div>
+    <div class="col-md-3"><label class="form-label small fw-semibold">Subcentro de custo</label>
       <input class="form-control" name="cost_center" value="{{ (c.cost_center or '') if c else '' }}" maxlength="50"></div>
     <div class="col-md-3"><label class="form-label small fw-semibold">Gestor responsável</label>
       <select class="form-select" name="responsible_user_id">
         <option value="">—</option>
         {% for g in gestores %}<option value="{{ g.id }}" {% if c and c.responsible_user_id == g.id %}selected{% endif %}>{{ g.name }}</option>{% endfor %}
       </select></div>
-    <div class="col-12"><label class="form-label small fw-semibold">Endereço / local</label>
+    <div class="col-md-6"><label class="form-label small fw-semibold">Cliente</label>
+      <select class="form-select" name="contratante_id">
+        <option value="">Sem cliente ligado</option>
+        {% for k in clientes %}{% if k.is_active or (c and c.contratante_id == k.id) %}<option value="{{ k.id }}" {% if c and c.contratante_id == k.id %}selected{% endif %}>{{ k.nome }}</option>{% endif %}{% endfor %}
+      </select></div>
+    <div class="col-md-6"><label class="form-label small fw-semibold">Estado</label>
+      <select class="form-select" name="estado_id">
+        <option value="">—</option>
+        {% for e in estados %}{% if e.is_active or (c and c.estado_id == e.id) %}<option value="{{ e.id }}" {% if c and c.estado_id == e.id %}selected{% endif %}>{{ e.nome }}</option>{% endif %}{% endfor %}
+      </select></div>
+    <div class="col-12"><label class="form-label small fw-semibold">Endereço</label>
       <input class="form-control" name="endereco" value="{{ (c.endereco or '') if c else '' }}" maxlength="255"></div>
   </div>
 {% endmacro %}
 {% block content %}
-<h1 class="fc-titulo">Contratos</h1>
-<p class="fc-sub">Cada contrato é um cliente atendido num local. As áreas (limpeza, portaria, manutenção…) e os turnos de cada um se configuram na Passagem de Turno.</p>
+<h1 class="fc-titulo">Locais</h1>
+<p class="fc-sub">Cada local é um armazém, loja ou sede de um cliente, num estado, com o seu subcentro de custo. A estrutura (setores, ambientes e pontos com QR) fica em "Estrutura"; áreas e turnos, na Passagem de Turno.</p>
+{% if not clientes %}<div class="alert alert-info small">Para ligar os locais a um cliente, cadastre antes a <a href="{{ url_for('cadastros.empresas') }}">empresa</a> e o <a href="{{ url_for('cadastros.clientes') }}">cliente</a>; e ative os <a href="{{ url_for('cadastros.estados') }}">estados</a> em uso.</div>{% endif %}
 
 <details class="fc-cartao mb-3" {% if not contratos %}open{% endif %}>
-  <summary class="fw-bold">Cadastrar contrato</summary>
+  <summary class="fw-bold">Cadastrar local</summary>
   <form method="post" action="{{ url_for('admin.criar_contrato') }}" class="mt-3">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     {{ campos(none) }}
@@ -33,6 +44,8 @@
   <details class="border-bottom px-3 py-2">
     <summary class="d-flex flex-wrap gap-2 align-items-center">
       <strong>{{ c.name }}</strong>
+      {% if c.contratante %}<span class="small">{{ c.contratante.nome }}</span>{% endif %}
+      {% if c.estado %}<span class="badge text-bg-light">{{ c.estado.sigla }}</span>{% endif %}
       {% if c.cost_center %}<span class="small text-muted">CC {{ c.cost_center }}</span>{% endif %}
       {% if not c.is_active %}<span class="badge text-bg-secondary">inativo</span>{% endif %}
       <span class="small text-muted ms-auto">{{ c.responsavel.name if c.responsavel else 'sem gestor responsável' }}</span>
@@ -44,12 +57,13 @@
         <label class="form-check-label small" for="cativo{{ c.id }}">Ativo</label></div>
       <div class="d-flex flex-wrap gap-2 mt-2">
         <button class="btn btn-primary btn-sm fw-bold" type="submit">Salvar</button>
+        <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('cadastros.local', cid=c.id) }}"><i class="bi bi-diagram-3"></i> Estrutura (setores, ambientes, QR)</a>
         <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('diario_operacional.configuracao', client_id=c.id) }}"><i class="bi bi-gear"></i> Configurar a passagem de turno</a>
       </div>
     </form>
   </details>
   {% else %}
-  <div class="fc-vazio">Nenhum contrato ainda.</div>
+  <div class="fc-vazio">Nenhum local ainda.</div>
   {% endfor %}
 </div>
 {% endblock %}

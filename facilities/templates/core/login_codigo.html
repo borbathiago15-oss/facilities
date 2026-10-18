@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b0d0f">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <title>Código de acesso — {{ NOME_DO_SISTEMA }}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+</head>
+<body>
+<div class="fc-login-fundo">
+  <div class="fc-login">
+    <div class="fc-login-topo">
+      <h1><img src="{{ url_for('static', filename='marca/trino-facilities.png') }}"
+               alt="Trino Facilities — Gestão de instalações e serviços"></h1>
+    </div>
+    <div class="fc-login-corpo">
+      {% with mensagens = get_flashed_messages(with_categories=true) %}
+        {% for categoria, texto in mensagens %}
+        <div class="alert alert-{{ categoria }} py-2 small">{{ texto }}</div>
+        {% endfor %}
+      {% endwith %}
+      <h2 class="h6 fw-bold">Código do aplicativo</h2>
+      <p class="small text-muted">Abra o aplicativo autenticador no seu celular e digite o código de 6 números do Trino Facilities.</p>
+      <form method="post" autocomplete="off">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label class="form-label small fw-semibold" for="codigo">Código</label>
+        <input class="form-control mb-3 fs-4 text-center" id="codigo" name="codigo" inputmode="numeric"
+               pattern="[0-9 ]*" maxlength="7" autocomplete="one-time-code" required autofocus>
+        <button class="btn btn-primary w-100 fw-bold" type="submit">Entrar</button>
+      </form>
+      <p class="small text-muted mt-3 mb-0">Perdeu o celular? Peça ao administrador para desligar a segunda etapa da sua conta. <a href="{{ url_for('auth.login') }}">Voltar</a></p>
+    </div>
+  </div>
+</div>
+<script src="{{ url_for('static', filename='js/app-instalavel.js') }}"></script>
+</body>
+</html>

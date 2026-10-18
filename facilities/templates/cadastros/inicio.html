@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+{% block title %}Cadastros{% endblock %}
+{% block content %}
+<h1 class="fc-titulo">Cadastros</h1>
+<p class="fc-sub">A estrutura de cada cliente: empresa do grupo, cliente, locais e, dentro de cada local, setores, ambientes, equipamentos e pontos com QR.</p>
+
+{% if e_admin %}
+<div class="fc-modulos mb-3">
+  <a class="fc-cartao fc-modulo" href="{{ url_for('cadastros.empresas') }}">
+    <i class="bi bi-buildings"></i><h2>Empresas do grupo</h2>
+    <p>{{ n_empresas }} cadastrada(s). A empresa do Grupo Trino que atende cada cliente.</p>
+  </a>
+  <a class="fc-cartao fc-modulo" href="{{ url_for('cadastros.clientes') }}">
+    <i class="bi bi-briefcase"></i><h2>Clientes</h2>
+    <p>{{ n_clientes }} cadastrado(s). Quem contrata, com o gerente responsável e o centro de custo.</p>
+  </a>
+  <a class="fc-cartao fc-modulo" href="{{ url_for('admin.contratos') }}">
+    <i class="bi bi-geo-alt"></i><h2>Locais</h2>
+    <p>Cada armazém, loja ou sede do cliente, com o estado e o subcentro de custo.</p>
+  </a>
+  <a class="fc-cartao fc-modulo" href="{{ url_for('cadastros.estados') }}">
+    <i class="bi bi-map"></i><h2>Estados</h2>
+    <p>{{ n_estados }} em uso. Ative os estados onde há operação.</p>
+  </a>
+  <a class="fc-cartao fc-modulo" href="{{ url_for('cadastros.trilha') }}">
+    <i class="bi bi-clock-history"></i><h2>Histórico de alterações</h2>
+    <p>Quem cadastrou ou mudou o quê, e quando.</p>
+  </a>
+</div>
+{% endif %}
+
+<div class="fc-cartao p-0">
+  <div class="px-3 pt-3"><h2 class="h6 fw-bold">Estrutura dos locais</h2>
+    <p class="small text-muted mb-2">Abra um local para cadastrar setores, ambientes, equipamentos e pontos, e imprimir as etiquetas de QR.</p></div>
+  {% for l in locais %}
+  <a class="d-flex flex-wrap gap-2 align-items-center border-top px-3 py-2 text-reset text-decoration-none" href="{{ url_for('cadastros.local', cid=l.id) }}">
+    <strong>{{ l.name }}</strong>
+    {% if l.contratante %}<span class="small text-muted">{{ l.contratante.nome }}</span>{% endif %}
+    {% if l.estado %}<span class="badge text-bg-light">{{ l.estado.sigla }}</span>{% endif %}
+    <i class="bi bi-chevron-right ms-auto"></i>
+  </a>
+  {% else %}
+  <div class="fc-vazio">Nenhum local na sua carteira.</div>
+  {% endfor %}
+</div>
+{% endblock %}

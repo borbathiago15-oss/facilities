@@ -209,6 +209,25 @@
       });
     },
 
+    // Execução de checklist da rota (Fase 4A): um envio só, com as fotos.
+    // A marca envio_id faz o servidor devolver a mesma execução se este
+    // envio já tinha chegado (resposta perdida no caminho).
+    execucao: function (it, s) {
+      var fd = new FormData();
+      fd.append('corpo', JSON.stringify(it.corpo));
+      (it.fotos || []).forEach(function (f) {
+        fd.append(f.campo, f.arquivo, (f.arquivo && f.arquivo.name) || 'foto.jpg');
+      });
+      return pedir('/app/api/execucoes', {
+        method: 'POST', headers: {'X-CSRFToken': s.csrf}, body: fd
+      }).then(function (r) {
+        // Recusa da regra (tarefa já feita por outra pessoa, QR errado):
+        // fica para a pessoa ver no painel da fila, não trava os outros.
+        if (r.tipo === 'recusado') { r.tipo = 'conflito'; }
+        return r;
+      });
+    },
+
     'auditoria-foto': function (it, s) {
       var fd = new FormData();
       fd.append('arquivo', it.arquivo, it.nome || it.arquivo.name || 'foto.jpg');

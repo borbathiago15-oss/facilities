@@ -16,7 +16,7 @@ import json
 import re
 from datetime import date, datetime
 
-from flask import Blueprint, jsonify, render_template, request
+from flask import Blueprint, abort, jsonify, make_response, render_template, request
 from flask_login import current_user, login_required
 
 from facilities import tempo
@@ -58,6 +58,18 @@ def _clientes_visiveis():
 def _client_allowed(client_id):
     from facilities.core.acesso import require_client
     require_client(client_id)
+
+
+def _id_do_corpo(data, campo):
+    """O id que veio no JSON, ou 400 em JSON — nunca o 500 de ``int(None)``
+    quando o corpo chega vazio ou sem o campo (a varredura de isolamento
+    achou: um formulário no lugar do JSON derrubava a rota)."""
+    try:
+        return int(data.get(campo))
+    except (TypeError, ValueError):
+        abort(make_response(jsonify({'error': 'Envio incompleto: falta o '
+                                              f'{campo}. Recarregue a tela e tente de novo.'}),
+                            400))
 
 
 def perguntas_do_modelo(atividades, campos):
@@ -859,9 +871,9 @@ def turno():
 @module_required(MODULO)
 def salvar_turno():
     data = request.get_json(silent=True) or {}
-    client_id = int(data.get('client_id'))
+    client_id = _id_do_corpo(data, 'client_id')
     _client_allowed(client_id)
-    cfg = DiarioConfiguracao.query.get_or_404(int(data.get('configuracao_id')))
+    cfg = DiarioConfiguracao.query.get_or_404(_id_do_corpo(data, 'configuracao_id'))
     if cfg.client_id != client_id or not cfg.ativo:
         return jsonify({'error': 'Configuração inválida para este cliente.'}), 400
     try:
@@ -1229,10 +1241,10 @@ def ver_turno(turno_id):
 @login_required
 @module_required(MODULO)
 def criar_pendencia_gestor():
-    if current_user._effective_role() not in ('master', 'pleno'):
+    if not current_user.e_gestao():
         return jsonify({'error': 'Somente gestor pode criar pendência para a operação.'}), 403
     data = request.get_json(silent=True) or {}
-    client_id = int(data.get('client_id'))
+    client_id = _id_do_corpo(data, 'client_id')
     _client_allowed(client_id)
     titulo = (data.get('titulo') or '').strip()
     if not titulo:
@@ -1432,7 +1444,7 @@ LIMITE_DO_PISO = 50
 # de manutenção, que passa o turno da equipe dele. No Trino o encarregado era
 # o único perfil de piso; aqui, sem o técnico, o contrato de manutenção
 # atendido só por técnicos não recebia aviso nenhum.
-PERFIS_DO_PISO = ('encarregado', 'tecnico')
+PERFIS_DO_PISO = ('encarregado', 'tecnico', 'supervisor')
 
 
 def _pode_receber(u, client_id):
@@ -1572,7 +1584,7 @@ def _gestores_do_contrato(client_id):
             _ve_o_contrato(cli.responsible_user_id, client_id):
         return [cli.responsible_user_id]
     plenos = (User.query
-              .filter(User.clients.any(id=client_id), User.role == 'pleno',
+              .filter(User.clients.any(id=client_id), User.role.in_(('pleno', 'gerente')),
                       User.is_active.is_(True), User.is_deleted.isnot(True))
               .order_by(User.id).limit(LIMITE_GESTORES_AVISADOS).all())
     return [u.id for u in plenos]
@@ -1639,7 +1651,7 @@ def criar_tarefa_turno():
         return jsonify({'error': 'Contrato inválido.'}), 400
     _client_allowed(client_id)
 
-    cfg = DiarioConfiguracao.query.get_or_404(int(data.get('configuracao_id')))
+    cfg = DiarioConfiguracao.query.get_or_404(_id_do_corpo(data, 'configuracao_id'))
     if cfg.client_id != client_id or not cfg.ativo:
         return jsonify({'error': 'Área inválida para este contrato.'}), 400
 

@@ -1,0 +1,6 @@
+# Testes de navegador (e2e/): não entram na imagem nem no CI.
+#   pip install -r requirements-e2e.txt && python -m playwright install chromium
+#   pytest -q e2e
+-r requirements-dev.txt
+playwright==1.64.0
+pillow==13.0.0

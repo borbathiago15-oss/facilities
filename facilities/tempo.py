@@ -71,3 +71,13 @@ def fmt(dt, formato='%d/%m/%Y %H:%M', vazio='—'):
     if isinstance(dt, date):
         return dt.strftime(formato)
     return str(dt)
+
+
+def para_utc(dia, hora):
+    """Data + hora de PAREDE em Brasília → datetime UTC ingênuo (como o banco grava).
+
+    É o caminho de volta do ``local``: a rota diz "09:00" no fuso da operação,
+    e a tarefa do dia guarda o instante em UTC.
+    """
+    return datetime.combine(dia, hora).replace(tzinfo=FUSO).astimezone(
+        timezone.utc).replace(tzinfo=None)

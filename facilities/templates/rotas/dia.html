@@ -1,0 +1,89 @@
+{% extends 'base.html' %}
+{% block title %}{{ local.name }} — {{ data.strftime('%d/%m') }}{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item"><a href="{{ url_for('rotas.inicio') }}">Rotas</a></li><li class="breadcrumb-item"><a href="{{ url_for('rotas.local', cid=local.id) }}">{{ local.name }}</a></li><li class="breadcrumb-item active" aria-current="page">{{ data.strftime('%d/%m/%Y') }}</li>{% endblock %}
+{% block content %}
+<h1 class="fc-titulo">{{ local.name }} — {{ data.strftime('%d/%m/%Y') }}</h1>
+<form class="d-flex gap-2 mb-3" method="get">
+  <label class="visually-hidden" for="fdata">Dia</label>
+  <input class="form-control w-auto" id="fdata" type="date" name="data" value="{{ data.isoformat() }}">
+  <button class="btn btn-outline-primary" type="submit">Ver o dia</button>
+</form>
+<div class="fc-cartao mb-3 d-flex flex-wrap gap-4">
+  <div><div class="small text-muted">Aderência à rota</div><div class="fs-3 fw-bold">{{ aderencia.pct ~ '%' if aderencia.pct is not none else '—' }}</div></div>
+  <div><div class="small text-muted">No prazo / já venceram</div><div class="fs-3 fw-bold">{{ aderencia.no_prazo }} / {{ aderencia.base }}</div></div>
+  <div><div class="small text-muted">Previstas no dia</div><div class="fs-3 fw-bold">{{ tarefas|length }}</div></div>
+</div>
+<div class="fc-cartao p-0">
+  {% for t in tarefas %}
+  {% set s = situacao(t, agora) %}
+  <div class="d-flex flex-wrap gap-2 align-items-center border-bottom px-3 py-2">
+    <span class="fw-bold">{{ t.previsto_para|hora_local('%H:%M') }}</span>
+    <span>{{ t.ponto.ambiente.nome }} · {{ t.ponto.nome }}</span>
+    <span class="small text-muted">{{ t.versao.modelo.nome }} · {{ t.rota.nome }}</span>
+    <span class="badge fc-sit fc-sit-{{ s }}">{{ situacoes.get(s, s) }}</span>
+    <span class="small ms-auto">
+      {% if t.execucoes %}{% set ex = t.execucoes[0] %}
+        <a href="{{ url_for('rotas.execucao', eid=ex.id) }}">{{ ex.pessoa.name }} · {{ ex.iniciada_em|hora_local('%H:%M') }}–{{ ex.concluida_em|hora_local('%H:%M') }}{% if ex.sem_sinal %} · feito sem sinal{% endif %}{% if ex.n_nao_conformes %} · {{ ex.n_nao_conformes }} não conforme(s){% endif %}</a>
+      {% elif t.status == 'nao_realizada' %}
+        {{ motivos.get(t.motivo, t.motivo) }}{% if t.motivo_texto %}: {{ t.motivo_texto }}{% endif %}{% if t.chamado_id %} · <a href="{{ url_for('chamados.ver', chamado_id=t.chamado_id) }}">chamado</a>{% endif %}
+      {% else %}
+        {{ t.pessoa.name if t.pessoa else 'sem escala' }}
+      {% endif %}
+    </span>
+  </div>
+  {% else %}
+  <div class="fc-vazio">Nenhuma tarefa prevista neste dia.</div>
+  {% endfor %}
+</div>
+<h2 class="h6 fw-bold mt-3">Ocorrências do QR público</h2>
+<div class="fc-cartao p-0 mb-3">
+  {% for o in ocorrencias %}
+  <div class="d-flex flex-wrap gap-2 align-items-center border-bottom px-3 py-2">
+    <span class="fw-bold">{{ o.criada_em|hora_local('%H:%M') }}</span>
+    <span>{{ o.ponto.ambiente.nome }} · {{ o.ponto.nome }}</span>
+    <span class="fw-semibold">{{ tipos_ocorrencia.get(o.tipo, o.tipo) }}</span>
+    {% if o.texto %}<span class="small text-muted">"{{ o.texto }}"</span>{% endif %}
+    {% if o.foto_key %}<a class="small" href="{{ url_for('publico.foto_da_ocorrencia', oid=o.id) }}" target="_blank" rel="noopener">foto</a>{% endif %}
+    <span class="badge fc-sit fc-ocor-{{ o.status }}">{{ situacoes_ocorrencia[o.status] }}</span>
+    {% if atrasada(o, agora) %}<span class="badge text-bg-danger">fora do prazo ({{ o.prazo|hora_local('%H:%M') }})</span>{% elif o.prazo and o.status != 'resolvida' %}<span class="small text-muted">prazo {{ o.prazo|hora_local('%H:%M') }}</span>{% endif %}
+    <span class="ms-auto small">
+      {% if o.status == 'resolvida' %}{{ o.quem_resolveu.name }} · {{ o.resolvida_em|hora_local('%H:%M') }}{% if o.resolucao %}: {{ o.resolucao }}{% endif %}
+      {% elif pode_atender %}
+      <form method="post" action="{{ url_for('publico.ocorrencia_no_site', oid=o.id, acao='resolver') }}" class="d-inline-flex gap-1 m-0">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label class="visually-hidden" for="res{{ o.id }}">O que foi feito</label>
+        <input class="form-control form-control-sm" id="res{{ o.id }}" name="resolucao" placeholder="O que foi feito" maxlength="300">
+        <button class="btn btn-sm btn-outline-success" type="submit">Resolvida</button>
+      </form>
+      {% endif %}
+    </span>
+  </div>
+  {% else %}
+  <div class="fc-vazio">Nenhuma ocorrência do público neste dia.</div>
+  {% endfor %}
+</div>
+
+{% if presencas %}
+<h2 class="h6 fw-bold mt-3">Confirmações de presença</h2>
+<div class="fc-cartao p-0 mb-3">
+  {% for c in presencas %}
+  <div class="d-flex flex-wrap gap-2 align-items-center border-bottom px-3 py-2">
+    <span class="fw-bold">{{ c.pedido_em|hora_local('%H:%M') }}</span><span>{{ c.pessoa.name }}</span><span class="small text-muted">{{ c.rota.nome }}</span>
+    <span class="ms-auto badge {% if c.status == 'confirmada' %}text-bg-success{% elif c.status == 'sem_resposta' %}text-bg-danger{% else %}text-bg-light{% endif %}">
+      {% if c.status == 'confirmada' %}Confirmada às {{ c.respondida_em|hora_local('%H:%M') }}{% elif c.status == 'sem_resposta' %}Sem resposta{% if c.respondida_em %} (respondeu às {{ c.respondida_em|hora_local('%H:%M') }}){% endif %}{% else %}Aguardando{% endif %}</span>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if extras %}
+<h2 class="h6 fw-bold mt-3">Atividades extras</h2>
+<div class="fc-cartao p-0">
+  {% for ex in extras %}
+  <a class="d-flex flex-wrap gap-2 border-bottom px-3 py-2 text-reset" href="{{ url_for('rotas.execucao', eid=ex.id) }}">
+    <span class="fw-bold">{{ ex.concluida_em|hora_local('%H:%M') }}</span><span>{{ ex.ponto.nome }}</span><span class="small text-muted">{{ ex.versao.modelo.nome }} · {{ ex.pessoa.name }}</span>
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

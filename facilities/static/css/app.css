@@ -187,6 +187,9 @@ a { text-decoration: none; }
 .fc-modulo p { color: var(--gray-500); margin: 0; font-size: 14px; }
 .fc-tabela { width: 100%; }
 .fc-tabela th { font-size: 12px; text-transform: uppercase; letter-spacing: .4px; color: var(--gray-500); }
+.fc-estreito { max-width: 480px; }
+.fc-qr-totp { width: 200px; height: 200px; margin: 8px 0 12px; }
+.fc-qr-totp svg { width: 100%; height: 100%; }
 .fc-vazio { color: var(--gray-500); text-align: center; padding: 28px 12px; }
 .fc-aviso { display: flex; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--linha); }
 .fc-aviso.nao-lido { background: var(--blue-50); }
@@ -204,11 +207,12 @@ a { text-decoration: none; }
   justify-content: center; padding: 16px; }
 .fc-login { width: 100%; max-width: 400px; background: #fff; border-radius: var(--radius-lg);
   overflow: hidden; box-shadow: var(--shadow-lg); }
-.fc-login-topo { background: var(--fundo-cartao); color: #fff; padding: 22px; text-align: center; }
+/* Topo branco: a logo oficial (static/marca/) tem letras escuras sobre branco. */
+.fc-login-topo { background: #fff; padding: 22px; text-align: center; }
 .fc-login-topo::after { content: ''; display: block; height: 3px; margin: 18px -22px -22px;
   background: var(--faixa-da-marca); }
-.fc-login-topo img { height: 56px; width: 56px; border-radius: 14px; }
-.fc-login-topo h1 { font-size: 20px; font-weight: 800; margin: 10px 0 0; }
+.fc-login-topo h1 { margin: 0; }
+.fc-login-topo img { display: block; width: 100%; max-width: 320px; height: auto; margin: 0 auto; }
 .fc-login-corpo { padding: 22px; }
 
 .faixa-versao { position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 2000;
@@ -520,3 +524,67 @@ body.dark .page-title, body.dark .pg-titulo, body.dark .pg-num-v, body.dark .pg-
 .ch-anexos { display: flex; flex-wrap: wrap; gap: 8px; }
 .ch-anexos img { width: 96px; height: 96px; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--linha); }
 .ch-arq { display: inline-block; padding: 6px 10px; border: 1px solid var(--linha); border-radius: var(--radius-sm); font-size: 13px; }
+
+
+/* ── Aplicativo de campo (/app/) ─────────────────────────────────────────
+   Topo curto, botões de pelo menos 48 px e a navegação embaixo, ao alcance
+   do polegar. O espaço de baixo do conteúdo é o da barra de navegação. */
+.fc-app .fc-conteudo { padding-bottom: calc(88px + env(safe-area-inset-bottom)); max-width: 720px; }
+.fc-app-topo { position: sticky; top: 0; z-index: 1030; display: flex; align-items: center; gap: 10px;
+  height: 56px; padding: 0 12px; background: var(--fundo); color: #fff; }
+.fc-app-topo .fc-marca { color: #fff; }
+.fc-app-pessoa { background: none; border: 0; color: #fff; min-height: 44px; font-weight: 600; }
+.fc-app-rede { background: var(--aviso); color: #fff; border-radius: 999px; padding: 2px 10px;
+  font-size: 13px; font-weight: 700; }
+.fc-app-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 1030; display: grid;
+  grid-auto-flow: column; grid-auto-columns: 1fr; background: #fff; border-top: 1px solid var(--linha);
+  padding-bottom: env(safe-area-inset-bottom); }
+.fc-app-nav a { display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 2px; min-height: 60px; color: var(--gray-500); font-size: 12px; font-weight: 600;
+  text-decoration: none; }
+.fc-app-nav a i { font-size: 22px; }
+.fc-app-nav a.ativo { color: var(--marca); }
+.fc-app-acao { min-height: 56px; font-weight: 700; display: flex; align-items: center;
+  justify-content: center; gap: 8px; }
+.fc-app-item { display: flex; flex-direction: column; padding: 10px 0; min-height: 48px;
+  border-top: 1px solid var(--linha); color: inherit; text-decoration: none; }
+.fc-app-item:first-of-type { border-top: 0; }
+.fc-leitor { position: relative; width: 100%; aspect-ratio: 1 / 1; max-width: 480px; margin: 0 auto;
+  background: #000; border-radius: var(--radius-lg); overflow: hidden; }
+.fc-leitor video { width: 100%; height: 100%; object-fit: cover; }
+.fc-leitor-mira { position: absolute; inset: 18%; border: 3px solid rgba(255, 255, 255, .85);
+  border-radius: 12px; box-shadow: 0 0 0 999px rgba(0, 0, 0, .35); }
+
+/* ── Rotas: situação das tarefas e miniaturas ─────────────────────────── */
+.fc-sit { font-weight: 700; }
+.fc-sit-prevista { background: var(--gray-100, #f1f3f5); color: var(--gray-700, #495057); }
+.fc-sit-no_horario { background: var(--info); color: #fff; }
+.fc-sit-atrasada { background: var(--aviso); color: #fff; }
+.fc-sit-concluida_no_prazo { background: var(--ok); color: #fff; }
+.fc-sit-concluida_com_atraso { background: var(--aviso-fundo); color: var(--aviso); border: 1px solid var(--aviso-borda); }
+.fc-sit-nao_realizada { background: var(--perigo-fundo); color: var(--perigo); border: 1px solid var(--perigo-borda); }
+.fc-sit-perdida { background: var(--perigo); color: #fff; }
+.fc-miniatura { width: 120px; height: 120px; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--linha); }
+.fc-opcao { position: relative; display: flex; align-items: center; justify-content: center; min-height: 52px;
+  border: 2px solid var(--linha); border-radius: var(--radius-sm); font-weight: 700; cursor: pointer; }
+.fc-opcao:has(.fc-opcao-radio:checked) { border-color: var(--marca); background: var(--marca); color: #fff; }
+.fc-opcao:has(.fc-opcao-radio:focus-visible) { outline: 3px solid var(--info); outline-offset: 2px; }
+.fc-opcao-radio { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.fc-texto-livre { white-space: pre-line; }
+.fc-foto { position: relative; }
+.fc-foto-input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.fc-foto:has(.fc-foto-input:focus-visible) label { outline: 3px solid var(--info); outline-offset: 2px; }
+
+/* ── Página pública do QR (sem login) ─────────────────────────────────── */
+.fc-publico { background: var(--surface, #fff); }
+.fc-publico-topo { text-align: center; padding: 14px; border-bottom: 1px solid var(--linha); }
+.fc-publico-topo img { max-height: 48px; max-width: 70%; }
+.fc-publico-corpo { position: relative; max-width: 520px; margin: 0 auto; padding: 18px 16px 40px; }
+.fc-opcao-lista { justify-content: flex-start; padding: 0 14px; font-weight: 600; }
+.fc-isca { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+.fc-ocor-aberta { background: var(--aviso); color: #fff; }
+.fc-ocor-em_atendimento { background: var(--info); color: #fff; }
+.fc-ocor-resolvida { background: var(--ok); color: #fff; }
+.fc-presenca { position: fixed; left: 12px; right: 12px; bottom: calc(72px + env(safe-area-inset-bottom));
+  z-index: 1040; background: var(--marca); color: #fff; border-radius: var(--radius-lg);
+  padding: 14px; box-shadow: 0 8px 24px rgba(0, 0, 0, .25); }

@@ -86,7 +86,7 @@ def _na_carteira(user, client_id):
 
 
 def e_gestor(user):
-    return user._effective_role() in ('master', 'pleno')
+    return user.e_gestao()
 
 
 def pode_ver(user, ch):
@@ -152,7 +152,7 @@ def pessoas_do_contrato(client_id, papeis):
 
 def tecnicos_do_contrato(client_id):
     """Quem pode receber um chamado: técnicos e gestores do contrato."""
-    return pessoas_do_contrato(client_id, ('tecnico', 'pleno'))
+    return pessoas_do_contrato(client_id, ('tecnico', 'pleno', 'gerente'))
 
 
 def gestores_do_contrato(client_id):
@@ -167,7 +167,7 @@ def gestores_do_contrato(client_id):
     ou perdeu o contrato receberia título e local de um chamado que não
     consegue abrir (o link dá 403).
     """
-    ids = {u.id for u in _ativos(User.query.filter(User.role == 'pleno',
+    ids = {u.id for u in _ativos(User.query.filter(User.role.in_(('pleno', 'gerente')),
                                                    User.clients.any(id=client_id)))}
     c = db.session.get(Client, client_id)
     resp = db.session.get(User, c.responsible_user_id) \

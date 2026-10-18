@@ -22,7 +22,7 @@
 //
 // Trocar VERSAO força o navegador a instalar a versão nova e apagar a antiga.
 // v4: identidade nova — ícone e página "Sem conexão" guardados de novo.
-const VERSAO = 'facilities-app-v1';
+const VERSAO = 'facilities-app-v5';
 const TELAS = 'trino-telas';
 const ESTATICOS = 'trino-estaticos-v3';
 const OFFLINE = '/static/pwa/offline.html';
@@ -30,6 +30,9 @@ const GUARDAR = [OFFLINE, '/static/pwa/icone-192.png'];
 // As únicas telas que ganham cópia no aparelho.
 const TELAS_SEM_INTERNET = [
   /^\/passagem-de-turno\/turno\/?$/,   // nova passagem de turno
+  /^\/app\/?$/,                         // início do aplicativo de campo
+  /^\/app\/ler-qr\/?$/,                 // leitor de QR (não tem dado de ninguém)
+  /^\/app\/turno\/?$/,                  // meu turno: tarefas e checklists do dia
 ];
 
 self.addEventListener('install', (evento) => {
@@ -162,4 +165,38 @@ self.addEventListener('notificationclick', (evento) => {
     }
     return self.clients.openWindow(destino);
   })());
+});
+
+// ── Avisos no celular (Web Push, Fase 4B) ──────────────────────────────
+// O servidor manda {titulo, texto, link, marca}. A "marca" faz o aviso novo
+// da mesma coisa substituir o anterior em vez de empilhar.
+self.addEventListener('push', (evento) => {
+  let d = {};
+  try { d = evento.data ? evento.data.json() : {}; } catch (e) { d = {}; }
+  const titulo = d.titulo || 'Trino Facilities';
+  evento.waitUntil(self.registration.showNotification(titulo, {
+    body: d.texto || '',
+    tag: d.marca || undefined,
+    renotify: !!d.marca,
+    icon: '/static/pwa/icone-192.png',
+    badge: '/static/pwa/icone-192.png',
+    data: { link: d.link || '/app/' },
+  }));
+});
+
+// Tocar no aviso abre (ou traz para a frente) o aplicativo no link do aviso.
+// Só caminho interno: um link que não começa com "/" vira o início do app.
+self.addEventListener('notificationclick', (evento) => {
+  evento.notification.close();
+  let link = (evento.notification.data && evento.notification.data.link) || '/app/';
+  if (typeof link !== 'string' || !link.startsWith('/') || link.startsWith('//')) link = '/app/';
+  evento.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+    .then((janelas) => {
+      for (const j of janelas) {
+        if (new URL(j.url).origin === self.location.origin && 'focus' in j) {
+          return j.navigate(link).then((w) => (w || j).focus());
+        }
+      }
+      return self.clients.openWindow(link);
+    }));
 });

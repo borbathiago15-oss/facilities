@@ -72,6 +72,13 @@ def run_migrations_offline():
         context.run_migrations()
 
 
+def _fora_da_quarentena(objeto, nome, tipo, refletido, comparado_com):
+    """As tabelas ``_quarentena_*`` (facilities/core/quarentena.py) ficam no
+    banco de propósito e não estão nos modelos: sem isto o autogenerate
+    proporia apagá-las e o ``flask db check`` acusaria diferença."""
+    return not (tipo == 'table' and refletido and (nome or '').startswith('_quarentena_'))
+
+
 def run_migrations_online():
     """Run migrations in 'online' mode.
 
@@ -93,6 +100,8 @@ def run_migrations_online():
     conf_args = current_app.extensions['migrate'].configure_args
     if conf_args.get("process_revision_directives") is None:
         conf_args["process_revision_directives"] = process_revision_directives
+    if conf_args.get("include_object") is None:
+        conf_args["include_object"] = _fora_da_quarentena
 
     connectable = get_engine()
 

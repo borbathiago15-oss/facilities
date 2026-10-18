@@ -35,7 +35,8 @@ log = logging.getLogger(__name__)
 # Endpoints que quem precisa trocar a senha ainda pode abrir.
 _LIVRES_NA_TROCA = {'auth.trocar_senha', 'auth.logout', 'static', 'core.healthz',
                     'app_instalavel.service_worker', 'app_instalavel.manifesto',
-                    'app_instalavel.versao', 'app_instalavel.sessao'}
+                    'app_instalavel.versao', 'app_instalavel.sessao',
+                    'campo.manifesto', 'campo.instalar'}
 
 
 _SIM = frozenset({'1', 'true', 'yes', 'on', 'sim'})
@@ -197,6 +198,8 @@ def _modelos(app):
     from facilities.core import models  # noqa: F401
     from facilities.passagem import models as _p  # noqa: F401
     from facilities.chamados import models as _c  # noqa: F401
+    from facilities.cadastros import models as _cad  # noqa: F401
+    from facilities.rotas import models as _rot  # noqa: F401
 
 
 def _rotas(app):
@@ -206,7 +209,12 @@ def _rotas(app):
     from facilities.core.rotas import bp as core_bp
     from facilities.passagem.rotas import bp as passagem_bp
     from facilities.chamados.rotas import bp as chamados_bp
-    for bp in (core_bp, auth_bp, admin_bp, app_bp, passagem_bp, chamados_bp):
+    from facilities.cadastros.rotas import bp as cadastros_bp
+    from facilities.campo.rotas import bp as campo_bp
+    from facilities.rotas.telas import bp as rotas_bp
+    from facilities.rotas.publico import bp as publico_bp
+    for bp in (core_bp, auth_bp, admin_bp, app_bp, passagem_bp, chamados_bp, cadastros_bp,
+               campo_bp, rotas_bp, publico_bp):
         app.register_blueprint(bp)
 
 
@@ -304,6 +312,33 @@ def _comandos(app):
         u.must_change_password = True
         db.session.commit()
         click.echo(f'Administrador {u.email} pronto. Senha temporária: {senha}')
+
+    @app.cli.group('agendador')
+    def agendador():
+        """O relógio das rotas: gera as tarefas do dia e fecha as perdidas."""
+
+    @agendador.command('rodar')
+    def agendador_rodar():
+        """Uma rodada: tarefas de hoje e amanhã; turnos encerrados → perdidas.
+        Pode rodar quantas vezes quiser: não duplica nada."""
+        from facilities.rotas.servico import rodar
+        reg = rodar(origem='comando')
+        db.session.commit()
+        click.echo(f'{reg.tarefas_geradas} tarefa(s) gerada(s), '
+                   f'{reg.tarefas_perdidas} marcada(s) como perdida(s).')
+
+    @app.cli.group('push')
+    def push_cli():
+        """Avisos no celular (Web Push)."""
+
+    @push_cli.command('chaves')
+    def push_chaves():
+        """Gera o par de chaves VAPID para pôr no ambiente."""
+        from facilities.core.push import gerar_chaves
+        privada, publica = gerar_chaves()
+        click.echo(f'VAPID_PRIVATE_KEY={privada}')
+        click.echo(f'VAPID_PUBLIC_KEY={publica}')
+        click.echo('VAPID_SUBJECT=mailto:seu-email@grupotrino.com.br')
 
     @app.cli.command('semear-modelos')
     @click.option('--contrato', 'contrato_id', type=int, required=True,

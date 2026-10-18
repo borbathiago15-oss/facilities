@@ -16,12 +16,18 @@ continua com a sua própria Passagem; os dois sistemas são independentes.
 |---|---|
 | Passagem de Turno | checklist da rotina, pendências que atravessam turnos (contadas por área), ocorrências, tarefas da gestão para o turno, correção de passagem, painel, relatório mensal em PDF, modelos prontos por serviço |
 | Chamados | abrir (com fotos), atribuir a um técnico, prazo pela prioridade, em espera, resolver (foto do serviço), confirmar ou reabrir, trilha completa, números de prazo |
-| Núcleo | pessoas e perfis, contratos, carteira de acesso por contrato, avisos, troca obrigatória de senha, bloqueio por tentativas |
+| Cadastros | empresas do grupo, clientes (gerente e centro de custo), estados, locais (subcentro), e em cada local setores, ambientes, equipamentos e pontos com QR; etiquetas em PDF; histórico de alterações |
+| Rotas e checklists | checklists com versão (biblioteca da Trino copiada por local), rotas do local e turno com horários e/ou frequência, escala, agendador das tarefas do dia, execução pelo QR com fotos, não conformidades, acompanhamento com aderência à rota |
+| Aplicativo de campo (`/app/`) | instalável no celular; meu turno, leitor de QR, execução também sem internet, avisos no celular, confirmação de presença, avisos do público |
+| QR público | qualquer pessoa no local abre uma ocorrência pelo QR, sem login, e acompanha até resolver |
+| Núcleo | pessoas, perfis e cadeia (superior direto), carteira que sobe pela cadeia, segunda etapa do login, avisos, troca obrigatória de senha, bloqueio por tentativas |
 
-Perfis: **Administrador** (tudo), **Gestor** (os contratos dele; configura a
-passagem, atribui chamados), **Encarregado** (passagem e abrir chamados),
-**Técnico de manutenção** (atende chamados e faz a passagem da equipe),
-**Diretoria** (lê tudo, não altera nada).
+Perfis (a cadeia, de cima para baixo): **Gerente** (os clientes dele) ›
+**Coordenador** (age como gestor nos seus locais) › **Supervisor**
+(acompanha e faz checklist) › **Encarregado / ASG** e **Técnico de
+manutenção**. Fora da cadeia: **Administrador** (tudo) e **Diretoria** (lê
+tudo). **Cliente**: criado, mas sem login até a liberação do cliente externo.
+Quem está acima vê tudo o que os de baixo veem.
 
 ## Rodar localmente
 
@@ -49,7 +55,14 @@ Primeiros passos na tela: cadastre um contrato, as pessoas, e em
 ```bash
 pytest -q                                                        # SQLite
 TEST_DATABASE_URL=postgresql://.../facilities_testes pytest -q   # Postgres (zera o banco!)
+python scripts/ensaio_migracoes_postgres.py postgresql://.../facilities_ensaio_test
+pip install -r requirements-e2e.txt && pytest -q e2e             # navegador (celular e PC)
 ```
+
+O ensaio das migrações semeia dado em todas as tabelas novas e prova que
+cada migração faz ida, volta e ida sem perder linha (a volta guarda tudo em
+quarentena, `_quarentena_<revisão>_<tabela>`). Os testes de navegador (`e2e/`)
+usam Playwright e Chromium; sem eles, são pulados.
 
 A suíte em Postgres APAGA todas as tabelas do banco no começo. Por isso ela
 se recusa a rodar se o nome do banco não tiver "test" (`facilities_testes`,
@@ -67,6 +80,19 @@ se recusa a rodar se o nome do banco não tiver "test" (`facilities_testes`,
   | `SECRET_KEY` | sim, fora do SQLite de desenvolvimento | não sobe — sem ela cada processo do gunicorn sortearia a sua, e o login e as sessões falhariam ao acaso |
   | `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` | sim, para anexos no Cloudflare R2 | não sobe, dizendo qual falta — a menos que `STORAGE_BACKEND=local` esteja escrito (anexos no disco do servidor: só com volume persistente) |
 
+- **Agendador das rotas**: gera as tarefas do dia, avisa a hora de cada uma,
+  pede e fecha as confirmações de presença e marca as perdidas. Precisa
+  rodar **a cada 5 minutos**, por um destes caminhos:
+  `flask --app facilities agendador rodar` (cron do servidor) ou
+  `POST /rotas/agendador` com `Authorization: Bearer $AGENDADOR_TOKEN`
+  (relógio externo da hospedagem; sem `AGENDADOR_TOKEN` a rota não existe).
+  Pode rodar quantas vezes quiser: não duplica nada. Sem agendador, as
+  tarefas do dia ainda aparecem (a tela gera as de hoje), mas sem avisos.
+- **Avisos no celular (Web Push)**: `flask --app facilities push chaves` gera
+  `VAPID_PRIVATE_KEY` e `VAPID_PUBLIC_KEY`; defina também
+  `VAPID_SUBJECT=mailto:...`. Sem as chaves, os avisos ficam só no sino e na
+  tela do aplicativo. No iPhone, o aviso só funciona com o aplicativo
+  instalado na Tela de Início (iOS 16.4 ou mais novo).
 - `SESSION_COOKIE_SECURE` (padrão ligado) vale para o cookie de sessão e para
   o "Manter conectado". Aceita `1/true/yes/on` e `0/false/no/off`; qualquer
   outro valor para o boot (antes `true` desligava o Secure sem avisar). O

@@ -11,7 +11,7 @@
   {% endif %}
   <meta name="app-versao" content="{{ versao_do_app() }}">
   <meta name="theme-color" content="#0b0d0f">
-  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="manifest" href="{% block manifesto %}/manifest.webmanifest{% endblock %}">
   <link rel="apple-touch-icon" href="{{ url_for('static', filename='pwa/apple-touch-icon.png') }}">
   <title>{% block title %}Início{% endblock %} — {{ NOME_DO_SISTEMA }}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -22,7 +22,8 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
   {% block head %}{% endblock %}
 </head>
-<body>
+<body class="{% block corpo_classe %}{% endblock %}">
+{% block topo %}
 {% if current_user.is_authenticated %}
 <header class="fc-topo">
   <div class="fc-topo-in">
@@ -45,10 +46,15 @@
          class="{% if ep.startswith('chamados.') %}ativo{% endif %}"
          {% if ep.startswith('chamados.') %}aria-current="page"{% endif %}>Chamados</a>
       {% endif %}
+      {% if current_user.e_gestao() or current_user._effective_role() == 'visualizador' %}
+      <a href="{{ url_for('cadastros.inicio') }}"
+         class="{% if ep.startswith('cadastros.') %}ativo{% endif %}"
+         {% if ep.startswith('cadastros.') %}aria-current="page"{% endif %}>Cadastros</a>
+      {% endif %}
       {% if current_user._effective_role() == 'master' %}
       <a href="{{ url_for('admin.contratos') }}"
          class="{% if ep == 'admin.contratos' %}ativo{% endif %}"
-         {% if ep == 'admin.contratos' %}aria-current="page"{% endif %}>Contratos</a>
+         {% if ep == 'admin.contratos' %}aria-current="page"{% endif %}>Locais</a>
       <a href="{{ url_for('admin.usuarios') }}"
          class="{% if ep == 'admin.usuarios' %}ativo{% endif %}"
          {% if ep == 'admin.usuarios' %}aria-current="page"{% endif %}>Pessoas</a>
@@ -66,6 +72,8 @@
           <li><span class="dropdown-item-text small text-muted">{{ current_user.name }}<br>{{ current_user.perfil_rotulo }}</span></li>
           <li><hr class="dropdown-divider"></li>
           <li><a class="dropdown-item" href="{{ url_for('auth.trocar_senha') }}"><i class="bi bi-key"></i> Trocar senha</a></li>
+          <li><a class="dropdown-item" href="{{ url_for('auth.seguranca') }}"><i class="bi bi-shield-lock"></i> Segurança da conta</a></li>
+          <li><a class="dropdown-item" href="{{ url_for('campo.inicio') }}"><i class="bi bi-phone"></i> Aplicativo de campo</a></li>
           <li>
             <form method="post" action="{{ url_for('auth.logout') }}" class="m-0">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -78,6 +86,7 @@
   </div>
 </header>
 {% endif %}
+{% endblock %}
 
 <main class="fc-conteudo">
   {% if self.breadcrumb()|trim %}
@@ -96,6 +105,7 @@
   <div id="fc-aviso-js"></div>
   {% block content %}{% endblock %}
 </main>
+{% block rodape %}{% endblock %}
 
 <script src="{{ url_for('static', filename='vendor/bootstrap/bootstrap.bundle.min.js') }}"></script>
 <script src="{{ url_for('static', filename='vendor/chart/chart.umd.min.js') }}"></script>

@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+{% block title %}{{ modelo.nome }}{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item"><a href="{{ url_for('rotas.inicio') }}">Rotas</a></li>{% if modelo.client_id %}<li class="breadcrumb-item"><a href="{{ url_for('rotas.local', cid=modelo.client_id) }}">{{ modelo.local.name }}</a></li>{% else %}<li class="breadcrumb-item"><a href="{{ url_for('rotas.biblioteca') }}">Biblioteca</a></li>{% endif %}<li class="breadcrumb-item active" aria-current="page">{{ modelo.nome }}</li>{% endblock %}
+{% block content %}
+<h1 class="fc-titulo">{{ modelo.nome }}</h1>
+<p class="fc-sub">{% if modelo.versao_atual %}Versão publicada: {{ modelo.versao_atual.numero }}, em {{ modelo.versao_atual.publicada_em|hora_local }}.{% else %}Ainda não publicado.{% endif %} {% if modelo.client_id %}Checklist do local {{ modelo.local.name }}.{% else %}Modelo da biblioteca da Trino.{% endif %}</p>
+{% if pode_montar %}
+<form method="post" action="{{ url_for('rotas.publicar', mid=modelo.id) }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="fc-cartao mb-3">
+    <label class="form-label small fw-semibold" for="mdesc">Procedimento (aparece para quem lê o QR)</label>
+    <textarea class="form-control mb-2" id="mdesc" name="descricao" rows="3">{{ modelo.descricao or '' }}</textarea>
+    <div class="form-check"><input class="form-check-input" type="checkbox" id="fantes" name="exige_foto_antes" value="1" {% if modelo.exige_foto_antes %}checked{% endif %}><label class="form-check-label" for="fantes">Exigir foto de ANTES</label></div>
+    <div class="form-check"><input class="form-check-input" type="checkbox" id="fdepois" name="exige_foto_depois" value="1" {% if modelo.exige_foto_depois %}checked{% endif %}><label class="form-check-label" for="fdepois">Exigir foto de DEPOIS</label></div>
+  </div>
+  <div class="fc-cartao mb-3">
+    <h2 class="h6 fw-bold">Perguntas</h2>
+    <p class="small text-muted">Deixe o texto vazio para tirar a pergunta. A ordem segue o número da coluna "Ordem". Pergunta condicional: em "Só aparece se", escreva <code>código=valor</code> de uma pergunta anterior (ex.: <code>vazamento=sim</code>).</p>
+    {% for it in linhas %}
+    {% set i = loop.index0 %}
+    <div class="border rounded p-2 mb-2">
+      <div class="row g-2">
+        <div class="col-3 col-md-1"><label class="form-label small" for="o{{ i }}">Ordem</label><input class="form-control" id="o{{ i }}" name="ordem" inputmode="numeric" value="{{ loop.index if it else '' }}"></div>
+        <div class="col-9 col-md-6"><label class="form-label small" for="t{{ i }}">Pergunta</label><input class="form-control" id="t{{ i }}" name="texto" maxlength="300" value="{{ it.texto or '' }}"></div>
+        <div class="col-md-3"><label class="form-label small" for="ti{{ i }}">Tipo de resposta</label>
+          <select class="form-select" id="ti{{ i }}" name="tipo">{% for k, v in tipos.items() %}<option value="{{ k }}" {% if it.tipo == k %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></div>
+        <div class="col-md-2 small"><span class="form-label d-block">Regras</span>
+          <label class="d-block"><input type="checkbox" name="obrigatorio" value="{{ i }}" {% if it.obrigatorio %}checked{% endif %}> Obrigatória</label>
+          <label class="d-block"><input type="checkbox" name="exige_foto" value="{{ i }}" {% if it.exige_foto %}checked{% endif %}> Pede foto</label></div>
+        <div class="col-md-4"><label class="form-label small" for="op{{ i }}">Opções (escolha), separadas por ;</label><input class="form-control" id="op{{ i }}" name="opcoes" value="{{ (it.opcoes or [])|join('; ') }}"></div>
+        <div class="col-6 col-md-2"><label class="form-label small" for="mn{{ i }}">Mínimo (número)</label><input class="form-control" id="mn{{ i }}" name="minimo" value="{{ it.minimo if it.minimo is not none and it.minimo is defined else '' }}"></div>
+        <div class="col-6 col-md-2"><label class="form-label small" for="mx{{ i }}">Máximo (número)</label><input class="form-control" id="mx{{ i }}" name="maximo" value="{{ it.maximo if it.maximo is not none and it.maximo is defined else '' }}"></div>
+        <div class="col-md-2"><label class="form-label small" for="ps{{ i }}">Sim/não: é problema se</label>
+          <select class="form-select" id="ps{{ i }}" name="problema_se"><option value="">nenhum</option><option value="nao" {% if it.problema_se == 'nao' %}selected{% endif %}>não</option><option value="sim" {% if it.problema_se == 'sim' %}selected{% endif %}>sim</option></select></div>
+        <div class="col-md-2"><label class="form-label small" for="ms{{ i }}">Só aparece se</label><input class="form-control" id="ms{{ i }}" name="mostrar_se" value="{{ (it.mostrar_se.codigo ~ '=' ~ it.mostrar_se.valor) if it.mostrar_se else '' }}"></div>
+        <input type="hidden" name="codigo" value="{{ it.codigo or '' }}">
+      </div>
+      {% if it.codigo %}<div class="small text-muted mt-1">Código: <code>{{ it.codigo }}</code></div>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  <button class="btn btn-primary fw-bold" type="submit">Publicar {{ 'nova versão' if modelo.versao_atual else 'a primeira versão' }}</button>
+  <span class="small text-muted ms-2">Precisa de mais linhas? Publique e as linhas em branco voltam.</span>
+</form>
+{% else %}
+<div class="fc-cartao">
+  {% if modelo.descricao %}<p>{{ modelo.descricao }}</p>{% endif %}
+  <ol class="mb-0">{% for it in itens %}<li>{{ it.texto }} <span class="small text-muted">({{ tipos.get(it.tipo) }}{% if it.obrigatorio %}, obrigatória{% endif %}{% if it.exige_foto %}, com foto{% endif %})</span></li>{% endfor %}</ol>
+</div>
+{% endif %}
+{% endblock %}

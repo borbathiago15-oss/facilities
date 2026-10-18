@@ -74,6 +74,11 @@ STATUS_ENCERRADOS = (FECHADO, CANCELADO)
 ORIGEM_MANUAL = 'manual'
 ORIGEM_OCORRENCIA = 'ocorrencia'
 ORIGEM_PENDENCIA = 'pendencia'
+# Fase 4A: da rota do posto — o item não conforme do checklist e a tarefa
+# "não realizada". O índice de origem viva vale para eles também: uma
+# não conformidade (ou tarefa) vira UM chamado.
+ORIGEM_NAO_CONFORMIDADE = 'nao_conformidade'
+ORIGEM_TAREFA_ROTA = 'tarefa_rota'
 # Quem entra no índice único de origem (``uq_chamados_origem_viva``): o
 # chamado que veio de outro registro e não foi cancelado. A migração inicial
 # repete este texto À MÃO — e o ``flask db check`` NÃO compara a condição de

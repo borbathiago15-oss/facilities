@@ -1,0 +1,28 @@
+{% extends 'campo/base_app.html' if current_user.is_authenticated else 'base.html' %}
+{% block title %}Instalar no celular{% endblock %}
+{% block content %}
+<h1 class="fc-titulo">Instalar o aplicativo no celular</h1>
+<p class="fc-sub">O aplicativo é instalado pelo navegador, sem loja. Depois de instalado, ele abre direto na tela do posto, com ícone próprio, e funciona também sem internet.</p>
+<div class="fc-cartao mb-3">
+  <h2 class="h6 fw-bold"><i class="bi bi-android2"></i> Android (Chrome)</h2>
+  <ol class="small mb-0">
+    <li>Abra este endereço no Chrome e entre com o seu e-mail e senha.</li>
+    <li>Toque nos três pontinhos (⋮) no canto de cima.</li>
+    <li>Toque em <strong>Instalar aplicativo</strong> (ou "Adicionar à tela inicial").</li>
+    <li>Confirme. O ícone "Facilities Campo" aparece na tela do celular.</li>
+  </ol>
+</div>
+<div class="fc-cartao mb-3">
+  <h2 class="h6 fw-bold"><i class="bi bi-apple"></i> iPhone (Safari)</h2>
+  <ol class="small mb-0">
+    <li>Abra este endereço no <strong>Safari</strong> (no iPhone, só o Safari instala).</li>
+    <li>Toque no botão de compartilhar (o quadrado com a seta para cima).</li>
+    <li>Role e toque em <strong>Adicionar à Tela de Início</strong>.</li>
+    <li>Toque em <strong>Adicionar</strong>.</li>
+  </ol>
+</div>
+<div class="fc-cartao">
+  <h2 class="h6 fw-bold"><i class="bi bi-people"></i> Celular do posto (usado por mais de uma pessoa)</h2>
+  <p class="small mb-0">Ao terminar o turno, toque no seu nome e em <strong>Sair / trocar de pessoa</strong>. O que você lançou sem sinal continua guardado no aparelho e só sobe quando VOCÊ entrar de novo; quem entrar depois não vê nem envia o que é seu.</p>
+</div>
+{% endblock %}

@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+{% block title %}Estados{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item"><a href="{{ url_for('cadastros.inicio') }}">Cadastros</a></li><li class="breadcrumb-item active" aria-current="page">Estados</li>{% endblock %}
+{% block content %}
+<h1 class="fc-titulo">Estados</h1>
+<p class="fc-sub">Os 27 estados já vêm na lista. Ative os estados onde há operação: só eles aparecem no cadastro do local.</p>
+<div class="fc-cartao p-0">
+  {% for e in estados %}
+  <form method="post" action="{{ url_for('cadastros.ativo_estado', eid=e.id) }}" class="d-flex align-items-center gap-2 border-bottom px-3 py-2 m-0">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="ativo" value="{{ '0' if e.is_active else '1' }}">
+    <span class="fw-semibold">{{ e.nome }}</span><span class="small text-muted">{{ e.sigla }}</span>
+    {% if e.is_active %}<span class="badge text-bg-success">em uso</span>{% endif %}
+    <button class="btn btn-sm ms-auto {{ 'btn-outline-secondary' if e.is_active else 'btn-outline-primary' }}" type="submit">{{ 'Desativar' if e.is_active else 'Ativar' }}</button>
+  </form>
+  {% endfor %}
+</div>
+{% endblock %}

@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% block title %}Histórico de alterações{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item"><a href="{{ url_for('cadastros.inicio') }}">Cadastros</a></li>{% if local %}<li class="breadcrumb-item"><a href="{{ url_for('cadastros.local', cid=local.id) }}">{{ local.name }}</a></li>{% endif %}<li class="breadcrumb-item active" aria-current="page">Histórico</li>{% endblock %}
+{% block content %}
+<h1 class="fc-titulo">Histórico de alterações{% if local %} — {{ local.name }}{% endif %}</h1>
+<p class="fc-sub">Cada cadastro, alteração, desativação e mudança de lugar, com quem fez e quando. Este histórico não se edita nem se apaga.</p>
+{% if not local %}
+<form method="get" class="d-flex gap-2 mb-3">
+  <label class="visually-hidden" for="fent">Tipo de cadastro</label>
+  <select class="form-select w-auto" id="fent" name="entidade">
+    <option value="">Todos os cadastros</option>
+    {% for k, v in entidades.items() %}<option value="{{ k }}" {% if entidade == k %}selected{% endif %}>{{ v }}</option>{% endfor %}
+  </select>
+  <button class="btn btn-outline-primary" type="submit">Filtrar</button>
+</form>
+{% endif %}
+<div class="fc-cartao p-0">
+  {% for ev in eventos %}
+  <div class="border-bottom px-3 py-2">
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+      <span class="badge text-bg-light">{{ entidades.get(ev.entidade, ev.entidade) }}</span>
+      <strong>{{ acoes.get(ev.acao, ev.acao) }}</strong>
+      <span class="small text-muted">#{{ ev.entidade_id }}</span>
+      <span class="small text-muted ms-auto">{{ ev.criado_em|hora_local }} · {{ ev.autor.name if ev.autor else 'sistema' }}</span>
+    </div>
+    {% set mudancas = diferencas(ev) %}
+    {% if mudancas %}
+    <ul class="small mb-0 mt-1">
+      {% for campo, antes, depois in mudancas %}
+      <li><code>{{ campo }}</code>: {% if ev.antes_json %}{{ antes if antes is not none else '—' }} → {% endif %}{{ depois if depois is not none else '—' }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </div>
+  {% else %}
+  <div class="fc-vazio">Nenhuma alteração registrada ainda.</div>
+  {% endfor %}
+</div>
+{% endblock %}

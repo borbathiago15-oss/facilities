@@ -8,16 +8,24 @@ alteração, e com eles as regras que custaram para acertar (contagem por área,
 rascunho fora dos indicadores, tarefa sem resposta...). Na TELA tudo fala a
 língua do Facilities: "contrato", "gestor", "técnico".
 
-Perfis (``role``) e o que cada um faz:
+Perfis (``role``) e o que cada um faz — de cima para baixo na cadeia
+(Fase 2: cada pessoa tem um superior direto, e quem está acima vê tudo o que
+os de baixo veem):
 
-* ``master``       — Administrador: tudo, todos os contratos, cadastros.
-* ``pleno``        — Gestor: os contratos dele; configura a passagem, pede
-                     tarefas, acompanha painel e relatório, gerencia chamados.
-* ``encarregado``  — Encarregado do posto (limpeza, portaria...): faz a
-                     passagem de turno e abre chamados. Nada de cadastro.
-* ``tecnico``      — Técnico de manutenção: atende os chamados e também faz
-                     a passagem de turno da equipe dele.
-* ``visualizador`` — Diretoria: lê tudo, não altera nada.
+* ``master``       — Administrador: tudo, todos os locais, cadastros. Fora da cadeia.
+* ``visualizador`` — Diretoria: lê tudo, não altera nada. Fora da cadeia.
+* ``gerente``      — Gerente: responsável por clientes; vê todos os locais dos
+                     clientes dele e tudo da sua equipe; age como gestor.
+* ``pleno``        — Coordenador (o antigo "gestor", nome interno herdado do
+                     Trino): os locais dele e da equipe; configura a passagem,
+                     pede tarefas, acompanha painel e chamados.
+* ``supervisor``   — Supervisor: acompanha a equipe dos locais dele e também
+                     faz a passagem/checklist.
+* ``encarregado``  — Encarregado ou ASG: faz a passagem/checklist e abre chamados.
+* ``tecnico``      — Técnico de manutenção (nível do encarregado): atende os
+                     chamados e faz a passagem da equipe dele.
+* ``cliente``      — Usuário do cliente: criado desde já, mas NÃO entra até a
+                     liberação do cliente externo (Fase 9).
 """
 import json
 from datetime import datetime
@@ -29,11 +37,26 @@ from facilities.extensions import db
 
 PERFIS = {
     'master': 'Administrador',
-    'pleno': 'Gestor',
-    'encarregado': 'Encarregado',
-    'tecnico': 'Técnico de manutenção',
     'visualizador': 'Diretoria (só leitura)',
+    'gerente': 'Gerente',
+    'pleno': 'Coordenador',
+    'supervisor': 'Supervisor',
+    'encarregado': 'Encarregado / ASG',
+    'tecnico': 'Técnico de manutenção',
+    'cliente': 'Cliente (acesso ainda não liberado)',
 }
+
+# Quem age como gestor nos locais que vê (configura, atribui, cobra).
+PERFIS_DE_GESTAO = ('master', 'gerente', 'pleno')
+
+# A cadeia: o superior direto precisa estar num nível ACIMA (número menor).
+# Pular nível vale (encarregado direto sob o coordenador, num local sem
+# supervisor). Administrador, diretoria e cliente ficam fora da cadeia.
+NIVEL_NA_CADEIA = {'gerente': 1, 'pleno': 2, 'supervisor': 3,
+                   'encarregado': 4, 'tecnico': 4}
+
+# O perfil cliente existe desde a Fase 2 e só entra na Fase 9.
+PERFIS_SEM_LOGIN = ('cliente',)
 
 # Os módulos com tela. O nome da passagem é o mesmo do Trino
 # (``diario_operacional``) pelo motivo do topo deste arquivo.
@@ -44,10 +67,13 @@ MODULES = [MODULO_PASSAGEM, MODULO_CHAMADOS]
 # Quem AGE em cada módulo, por perfil. O perfil decide sozinho — não há
 # caixinha de módulo no cadastro: um clique errado não abre nada a ninguém.
 MODULOS_DO_PERFIL = {
+    'gerente': (MODULO_PASSAGEM, MODULO_CHAMADOS),
     'pleno': (MODULO_PASSAGEM, MODULO_CHAMADOS),
+    'supervisor': (MODULO_PASSAGEM, MODULO_CHAMADOS),
     'encarregado': (MODULO_PASSAGEM, MODULO_CHAMADOS),
     'tecnico': (MODULO_PASSAGEM, MODULO_CHAMADOS),
     'visualizador': (),
+    'cliente': (),
 }
 
 
@@ -59,7 +85,14 @@ user_clients = db.Table(
 
 
 class Client(db.Model):
-    """Um CONTRATO de facilities: o cliente atendido e o local da operação."""
+    """Um LOCAL da operação (na origem, o "contrato"): o armazém, a loja, a sede.
+
+    O nome interno (``clients``, ``client_id``) vem do Trino e não muda. Desde
+    a Fase 1 o local pertence a um cliente (``contratante_id``, ver
+    ``facilities/cadastros/models.py``) e fica num estado; o ``cost_center``
+    é o SUBCENTRO de custo do local (o centro pai é do cliente). Os dois
+    campos são opcionais: local antigo, sem cliente, funciona como antes.
+    """
     __tablename__ = 'clients'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(120), nullable=False)
@@ -69,13 +102,21 @@ class Client(db.Model):
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     is_deleted = db.Column(db.Boolean, default=False, nullable=False, index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    contratante_id = db.Column(db.Integer,
+                               db.ForeignKey('contratantes.id', ondelete='RESTRICT'),
+                               nullable=True, index=True)
+    estado_id = db.Column(db.Integer, db.ForeignKey('estados.id', ondelete='RESTRICT'),
+                          nullable=True, index=True)
 
     responsavel = db.relationship('User', foreign_keys=[responsible_user_id])
+    contratante = db.relationship('Contratante', backref='locais')
+    estado = db.relationship('Estado')
 
     def to_dict(self):
         return {'id': self.id, 'name': self.name, 'cost_center': self.cost_center,
                 'endereco': self.endereco, 'is_active': self.is_active,
-                'responsible_user_id': self.responsible_user_id}
+                'responsible_user_id': self.responsible_user_id,
+                'contratante_id': self.contratante_id, 'estado_id': self.estado_id}
 
 
 class User(db.Model, UserMixin):
@@ -96,10 +137,24 @@ class User(db.Model, UserMixin):
     last_login_at = db.Column(db.DateTime, nullable=True)
     failed_login_count = db.Column(db.Integer, default=0, nullable=False)
     lockout_until = db.Column(db.DateTime, nullable=True)
-    # Sobe a cada troca de senha/desativação: derruba as sessões abertas.
+    # Sobe a cada troca de senha/desativação/saída: derruba as sessões abertas.
     session_epoch = db.Column(db.Integer, default=0, nullable=False)
+    # A cadeia (Fase 2): o superior direto. Ver ``core/hierarquia.py``.
+    superior_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='RESTRICT'),
+                            nullable=True, index=True)
+    # Só para o perfil cliente: de qual cliente (contratante) ele é.
+    cliente_id = db.Column(db.Integer, db.ForeignKey('contratantes.id', ondelete='RESTRICT'),
+                           nullable=True, index=True)
+    # Segunda etapa do login (TOTP, ``core/totp.py``). O segredo só vale com
+    # ``totp_ativo``; o último passo aceito barra o mesmo código duas vezes.
+    totp_segredo = db.Column(db.String(64), nullable=True)
+    totp_ativo = db.Column(db.Boolean, default=False, nullable=False,
+                           server_default=db.false())
+    totp_ultimo_passo = db.Column(db.BigInteger, nullable=True)
 
     clients = db.relationship('Client', secondary=user_clients, backref='linked_users')
+    superior = db.relationship('User', remote_side=[id], foreign_keys=[superior_id],
+                               backref='subordinados_diretos')
 
     MODULES = MODULES
 
@@ -157,17 +212,21 @@ class User(db.Model, UserMixin):
         r = self._effective_role()
         if r == 'master':
             return True
-        if r == 'pleno' and permissao == 'diario_config':
+        if r in PERFIS_DE_GESTAO and permissao == 'diario_config':
             return True
         return permissao in self.permissions
 
     def sees_client_data(self):
-        """Pode agir sobre os dados dos contratos (gestor e administrador)."""
-        return self._effective_role() in ('master', 'pleno')
+        """Pode agir sobre os dados dos locais (gestão: gerente, coordenador,
+        administrador)."""
+        return self._effective_role() in PERFIS_DE_GESTAO
+
+    def e_gestao(self):
+        return self._effective_role() in PERFIS_DE_GESTAO
 
     def le_dados_do_cliente(self):
-        """Pode LER os dados dos contratos (inclui a diretoria)."""
-        return self._effective_role() in ('master', 'pleno', 'visualizador')
+        """Pode LER os dados dos locais (inclui a diretoria)."""
+        return self._effective_role() in PERFIS_DE_GESTAO + ('visualizador',)
 
     def e_encarregado(self):
         return self._effective_role() == 'encarregado'
@@ -175,11 +234,18 @@ class User(db.Model, UserMixin):
     def e_tecnico(self):
         return self._effective_role() == 'tecnico'
 
+    def e_supervisor(self):
+        return self._effective_role() == 'supervisor'
+
+    @property
+    def nivel(self):
+        return NIVEL_NA_CADEIA.get(self._effective_role())
+
     def to_dict(self):
         return {'id': self.id, 'name': self.name, 'email': self.email,
                 'role': self._effective_role(), 'perfil': self.perfil_rotulo,
                 'is_active': self.is_active, 'client_ids': self.client_ids,
-                'all_clients': bool(self.all_clients)}
+                'all_clients': bool(self.all_clients), 'superior_id': self.superior_id}
 
 
 class Notification(db.Model):
@@ -193,3 +259,23 @@ class Notification(db.Model):
     link = db.Column(db.String(255))
     status = db.Column(db.String(10), default='unread', nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+
+class PushInscricao(db.Model):
+    """Um celular (navegador) que aceitou receber avisos (Web Push, Fase 4B).
+
+    O endereço é do serviço de push do navegador (Google, Mozilla, Apple,
+    Microsoft) — ``core/push.py`` só aceita esses. Uma pessoa pode ter
+    vários aparelhos; o serviço respondeu 404/410 → a inscrição sai.
+    """
+    __tablename__ = 'push_inscricoes'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='RESTRICT'),
+                        nullable=False, index=True)
+    endpoint = db.Column(db.String(600), nullable=False, unique=True)
+    p256dh = db.Column(db.String(200), nullable=False)
+    auth = db.Column(db.String(100), nullable=False)
+    aparelho = db.Column(db.String(120))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    ultimo_envio_em = db.Column(db.DateTime)
+    falhas = db.Column(db.Integer, default=0, nullable=False)
