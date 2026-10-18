@@ -16,7 +16,8 @@ from datetime import datetime, time, timedelta
 from facilities import tempo
 from facilities.extensions import db
 from facilities.core.models import PERFIS_DE_GESTAO, User
-from facilities.visitas.models import FEITA, PREVISTA, Visita, VisitaFoto, VisitaProgramada
+from facilities.visitas.models import (FEITA, PERDIDA, PREVISTA, Visita, VisitaFoto,
+                                       VisitaProgramada)
 
 PERFIS_QUE_VISITAM = ('supervisor',) + tuple(PERFIS_DE_GESTAO)
 
@@ -91,7 +92,7 @@ def _avisar_quem_faz(visita):
     titulo = f'Visita de supervisão: {visita.programada.nome}'
     texto = f'{visita.local.name} · até {visita.vencimento.strftime("%d/%m")}.'
     link = f'/app/visitas/{visita.id}'
-    avisar(quem, titulo, texto, link, tipo='visita')
+    quem = avisar(quem, titulo, texto, link, tipo='visita', client_id=visita.client_id)
     push.avisar(quem, titulo, texto, link, marca=f'visita-{visita.id}')
 
 
@@ -120,6 +121,24 @@ def gerar_visitas(hoje=None, agora_utc=None):
 def prazo(visita):
     """Fim do dia do vencimento, em Brasília (UTC)."""
     return tempo.para_utc(visita.vencimento, time(23, 59))
+
+
+# Quanto tempo depois do vencimento a visita ainda pode ser feita (o
+# supervisor que foi um dia depois ainda registra); passou disso, fecha.
+FOLGA_DA_VISITA = timedelta(days=2)
+
+
+def fechar_vencidas(agora_utc=None):
+    """A parte do agendador: visita não feita, vencida há mais que a folga,
+    vira PERDIDA (antes ficava "a fazer" para sempre)."""
+    agora_utc = agora_utc or datetime.utcnow()
+    limite = tempo.local(agora_utc - FOLGA_DA_VISITA).date()
+    n = 0
+    for v in Visita.query.filter(Visita.status == PREVISTA, Visita.vencimento < limite).all():
+        if agora_utc > prazo(v) + FOLGA_DA_VISITA:
+            v.status = PERDIDA
+            n += 1
+    return n
 
 
 def pode_fazer(user, visita):

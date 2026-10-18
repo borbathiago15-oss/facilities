@@ -19,6 +19,13 @@ from tests.test_rotas_servico import utc
 SEGUNDA = date(2026, 10, 19)
 
 
+def _cedo(dia):
+    """O começo do dia: todos os pedidos ainda no futuro (horário que já
+    passou não vira pedido — o teste não pode depender da hora em que roda)."""
+    from datetime import time
+    return tempo.para_utc(dia, time(0, 0))
+
+
 @pytest.fixture()
 def cena(app_module):
     from app import db
@@ -53,8 +60,8 @@ def test_dois_pedidos_sorteados_dentro_do_turno_e_sem_duplicar(app_module, cena)
     from app import db
     from facilities.rotas import servico as s
     with app_module.app.app_context():
-        s.gerar(SEGUNDA)
-        s.gerar(SEGUNDA)
+        s.gerar(SEGUNDA, agora_utc=_cedo(SEGUNDA))
+        s.gerar(SEGUNDA, agora_utc=_cedo(SEGUNDA))
         db.session.commit()
         p = _pedidos()
         assert len(p) == 2 and {x.user_id for x in p} == {cena['ana']}
@@ -63,7 +70,7 @@ def test_dois_pedidos_sorteados_dentro_do_turno_e_sem_duplicar(app_module, cena)
         assert all(h.hour * 60 + h.minute <= 15 * 60 - 40 for h in horas)
         assert all((x.prazo_ate - x.pedido_em) == timedelta(minutes=10) for x in p)
         # Outro dia, outro sorteio.
-        s.gerar(SEGUNDA + timedelta(days=1))
+        s.gerar(SEGUNDA + timedelta(days=1), agora_utc=_cedo(SEGUNDA + timedelta(days=1)))
         db.session.commit()
         terca = [tempo.local(x.pedido_em).time() for x in _pedidos()[2:]]
         assert terca != [h.time() for h in horas]
@@ -78,7 +85,7 @@ def test_zero_desliga(app_module, cena):
         s.salvar_rota(rota.local, rota, {'nome': rota.nome, 'turno': rota.turno,
                                          'hora_inicio': '07:00', 'hora_fim': '15:00',
                                          'dias_semana': '12345', 'presencas_por_turno': '0'})
-        s.gerar(SEGUNDA)
+        s.gerar(SEGUNDA, agora_utc=_cedo(SEGUNDA))
         assert _pedidos() == []
         with pytest.raises(s.RegraDaRota, match='de 0 a 6'):
             s.salvar_rota(rota.local, rota, {'nome': rota.nome, 'turno': rota.turno,
@@ -98,7 +105,7 @@ def test_aviso_confirmacao_e_sem_resposta(app_module, cena):
         from facilities.core import push
         _r, d, _a = _celular()
         push.inscrever(db.session.get(User, cena['ana']), d)
-        s.gerar(SEGUNDA)
+        s.gerar(SEGUNDA, agora_utc=_cedo(SEGUNDA))
         db.session.commit()
         p1, p2 = _pedidos()
         presenca.avisar_e_fechar(p1.pedido_em + timedelta(minutes=1))
@@ -113,7 +120,9 @@ def test_aviso_confirmacao_e_sem_resposta(app_module, cena):
         presenca.confirmar(p1, ana, p1.pedido_em + timedelta(minutes=5))
         db.session.commit()
         assert p1.status == 'confirmada'
-        # O segundo vence sem resposta: o superior (a supervisora) é avisado.
+        # O segundo é avisado na hora e vence sem resposta: o superior (a
+        # supervisora) é avisado.
+        presenca.avisar_e_fechar(p2.pedido_em + timedelta(minutes=1))
         presenca.avisar_e_fechar(p2.prazo_ate + timedelta(minutes=1))
         db.session.commit()
         assert p2.status == 'sem_resposta'
@@ -158,7 +167,7 @@ def test_aviso_da_hora_da_tarefa_uma_vez(app_module, cena):
         from facilities.core import push
         _r, d, _a = _celular()
         push.inscrever(db.session.get(User, cena['ana']), d)
-        s.gerar(SEGUNDA)
+        s.gerar(SEGUNDA, agora_utc=_cedo(SEGUNDA))
         db.session.commit()
         assert s.avisar_tarefas(utc(SEGUNDA, '08:50')) == 0
         assert s.avisar_tarefas(utc(SEGUNDA, '08:59')) == 1
@@ -173,3 +182,30 @@ def test_rodada_completa_do_agendador(app_module, cena):
         reg = s.rodar(agora_utc=utc(SEGUNDA, '06:00'))
         db.session.commit()
         assert reg.ok and len(_pedidos()) == 4          # segunda e terça, 2 cada
+
+
+def test_pedido_que_nunca_saiu_nao_vira_sem_resposta(app_module, cena):
+    """O agendador atrasou e o pedido venceu sem ter sido enviado: não é
+    "sem resposta" e ninguém é alertado (análise de 18/10/2026)."""
+    from app import db
+    from facilities.core.models import Notification
+    from facilities.rotas import presenca, servico as s
+    with app_module.app.app_context():
+        s.gerar(SEGUNDA, agora_utc=_cedo(SEGUNDA))
+        db.session.commit()
+        p1, _p2 = _pedidos()
+        presenca.avisar_e_fechar(p1.prazo_ate + timedelta(minutes=1))
+        db.session.commit()
+        assert p1.status == 'nao_enviada'
+        assert Notification.query.filter_by(title='Presença sem resposta').count() == 0
+
+
+def test_horario_que_ja_passou_nao_vira_pedido(app_module, cena):
+    from app import db
+    from facilities.rotas import servico as s
+    from facilities.rotas.models import ConfirmacaoPresenca
+    with app_module.app.app_context():
+        s.gerar(SEGUNDA, agora_utc=_cedo(SEGUNDA + timedelta(days=1)))
+        db.session.commit()
+        assert ConfirmacaoPresenca.query.count() == 0
+

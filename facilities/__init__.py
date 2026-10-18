@@ -401,6 +401,9 @@ def _comandos(app):
         from facilities.rotas.servico import rodar
         reg = rodar(origem='comando')
         db.session.commit()
+        if reg is None:
+            click.echo('Outra rodada já estava em andamento: nada a fazer agora.')
+            return
         click.echo(f'{reg.tarefas_geradas} tarefa(s) gerada(s), '
                    f'{reg.tarefas_perdidas} marcada(s) como perdida(s).')
 

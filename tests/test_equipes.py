@@ -199,7 +199,10 @@ def test_falta_dispensa_o_pedido_de_presenca_aleatoria(app_module, cena):
     from facilities.rotas.models import ConfirmacaoPresenca
     with app_module.app.app_context():
         hoje = tempo.hoje()
-        rotas.gerar(hoje, [cena['local']])
+        # Começo do dia: os pedidos de presença ainda estão todos no futuro
+        # (horário que já passou não vira pedido).
+        cedo = tempo.para_utc(hoje, time(0, 0))
+        rotas.gerar(hoje, [cena['local']], agora_utc=cedo)
         db.session.commit()
         pedidos = ConfirmacaoPresenca.query.filter_by(user_id=cena['ana_u'], data=hoje).all()
         assert len(pedidos) == 2
@@ -224,7 +227,10 @@ def test_cobertura_passa_as_tarefas_da_rota_para_quem_cobriu(app_module, cena):
     from facilities.rotas.models import ConfirmacaoPresenca
     with app_module.app.app_context():
         hoje = tempo.hoje()
-        rotas.gerar(hoje, [cena['local']])
+        # Começo do dia: os pedidos de presença ainda estão todos no futuro
+        # (horário que já passou não vira pedido).
+        cedo = tempo.para_utc(hoje, time(0, 0))
+        rotas.gerar(hoje, [cena['local']], agora_utc=cedo)
         db.session.commit()
         assert len(_tarefas(cena['ana_u'])) == 3
         sup = _u(cena['sup'])
@@ -237,7 +243,8 @@ def test_cobertura_passa_as_tarefas_da_rota_para_quem_cobriu(app_module, cena):
         with pytest.raises(RegraDaEquipe, match='própria falta'):
             eq.registrar_cobertura(sup, p, {'funcionario_id': cena['ana'], 'motivo': 'atestado'})
         c, passadas = eq.registrar_cobertura(sup, p, {'funcionario_id': cena['bia'],
-                                                      'motivo': 'atestado médico'})
+                                                      'motivo': 'atestado médico'},
+                                             agora_utc=cedo)
         db.session.commit()
         assert passadas == 3
         assert len(_tarefas(cena['bia_u'])) == 3 and not _tarefas(cena['ana_u'])
@@ -245,7 +252,7 @@ def test_cobertura_passa_as_tarefas_da_rota_para_quem_cobriu(app_module, cena):
         assert ConfirmacaoPresenca.query.filter_by(user_id=cena['bia_u'], data=hoje,
                                                    status='pendente').count() == 2
         # Gerar de novo não devolve nada para a Ana.
-        rotas.gerar(hoje, [cena['local']])
+        rotas.gerar(hoje, [cena['local']], agora_utc=cedo)
         db.session.commit()
         assert not _tarefas(cena['ana_u'])
         # Com cobertura, a falta não vira "veio" sem a gestão corrigir.

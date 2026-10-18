@@ -355,8 +355,13 @@ def test_tarefa_feita_nao_e_feita_de_novo_por_outra_pessoa(app_module, cena):
         t9 = _tarefas()[0]
         _executar(cena['ana'], t9, utc(SEGUNDA, '09:00'))
         db.session.commit()
-        with pytest.raises(s.RegraDaRota, match='já foi registrada por Ana'):
-            _executar(cena['mariana'], t9, utc(SEGUNDA, '09:05'))
+        # O trabalho foi feito: não se perde — vira atividade extra, dizendo
+        # por quê; a tarefa continua com a execução da Ana.
+        ex, nova = _executar(cena['mariana'], t9, utc(SEGUNDA, '09:05'))
+        db.session.commit()
+        assert nova and ex.extra and ex.tarefa_id is None
+        assert 'já tinha sido registrada por Ana' in ex.observacao
+        assert len(t9.execucoes) == 1
 
 
 def test_mariana_cobre_a_ana(app_module, cena):

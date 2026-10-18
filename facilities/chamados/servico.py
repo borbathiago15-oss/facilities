@@ -311,10 +311,15 @@ def abrir(user, client_id, titulo, descricao='', local='', categoria='outro',
     db.session.add(ch)
     db.session.flush()
     _evento(ch, 'aberto', user, f'Prioridade {PRIORIDADES[prioridade].lower()}.')
-    _avisar(gestores_do_contrato(client_id), ch, f'Novo chamado: {ch.titulo}',
-            f'{contrato.name} · prioridade {PRIORIDADES[prioridade].lower()}'
-            f'{" · " + ch.local if ch.local else ""}. Atribua a um técnico.',
-            exceto=user.id)
+    avisados = _avisar(gestores_do_contrato(client_id), ch, f'Novo chamado: {ch.titulo}',
+                       f'{contrato.name} · prioridade {PRIORIDADES[prioridade].lower()}'
+                       f'{" · " + ch.local if ch.local else ""}. Atribua a um técnico.',
+                       exceto=user.id)
+    if prioridade == 'urgente':
+        # Urgente não espera alguém abrir o sino: vai também para o celular.
+        from facilities.core import push
+        push.avisar(avisados, f'Urgente: {ch.numero}', f'{contrato.name} · {ch.titulo}',
+                    f'/chamados/{ch.id}', marca=f'novo-{ch.id}')
     return ch
 
 
@@ -571,9 +576,14 @@ def executar(user, ch, acao, form):
         if ch.responsavel_id is None:
             ch.responsavel_id = user.id
         _evento(ch, 'resolvido', user, texto)
-        if _avisar([ch.solicitante_id], ch, f'Chamado resolvido: {ch.titulo}',
-                   'Confira no local e confirme — ou reabra se não ficou bom.',
-                   exceto=user.id):
+        avisados = _avisar([ch.solicitante_id], ch, f'Chamado resolvido: {ch.titulo}',
+                           'Confira no local e confirme — ou reabra se não ficou bom.',
+                           exceto=user.id)
+        if avisados:
+            from facilities.core import push
+            push.avisar(avisados, f'Resolvido: {ch.numero}',
+                        f'{ch.titulo} — confira e confirme.', f'/chamados/{ch.id}',
+                        marca=f'resolvido-{ch.id}')
             mensagem = 'Chamado marcado como resolvido. Quem pediu foi avisado para conferir.'
 
     elif acao == 'confirmar':
@@ -588,7 +598,12 @@ def executar(user, ch, acao, form):
         _exigir(texto, 'Diga o que ainda não ficou bom.', 400)
         ch.status = EM_ATENDIMENTO
         ch.resolvido_em = None
-        _evento(ch, 'reaberto', user, texto)
+        # Reaberto é serviço refeito: prazo novo pela régua e os avisos de
+        # prazo valem de novo (antes o reaberto atrasado não avisava ninguém).
+        ch.prazo = prazo_para(ch.prioridade, agora, ch.client_id)
+        ch.aviso_vencendo_em = None
+        ch.aviso_vencido_em = None
+        _evento(ch, 'reaberto', user, f'{texto} — novo prazo: {_prazo_txt(ch)}.')
         _avisar([ch.responsavel_id] if ch.responsavel_id else gestores_do_contrato(ch.client_id),
                 ch, f'Chamado reaberto: {ch.titulo}', texto[:300], exceto=user.id)
 
@@ -695,3 +710,34 @@ def avisar_prazos(agora=None):
             ch.aviso_vencendo_em = agora
             n += 1
     return n
+
+
+# Decisão do dono (18/10/2026): o chamado resolvido NÃO fecha sozinho — só
+# quem abriu é lembrado de conferir e confirmar.
+LEMBRAR_CONFIRMACAO_APOS = timedelta(hours=24)
+
+
+def lembrar_confirmacao(agora=None):
+    """A parte do agendador: resolvido há mais de 24 h sem confirmação → um
+    lembrete (sino e celular) para quem abriu. Uma vez por resolução: se
+    reabrir e resolver de novo, lembra de novo."""
+    from facilities.core import push
+    agora = agora or datetime.utcnow()
+    n = 0
+    for ch in Chamado.query.filter(Chamado.status == RESOLVIDO,
+                                   Chamado.resolvido_em <= agora - LEMBRAR_CONFIRMACAO_APOS).all():
+        ja = ChamadoEvento.query.filter(ChamadoEvento.chamado_id == ch.id,
+                                        ChamadoEvento.tipo == 'lembrete',
+                                        ChamadoEvento.created_at >= ch.resolvido_em).first()
+        if ja is not None:
+            continue
+        avisados = _avisar([ch.solicitante_id], ch, f'Falta confirmar: {ch.titulo}',
+                           'O chamado foi resolvido. Confira no local e confirme — '
+                           'ou reabra se não ficou bom.')
+        push.avisar(avisados, f'Falta confirmar: {ch.numero}', ch.titulo,
+                    f'/chamados/{ch.id}', marca=f'resolvido-{ch.id}')
+        db.session.add(ChamadoEvento(chamado_id=ch.id, tipo='lembrete', created_at=agora,
+                                     texto='Lembrete para quem abriu conferir e confirmar.'))
+        n += 1
+    return n
+

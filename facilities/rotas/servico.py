@@ -374,7 +374,7 @@ def horarios_do_item(rota, item, dia):
     return sorted(momentos)
 
 
-def gerar(dia, client_ids=None):
+def gerar(dia, client_ids=None, agora_utc=None):
     """Cria as tarefas do turno que começa em ``dia``. Devolve quantas criou."""
     from facilities.core.models import Client
     q = Rota.query.join(Client, Client.id == Rota.client_id).filter(
@@ -392,7 +392,7 @@ def gerar(dia, client_ids=None):
         from facilities.equipes.servico import substituto
         pessoa = substituto(rota, dia, pessoa)
         from facilities.rotas import presenca
-        presenca.gerar(rota, dia, pessoa)
+        presenca.gerar(rota, dia, pessoa, agora_utc)
         for item in rota.itens:
             versao = item.modelo.versao_atual if item.modelo else None
             if (not item.is_active or versao is None or not item.modelo.is_active
@@ -448,33 +448,64 @@ def avisar_tarefas(agora_utc):
     return n
 
 
+# Chave da trava do agendador no Postgres (pg_advisory_xact_lock): um
+# número qualquer, fixo, só deste uso.
+TRAVA_DO_AGENDADOR = 7_314_202_610
+
+
+def _outra_rodada_em_andamento():
+    """Duas rodadas ao mesmo tempo (relógio atrasado + comando manual, ou um
+    deploy no meio) mandariam o mesmo aviso duas vezes e esbarrariam nas
+    regras de unicidade. No Postgres, só uma passa; a trava cai no commit.
+    No SQLite (testes, desenvolvimento) não há concorrência."""
+    bind = db.session.get_bind()
+    if bind.dialect.name != 'postgresql':
+        return False
+    from sqlalchemy import text
+    return not db.session.execute(text('SELECT pg_try_advisory_xact_lock(:k)'),
+                                  {'k': TRAVA_DO_AGENDADOR}).scalar()
+
+
 def rodar(origem='comando', agora_utc=None):
     """Uma rodada: hoje e amanhã gerados; avisos da hora (tarefas e presença);
-    perdidas e presenças vencidas fechadas. Fica registrada."""
+    perdidas e presenças vencidas fechadas. Fica registrada.
+
+    Devolve ``None`` se outra rodada já está em andamento (não faz nada).
+    Se falhar, desfaz o que fez, GRAVA o registro da falha (com o erro) e
+    repassa a exceção — antes a falha sumia junto com o desfazer."""
     agora_utc = agora_utc or datetime.utcnow()
+    if _outra_rodada_em_andamento():
+        return None
     hoje = tempo.local(agora_utc).date()
-    reg = AgendadorExecucao(origem=origem, iniciada_em=datetime.utcnow())
+    iniciada = datetime.utcnow()
+    reg = AgendadorExecucao(origem=origem, iniciada_em=iniciada)
     db.session.add(reg)
     db.session.flush()
     try:
         from facilities.chamados.servico import avisar_prazos
         from facilities.preventiva.servico import gerar_ordens
         from facilities.rotas import presenca
-        reg.tarefas_geradas = gerar(hoje) + gerar(hoje + timedelta(days=1))
+        reg.tarefas_geradas = (gerar(hoje, agora_utc=agora_utc)
+                               + gerar(hoje + timedelta(days=1), agora_utc=agora_utc))
         gerar_ordens(hoje, agora_utc)
-        from facilities.visitas.servico import gerar_visitas
+        from facilities.visitas.servico import fechar_vencidas, gerar_visitas
         gerar_visitas(hoje, agora_utc)
+        fechar_vencidas(agora_utc)
         avisar_tarefas(agora_utc)
         presenca.avisar_e_fechar(agora_utc)
         avisar_prazos(agora_utc)
+        from facilities.chamados.servico import lembrar_confirmacao
+        lembrar_confirmacao(agora_utc)
         reg.tarefas_perdidas = fechar_perdidas(agora_utc)
         reg.ok = True
-    except Exception as erro:            # registra e repassa: quem chamou decide
-        reg.ok = False
-        reg.erro = f'{type(erro).__name__}: {erro}'[:2000]
+    except Exception as erro:
+        db.session.rollback()
+        db.session.add(AgendadorExecucao(origem=origem, iniciada_em=iniciada,
+                                         concluida_em=datetime.utcnow(), ok=False,
+                                         erro=f'{type(erro).__name__}: {erro}'[:2000]))
+        db.session.commit()
         raise
-    finally:
-        reg.concluida_em = datetime.utcnow()
+    reg.concluida_em = datetime.utcnow()
     return reg
 
 
@@ -701,7 +732,12 @@ def registrar_execucao(user, dados, fotos, agora_utc=None):
             raise RegraDaRota('O checklist desta preventiva não está publicado. Avise a gestão.',
                               409)
     elif dados.get('tarefa_id'):
-        tarefa = db.session.get(TarefaDia, int(dados['tarefa_id']))
+        bruto = str(dados.get('tarefa_id')).strip()
+        # Trava a tarefa até o commit: duas pessoas no mesmo ponto não
+        # registram a MESMA tarefa (a segunda vê "já registrada").
+        tarefa = (db.session.execute(db.select(TarefaDia).where(TarefaDia.id == int(bruto))
+                                     .with_for_update()).scalar_one_or_none()
+                  if bruto.isdigit() else None)
         if tarefa is None or tarefa.client_id != ponto.client_id:
             raise RegraDaRota('Tarefa não encontrada.', 404)
         if tarefa.ponto_id != ponto.id:
@@ -714,11 +750,11 @@ def registrar_execucao(user, dados, fotos, agora_utc=None):
         # enquanto estava sem sinal, vale a que ele mostrou à pessoa.
         from facilities.rotas.models import ChecklistVersao
         versao = None
-        if dados.get('versao_id'):
+        if str(dados.get('versao_id') or '').strip().isdigit():
             versao = db.session.get(ChecklistVersao, int(dados['versao_id']))
             modelo = versao.modelo if versao else None
         else:
-            modelo = db.session.get(ChecklistModelo, int(dados.get('modelo_id') or 0))
+            modelo = db.session.get(ChecklistModelo, int(dados['modelo_id']) if str(dados.get('modelo_id') or '').strip().isdigit() else 0)
             versao = modelo.versao_atual if modelo else None
         if modelo is None or versao is None or modelo.client_id != ponto.client_id \
                 or not modelo.is_active:
@@ -734,18 +770,23 @@ def registrar_execucao(user, dados, fotos, agora_utc=None):
         concluida = max(lido, _hora_do_aparelho(dados.get('concluida_em'), agora_utc))
     else:
         concluida = agora_utc
+    virou_extra = None
     if tarefa is not None:
         tol = timedelta(minutes=tarefa.tolerancia_min)
-        if tarefa.status in (CONCLUIDA_NO_PRAZO, CONCLUIDA_COM_ATRASO, NAO_REALIZADA):
-            quem = tarefa.execucoes[0].pessoa.name if tarefa.execucoes else 'outra pessoa'
-            raise RegraDaRota(f'Esta tarefa já foi registrada por {quem}.', 409)
         if lido < tarefa.previsto_para - tol:
             raise RegraDaRota(
                 'Ainda não chegou o horário desta tarefa. Ela pode ser feita a partir das '
                 f'{tempo.fmt(tarefa.previsto_para - tol, "%H:%M")}.', 409)
-        if lido > tarefa.fim_do_turno:
-            raise RegraDaRota('O turno desta tarefa já terminou. Registre como atividade '
-                              'extra, se fez agora.', 409)
+        # O trabalho FOI feito: se a tarefa já tinha dono ou o turno acabou
+        # (comum quando o envio ficou guardado sem sinal), vira atividade extra
+        # em vez de ser recusado — antes a fila só oferecia "descartar".
+        if tarefa.status in (CONCLUIDA_NO_PRAZO, CONCLUIDA_COM_ATRASO, NAO_REALIZADA):
+            quem = tarefa.execucoes[0].pessoa.name if tarefa.execucoes else 'outra pessoa'
+            virou_extra = f'a tarefa já tinha sido registrada por {quem}'
+        elif lido > tarefa.fim_do_turno:
+            virou_extra = 'o turno da tarefa já tinha terminado'
+        if virou_extra:
+            tarefa = None
 
     itens = itens_da_versao(versao)
     fotos_por_item = {k.split(':', 1)[1]: v for k, v in fotos.items()
@@ -766,8 +807,11 @@ def registrar_execucao(user, dados, fotos, agora_utc=None):
                   lido_em=lido, iniciada_em=lido, concluida_em=concluida,
                   sem_sinal=sem_sinal, recebida_em=agora_utc,
                   respostas_json=json.dumps(limpas, ensure_ascii=False),
-                  observacao=(dados.get('observacao') or '').strip()[:2000] or None,
+                  observacao=((f'[Registrada como atividade extra: {virou_extra}.] '
+                               if virou_extra else '')
+                              + (dados.get('observacao') or '').strip())[:2000] or None,
                   envio_id=envio, n_nao_conformes=len(ncs))
+    ex.virou_extra = virou_extra
     db.session.add(ex)
     try:
         db.session.flush()
@@ -783,10 +827,15 @@ def registrar_execucao(user, dados, fotos, agora_utc=None):
                 _guardar_foto(ex, arq, chave)
             elif chave.startswith('item:'):
                 _guardar_foto(ex, arq, 'item', chave.split(':', 1)[1])
+    novas_ncs = []
     for item in ncs:
-        db.session.add(NaoConformidade(execucao_id=ex.id, client_id=ex.client_id,
-                                       item_codigo=item['codigo'], item_texto=item['texto'],
-                                       resposta=limpas.get(item['codigo'])))
+        nc = NaoConformidade(execucao_id=ex.id, client_id=ex.client_id,
+                             item_codigo=item['codigo'], item_texto=item['texto'],
+                             resposta=limpas.get(item['codigo']))
+        db.session.add(nc)
+        novas_ncs.append(nc)
+    if novas_ncs:
+        _chamado_das_ncs(ex, novas_ncs, user)
     if chamado is not None:
         from facilities.preventiva.servico import resolver_pela_execucao
         resolver_pela_execucao(chamado, user, ex, agora_utc)
@@ -829,6 +878,42 @@ def marcar_nao_realizada(tarefa, user, motivo, texto='', abrir_chamado=False):
             origem=ORIGEM_TAREFA_ROTA, origem_id=tarefa.id)
         tarefa.chamado_id = ch.id
     return tarefa
+
+
+def _chamado_das_ncs(ex, ncs, user):
+    """Decisão do dono (18/10/2026): item não conforme no checklist da rota
+    ABRE chamado na hora — um por execução, com os itens na descrição e as
+    fotos da execução (como a visita de supervisão). Antes o app dizia
+    "avisado à gestão" e ninguém era avisado.
+
+    O chamado nasce ligado à primeira não conformidade (o índice de origem viva
+    impede duplicar) e todas as da execução apontam para ele."""
+    from facilities.chamados import servico as chamados
+    from facilities.chamados.models import ORIGEM_NAO_CONFORMIDADE, ChamadoAnexo
+    db.session.flush()
+    lista = '; '.join(f'"{nc.item_texto}": {nc.resposta or "—"}' for nc in ncs)
+    try:
+        ch = chamados.abrir(
+            user, ex.client_id,
+            f'{ex.ponto.nome}: {len(ncs)} item(ns) não conforme(s) — '
+            f'{ex.versao.modelo.nome}'[:200],
+            descricao=(f'Checklist feito por {user.name} em {tempo.fmt(ex.concluida_em)}. '
+                       f'Não conforme: {lista}.'
+                       + (f' Observação: {ex.observacao}' if ex.observacao else '')),
+            local=f'{ex.ponto.ambiente.nome} · {ex.ponto.nome}'[:200],
+            origem=ORIGEM_NAO_CONFORMIDADE, origem_id=ncs[0].id)
+    except chamados.RecusaChamado:
+        # Perfil sem chamados (não deveria acontecer no campo): as não
+        # conformidades ficam registradas e a gestão abre pela execução.
+        return None
+    for nc in ncs:
+        nc.chamado_id = ch.id
+    for f in ex.fotos:
+        ext = f.storage_key.rsplit('.', 1)[-1]
+        db.session.add(ChamadoAnexo(chamado_id=ch.id, nome=f'checklist-{f.id}.{ext}', mime=f.mime,
+                                    tamanho=f.tamanho, storage_key=f.storage_key,
+                                    momento='antes', uploaded_by=user.id))
+    return ch
 
 
 def abrir_chamado_da_nc(nc, user):

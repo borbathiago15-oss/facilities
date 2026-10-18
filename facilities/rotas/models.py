@@ -379,6 +379,9 @@ class OcorrenciaPublica(db.Model):
 PRESENCA_PENDENTE = 'pendente'
 PRESENCA_CONFIRMADA = 'confirmada'
 PRESENCA_SEM_RESPOSTA = 'sem_resposta'
+# O pedido venceu sem nunca ter sido enviado (o agendador atrasou): não é
+# culpa de ninguém no posto — não vira "sem resposta" nem alerta o superior.
+PRESENCA_NAO_ENVIADA = 'nao_enviada'
 
 
 class ConfirmacaoPresenca(db.Model):

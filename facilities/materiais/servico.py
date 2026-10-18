@@ -245,8 +245,8 @@ def pedir(user, local, dados, foto=None, agora_utc=None):
         _guardar_foto(p, foto)
     quem = gestores_do_contrato(local.id)
     titulo = f'Pedido de insumo · {local.name}'
-    avisar(quem, titulo, f'{p.resumo} — pedido por {user.name}.', '/materiais/pedidos',
-           tipo='insumo')
+    quem = avisar(quem, titulo, f'{p.resumo} — pedido por {user.name}.', '/materiais/pedidos',
+                  tipo='insumo', client_id=local.id)
     push.avisar(quem, titulo, p.resumo, '/materiais/pedidos', marca=f'pedido-{p.id}')
     return p
 

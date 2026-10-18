@@ -11,12 +11,31 @@ bp = Blueprint('core', __name__)
 AVISOS_POR_PAGINA = 50
 
 
-def avisar(user_ids, titulo, mensagem='', link=None, tipo='geral'):
-    """Grava um aviso para cada pessoa (o commit é de quem chama)."""
-    for uid in {u for u in (user_ids or []) if u}:
-        db.session.add(Notification(user_id=uid, notification_type=tipo,
+def avisar(user_ids, titulo, mensagem='', link=None, tipo='geral', client_id=None):
+    """Grava um aviso para cada pessoa e devolve quem foi avisado (o commit é
+    de quem chama).
+
+    Só recebe quem está ativo e — com ``client_id`` — ainda tem o local na
+    carteira: quem saiu do local não continua recebendo título e local dele
+    (a mesma conferência dos avisos de chamado). Quem chama manda o push só
+    para os devolvidos."""
+    from facilities.core.hierarquia import carteira
+    from facilities.core.models import User
+    ids = {u for u in (user_ids or []) if u}
+    if not ids:
+        return set()
+    avisados = set()
+    for u in User.query.filter(User.id.in_(ids), User.is_active.is_(True),
+                               User.is_deleted.is_(False)):
+        if client_id is not None:
+            cart = carteira(u)
+            if cart is not None and client_id not in cart:
+                continue
+        db.session.add(Notification(user_id=u.id, notification_type=tipo,
                                     title=(titulo or '')[:150], message=mensagem,
                                     link=link, status='unread'))
+        avisados.add(u.id)
+    return avisados
 
 
 @bp.app_context_processor
