@@ -78,6 +78,8 @@ se recusa a rodar se o nome do banco não tiver "test" (`facilities_testes`,
 
 ## Produção
 
+Passo a passo do Railway (a hospedagem escolhida): `docs/DEPLOY_RAILWAY.md`.
+
 - Banco **Postgres**; o schema vem só das migrações (`flask db upgrade`, que o
   `docker-entrypoint.sh` roda antes do gunicorn). O boot não faz DDL.
 - O app **recusa subir** com configuração que perde dado ou derruba sessão:
