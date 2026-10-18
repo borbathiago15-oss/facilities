@@ -147,6 +147,19 @@ obrigatória não serve para visita) e precisa de sinal. O motivo da cobertura
 é texto livre — se a operação quiser uma lista fixa de motivos, é decisão do
 dono.
 
+Fase 7 (18/10/2026) — materiais e custo operacional (`facilities/materiais/`):
+
+| Decisão do dono | Como ficou |
+|---|---|
+| F7-1 preço opcional, no site | `Material.preco_unitario` nulo pode; cada movimento guarda o preço do dia; sem preço = fora do custo, avisado na tela |
+| F7-2 saldo negativo | só o gestor do contrato (`gestores_do_contrato`) ou o administrador, com justificativa; quem autorizou fica no movimento |
+| F7-3 pedido de insumo | só aviso: o gestor marca "visto" e compra em outro sistema; prazo 48 h ou o do cliente (`contratantes.prazo_pedido_insumo_horas`); entra nas Demandas |
+| F7-4 custo | supervisor, gestão e diretoria veem; cliente, encarregado e técnico, não |
+
+Custo operacional = soma dos consumos do período (por local, cliente e estado,
+das mesmas linhas). Migração `7da1bd3b5466`: 4 tabelas e 1 coluna, só
+acrescenta. O catálogo de materiais é do grupo inteiro: qualquer gestor edita.
+
 ATENÇÃO: a presença lançada pelo supervisor tem o mesmo risco da D48
 (controle de jornada): validar com RH e jurídico antes do piloto e constar no
 aviso aos colaboradores (D25).

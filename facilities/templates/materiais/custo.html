@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% block title %}Custo operacional{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item"><a href="{{ url_for('materiais.catalogo') }}">Materiais</a></li><li class="breadcrumb-item active" aria-current="page">Custo operacional</li>{% endblock %}
+{% block content %}
+<h1 class="fc-titulo">Custo operacional de materiais</h1>
+<p class="fc-sub">O que foi consumido no período, pelo preço do dia de cada lançamento. É controle da operação: não substitui nem alimenta o DRE.</p>
+<form class="d-flex flex-wrap gap-2 mb-3" method="get">
+  <label class="visually-hidden" for="cde">De</label><input class="form-control w-auto" type="date" id="cde" name="de" value="{{ de.isoformat() }}">
+  <label class="visually-hidden" for="cate">Até</label><input class="form-control w-auto" type="date" id="cate" name="ate" value="{{ ate.isoformat() }}">
+  <button class="btn btn-outline-primary" type="submit">Ver</button>
+</form>
+<div class="fc-cartao py-2 px-3 mb-3 d-inline-block"><div class="small text-muted">Total de {{ de.strftime('%d/%m/%Y') }} a {{ ate.strftime('%d/%m/%Y') }}</div><div class="fs-4 fw-bold">{{ r.total|reais }}</div></div>
+{% if r.sem_preco %}<div class="alert alert-warning small">{{ r.sem_preco }} consumo(s) de material sem preço ficaram fora do total.</div>{% endif %}
+<div class="row g-3">
+  <div class="col-lg-6"><section class="fc-cartao" aria-labelledby="tit-cli"><h2 class="h6 fw-bold" id="tit-cli">Por cliente</h2>
+    {% for k, v in r.clientes.items() %}<div class="d-flex border-top py-1"><span>{{ k }}</span><span class="ms-auto fw-semibold">{{ v|reais }}</span></div>{% else %}<p class="small text-muted">Nada no período.</p>{% endfor %}</section></div>
+  <div class="col-lg-6"><section class="fc-cartao" aria-labelledby="tit-uf"><h2 class="h6 fw-bold" id="tit-uf">Por estado</h2>
+    {% for k, v in r.estados.items() %}<div class="d-flex border-top py-1"><span>{{ k }}</span><span class="ms-auto fw-semibold">{{ v|reais }}</span></div>{% else %}<p class="small text-muted">Nada no período.</p>{% endfor %}</section></div>
+  <div class="col-12"><section class="fc-cartao" aria-labelledby="tit-loc"><h2 class="h6 fw-bold" id="tit-loc">Por local</h2>
+    {% for x in r.locais %}<a class="d-flex flex-wrap gap-2 border-top py-1 text-reset text-decoration-none" href="{{ url_for('materiais.local', cid=x.local.id) }}"><span>{{ x.local.name }}</span><span class="small text-muted">{{ x.cliente }} · {{ x.estado }} · {{ x.consumos }} lançamento(s){% if x.sem_preco %}, {{ x.sem_preco }} sem preço{% endif %}</span><span class="ms-auto fw-semibold">{{ x.valor|reais }}</span></a>{% else %}<p class="small text-muted">Nada no período.</p>{% endfor %}</section></div>
+</div>
+{% endblock %}

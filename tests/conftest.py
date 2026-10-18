@@ -134,7 +134,9 @@ def clean_transactional_data(app_module):
         # Fase 6: equipe e visitas apontam para rotas, checklists e chamados.
         from facilities.equipes import models as equipes_models
         from facilities.visitas import models as visitas_models
-        for model in (equipes_models.MODELOS_EM_ORDEM_DE_LIMPEZA
+        from facilities.materiais import models as materiais_models
+        for model in (materiais_models.MODELOS_EM_ORDEM_DE_LIMPEZA
+                      + equipes_models.MODELOS_EM_ORDEM_DE_LIMPEZA
                       + visitas_models.MODELOS_EM_ORDEM_DE_LIMPEZA
                       + preventiva_models.MODELOS_EM_ORDEM_DE_LIMPEZA
                       + rotas_models.MODELOS_EM_ORDEM_DE_LIMPEZA + (PushInscricao,)):

@@ -28,6 +28,8 @@
         {% endfor %}
       </div>
     </details>
+    <div class="col-md-6"><label class="form-label small fw-semibold" for="ppi{{ sfx }}">Prazo do pedido de insumo (horas)</label>
+      <input class="form-control" id="ppi{{ sfx }}" name="prazo_pedido_insumo_horas" type="number" min="1" max="720" value="{{ (c.prazo_pedido_insumo_horas or '') if c else '' }}" placeholder="Vazio = 48 h"></div>
     {% set prazos = prazos_de(c) %}
     <details class="col-12"><summary class="small fw-semibold">Prazo de atendimento das ocorrências do QR público (minutos)</summary>
       <p class="form-text">Vazio = sem prazo. O prazo conta da hora em que a pessoa enviou o aviso.</p>

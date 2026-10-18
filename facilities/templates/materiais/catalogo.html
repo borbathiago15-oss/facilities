@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+{% block title %}Materiais{% endblock %}
+{% block content %}
+<h1 class="fc-titulo">Materiais e insumos</h1>
+<p class="fc-sub">O catálogo do grupo. O preço é opcional: material sem preço entra no estoque, mas fica fora do custo.</p>
+<div class="d-flex flex-wrap gap-2 mb-3">
+  <a class="btn btn-primary btn-sm" href="{{ url_for('materiais.custo') }}"><i class="bi bi-cash-coin"></i> Custo operacional</a>
+  <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('materiais.pedidos') }}"><i class="bi bi-cart"></i> Pedidos de insumo</a>
+</div>
+<section class="fc-cartao mb-3" aria-labelledby="tit-est">
+  <h2 class="h6 fw-bold" id="tit-est"><i class="bi bi-box-seam"></i> Estoque por local</h2>
+  {% for l in locais %}
+  <a class="d-flex border-top py-2 text-reset text-decoration-none" href="{{ url_for('materiais.local', cid=l.id) }}"><span class="fw-semibold">{{ l.name }}</span><i class="bi bi-chevron-right ms-auto"></i></a>
+  {% else %}<p class="small text-muted">Nenhum local na sua carteira.</p>{% endfor %}
+</section>
+<section class="fc-cartao" aria-labelledby="tit-cat">
+  <h2 class="h6 fw-bold" id="tit-cat"><i class="bi bi-list-ul"></i> Catálogo</h2>
+  {% for m in materiais %}
+  <div class="border-top py-2">
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+      <span class="fw-semibold">{{ m.nome }}</span><span class="small text-muted">{{ m.unidade }}</span>
+      <span class="small ms-auto">{% if m.preco_unitario is not none %}{{ m.preco_unitario|reais }} / {{ m.unidade }}{% else %}<span class="text-muted">sem preço</span>{% endif %}</span>
+      {% if not m.is_active %}<span class="badge text-bg-secondary">desativado</span>{% endif %}
+    </div>
+    {% if pode_montar %}
+    <details class="mt-1"><summary class="small fw-semibold">Editar</summary>
+      <form method="post" action="{{ url_for('materiais.editar_material', mid=m.id) }}" class="row g-2 mt-1">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="col-md-5"><label class="form-label small" for="mn{{ m.id }}">Nome</label><input class="form-control" id="mn{{ m.id }}" name="nome" required maxlength="120" value="{{ m.nome }}"></div>
+        <div class="col-6 col-md-3"><label class="form-label small" for="mu{{ m.id }}">Unidade</label><input class="form-control" id="mu{{ m.id }}" name="unidade" required maxlength="20" value="{{ m.unidade }}"></div>
+        <div class="col-6 col-md-4"><label class="form-label small" for="mp{{ m.id }}">Preço por unidade (R$, opcional)</label><input class="form-control" id="mp{{ m.id }}" name="preco_unitario" inputmode="decimal" value="{{ m.preco_unitario|reais|replace('R$ ', '') if m.preco_unitario is not none else '' }}"></div>
+        <div class="col-12"><button class="btn btn-primary btn-sm fw-bold" type="submit">Salvar</button></div>
+      </form>
+      <form method="post" action="{{ url_for('materiais.editar_material', mid=m.id) }}" class="mt-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="ativo" value="{{ '0' if m.is_active else '1' }}">
+        <button class="btn btn-outline-secondary btn-sm" type="submit">{{ 'Desativar' if m.is_active else 'Reativar' }}</button>
+      </form>
+    </details>
+    {% endif %}
+  </div>
+  {% else %}<p class="small text-muted">Nenhum material ainda.</p>{% endfor %}
+  {% if pode_montar %}
+  <details class="mt-2" {% if not materiais %}open{% endif %}><summary class="fw-semibold">Cadastrar material</summary>
+    <form method="post" action="{{ url_for('materiais.criar_material') }}" class="row g-2 mt-1">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="col-md-5"><label class="form-label small" for="nmn">Nome</label><input class="form-control" id="nmn" name="nome" required maxlength="120" placeholder="Ex.: Detergente neutro 5 L"></div>
+      <div class="col-6 col-md-3"><label class="form-label small" for="nmu">Unidade</label><input class="form-control" id="nmu" name="unidade" required maxlength="20" placeholder="Ex.: un, L, kg"></div>
+      <div class="col-6 col-md-4"><label class="form-label small" for="nmp">Preço por unidade (R$, opcional)</label><input class="form-control" id="nmp" name="preco_unitario" inputmode="decimal" placeholder="Ex.: 12,90"></div>
+      <div class="col-12"><button class="btn btn-primary fw-bold" type="submit">Cadastrar</button></div>
+    </form>
+  </details>
+  {% endif %}
+</section>
+{% endblock %}

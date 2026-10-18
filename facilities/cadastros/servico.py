@@ -183,6 +183,7 @@ def salvar_contratante(contratante, dados, autor):
     contratante.gerente_id = _gerente_valido(_id(dados, 'gerente_id'))
     contratante.prazos_ocorrencia_json = _prazos_de_ocorrencia(dados)
     contratante.prazos_chamado_json = _regua_de_chamado(dados)
+    contratante.prazo_pedido_insumo_horas = _prazo_do_pedido(dados)
     if nova:
         db.session.add(contratante)
     registrar('contratante', contratante, 'criado' if nova else 'alterado', antes, autor)
@@ -216,6 +217,15 @@ def _regua_de_chamado(dados):
                                    '(90 dias).')
         regua[prioridade] = int(bruto)
     return json.dumps(regua, sort_keys=True) if regua else None
+
+
+def _prazo_do_pedido(dados):
+    bruto = str(dados.get('prazo_pedido_insumo_horas') or '').strip()
+    if not bruto:
+        return None
+    if not bruto.isdigit() or not 1 <= int(bruto) <= 720:
+        raise CadastroInvalido('Prazo do pedido de insumo: em horas, de 1 a 720 (30 dias).')
+    return int(bruto)
 
 
 def regua_de(contratante):

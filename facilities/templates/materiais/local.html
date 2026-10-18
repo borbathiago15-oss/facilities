@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+{% block title %}{{ local.name }} — estoque{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item"><a href="{{ url_for('materiais.catalogo') }}">Materiais</a></li><li class="breadcrumb-item active" aria-current="page">{{ local.name }}</li>{% endblock %}
+{% block content %}
+<h1 class="fc-titulo">Estoque · {{ local.name }}</h1>
+<p class="fc-sub">O saldo é a soma de tudo que entrou e saiu. O consumo do dia a dia é lançado no aplicativo, por quem usou.</p>
+<div class="d-flex flex-wrap gap-2 mb-3">
+  <a class="btn btn-primary btn-sm" href="{{ url_for('materiais.mes', cid=local.id) }}"><i class="bi bi-calendar3"></i> Consumo do mês</a>
+</div>
+<section class="fc-cartao mb-3" aria-labelledby="tit-saldo">
+  <h2 class="h6 fw-bold" id="tit-saldo"><i class="bi bi-box-seam"></i> Saldo</h2>
+  {% for m in com_saldo %}
+  <div class="d-flex border-top py-2 gap-2"><span class="fw-semibold">{{ m.nome }}</span>
+    <span class="ms-auto fw-bold {% if saldos[m.id] < 0 %}text-danger{% endif %}">{{ saldos[m.id]|qtd }} {{ m.unidade }}</span></div>
+  {% else %}<p class="small text-muted">Nenhum material lançado neste local ainda.</p>{% endfor %}
+</section>
+{% if pode_montar and materiais %}
+<section class="fc-cartao mb-3" aria-labelledby="tit-mov">
+  <h2 class="h6 fw-bold" id="tit-mov"><i class="bi bi-arrow-left-right"></i> Lançar entrada, saída ou ajuste</h2>
+  <form method="post" action="{{ url_for('materiais.movimento', cid=local.id) }}" class="row g-2">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="col-md-3"><label class="form-label small" for="mvt">Tipo</label>
+      <select class="form-select" id="mvt" name="tipo">{% for k, v in tipos.items() if k != 'consumo' %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></div>
+    <div class="col-md-4"><label class="form-label small" for="mvm">Material</label>
+      <select class="form-select" id="mvm" name="material_id" required>{% for m in materiais %}<option value="{{ m.id }}">{{ m.nome }} ({{ m.unidade }})</option>{% endfor %}</select></div>
+    <div class="col-md-2"><label class="form-label small" for="mvq">Quantidade</label><input class="form-control" id="mvq" name="quantidade" required inputmode="decimal" placeholder="Ex.: 10"></div>
+    <div class="col-md-3"><label class="form-label small" for="mvmo">Motivo</label><input class="form-control" id="mvmo" name="motivo" maxlength="300" placeholder="Obrigatório em saída e ajuste"></div>
+    <div class="col-12"><p class="form-text mt-0">No ajuste de inventário, use número negativo para tirar (ex.: -2).</p>
+      {% if gestor_do_contrato %}<label class="d-flex gap-2 small"><input type="checkbox" name="autorizar_negativo" value="1"> Autorizo o saldo ficar negativo (gestor do contrato; escreva a justificativa no motivo)</label>{% endif %}
+      <button class="btn btn-primary fw-bold mt-2" type="submit">Lançar</button></div>
+  </form>
+</section>
+{% endif %}
+{% if materiais %}
+<section class="fc-cartao mb-3" aria-labelledby="tit-cons">
+  <h2 class="h6 fw-bold" id="tit-cons"><i class="bi bi-droplet-half"></i> Lançar consumo</h2>
+  <form method="post" action="{{ url_for('materiais.consumo', cid=local.id) }}" class="row g-2">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="col-md-4"><label class="form-label small" for="csm">Material</label>
+      <select class="form-select" id="csm" name="material_id" required>{% for m in materiais %}<option value="{{ m.id }}">{{ m.nome }} ({{ m.unidade }})</option>{% endfor %}</select></div>
+    <div class="col-md-2"><label class="form-label small" for="csq">Quantidade</label><input class="form-control" id="csq" name="quantidade" required inputmode="decimal"></div>
+    <div class="col-md-3"><label class="form-label small" for="csr">Na rotina (opcional)</label>
+      <select class="form-select" id="csr" name="rota_id"><option value="">—</option>{% for r in rotas %}<option value="{{ r.id }}">{{ r.nome }}</option>{% endfor %}</select></div>
+    <div class="col-md-3"><label class="form-label small" for="csmo">Observação</label><input class="form-control" id="csmo" name="motivo" maxlength="300"></div>
+    {% if gestor_do_contrato %}<div class="col-12"><label class="d-flex gap-2 small"><input type="checkbox" name="autorizar_negativo" value="1"> Autorizo o saldo ficar negativo (escreva a justificativa na observação)</label></div>{% endif %}
+    <div class="col-12"><button class="btn btn-outline-primary fw-bold" type="submit">Lançar consumo</button></div>
+  </form>
+</section>
+{% endif %}
+<section class="fc-cartao p-0" aria-labelledby="tit-hist">
+  <h2 class="h6 fw-bold px-3 pt-3" id="tit-hist"><i class="bi bi-clock-history"></i> Últimos lançamentos</h2>
+  <div class="fc-mes-rolar">
+  <table class="table table-sm mb-0">
+    <thead><tr><th scope="col">Dia</th><th scope="col">Tipo</th><th scope="col">Material</th><th scope="col" class="text-end">Qtd.</th><th scope="col" class="text-end">Valor</th><th scope="col">Quem · motivo</th></tr></thead>
+    <tbody>
+    {% for mv in movimentos %}
+      <tr><td class="text-nowrap">{{ mv.data.strftime('%d/%m') }}</td><td>{{ mv.tipo_rotulo }}</td><td>{{ mv.material.nome }}</td>
+        <td class="text-end text-nowrap">{{ mv.quantidade|qtd }} {{ mv.material.unidade }}</td>
+        <td class="text-end text-nowrap">{{ mv.valor|reais if mv.valor is not none else '—' }}</td>
+        <td class="small">{{ mv.pessoa.name }}{% if mv.motivo %} · {{ mv.motivo }}{% endif %}{% if mv.autorizou %} · <b>saldo negativo autorizado por {{ mv.autorizou.name }}</b>{% endif %}</td></tr>
+    {% else %}<tr><td colspan="6" class="fc-vazio">Nenhum lançamento ainda.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endblock %}

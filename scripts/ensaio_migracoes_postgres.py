@@ -149,6 +149,25 @@ SEMENTES = [
     "vp.client_id,'2026-10-16',vp.supervisor_id,'feita',now(),vp.supervisor_id,now(),v.id,"
     "'{}',1,(SELECT max(id) FROM chamados) FROM visitas_programadas vp JOIN checklist_versoes v "
     "ON v.modelo_id=vp.modelo_id",
+    # Fase 7: catálogo (com e sem preço), entrada, consumo na OS, pedido.
+    "UPDATE contratantes SET prazo_pedido_insumo_horas=24",
+    "INSERT INTO materiais (nome,unidade,preco_unitario,is_active,created_at) VALUES "
+    "('Detergente neutro 5 L','un',12.90,true,now()),('Pano de chão','un',NULL,true,now())",
+    "INSERT INTO movimentos_estoque (client_id,material_id,tipo,quantidade,preco_unitario,valor,"
+    "data,user_id,criado_em) SELECT c.id,m.id,'entrada',10.000,m.preco_unitario,"
+    "10*m.preco_unitario,'2026-10-15',u.id,now() FROM clients c, materiais m, users u "
+    "WHERE c.name='GL Armazém 1' AND u.email='gerente@ensaio'",
+    "INSERT INTO movimentos_estoque (client_id,material_id,tipo,quantidade,preco_unitario,valor,"
+    "data,motivo,user_id,criado_em) SELECT c.id,m.id,'consumo',-1.500,m.preco_unitario,"
+    "1.5*m.preco_unitario,'2026-10-16','na OS',u.id,now() FROM clients c, materiais m, users u "
+    "WHERE c.name='GL Armazém 1' AND u.email='sup@ensaio'",
+    "INSERT INTO consumos (movimento_id,client_id,chamado_id,rota_id) SELECT mv.id,mv.client_id,"
+    "(SELECT max(id) FROM chamados),(SELECT min(id) FROM rotas) FROM movimentos_estoque mv "
+    "WHERE mv.tipo='consumo'",
+    "INSERT INTO pedidos_insumo (client_id,material_id,quantidade,texto,prazo,status,user_id,"
+    "criado_em) SELECT c.id,m.id,5,'acabou','2026-10-19 12:00','aberto',u.id,now() "
+    "FROM clients c, materiais m, users u WHERE c.name='GL Armazém 1' "
+    "AND m.nome='Pano de chão' AND u.email='sup@ensaio'",
 ]
 
 

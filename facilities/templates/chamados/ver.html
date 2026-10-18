@@ -187,6 +187,30 @@
       </form>
       {% endif %}
     </div>
+    <div class="fc-cartao mt-3">
+      <h2 class="h6 fw-bold mb-2">Material usado</h2>
+      {% for c in consumos %}
+      <div class="d-flex flex-wrap gap-2 border-top py-1 small">
+        <span class="fw-semibold">{{ (-c.movimento.quantidade)|qtd }} {{ c.movimento.material.unidade }} · {{ c.movimento.material.nome }}</span>
+        <span class="text-muted">{{ c.movimento.pessoa.name }} · {{ c.movimento.criado_em|hora_local('%d/%m %H:%M') }}</span>
+        {% if ve_custo %}<span class="ms-auto">{{ c.movimento.valor|reais if c.movimento.valor is not none else 'sem preço' }}</span>{% endif %}
+      </div>
+      {% else %}<p class="small text-muted">Nenhum material lançado nesta OS.</p>{% endfor %}
+      {% if materiais %}
+      <form method="post" action="{{ url_for('materiais.consumo', cid=ch.client_id) }}" class="mt-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="chamado_id" value="{{ ch.id }}">
+        <input type="hidden" name="voltar" value="chamado">
+        <label class="visually-hidden" for="chm">Material</label>
+        <select class="form-select form-select-sm mb-2" id="chm" name="material_id" required>{% for m in materiais %}<option value="{{ m.id }}">{{ m.nome }} ({{ m.unidade }})</option>{% endfor %}</select>
+        <div class="d-flex gap-2">
+          <label class="visually-hidden" for="chq">Quantidade</label>
+          <input class="form-control form-control-sm" id="chq" name="quantidade" required inputmode="decimal" placeholder="Quantidade">
+          <button class="btn btn-sm btn-outline-secondary text-nowrap" type="submit">Lançar material</button>
+        </div>
+      </form>
+      {% endif %}
+    </div>
   </div>
 </div>
 {% endblock %}

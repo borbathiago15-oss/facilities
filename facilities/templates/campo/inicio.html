@@ -10,6 +10,11 @@
 <a class="btn btn-outline-primary w-100 fc-app-acao mb-3" href="{{ url_for('rotas.turno') }}">
   <i class="bi bi-list-check"></i> Meu turno (tarefas da rota)
 </a>
+{% if usa_material %}
+<a class="btn btn-outline-primary w-100 fc-app-acao mb-2" href="{{ url_for('materiais.app') }}">
+  <i class="bi bi-box-seam"></i> Material: usei / está faltando
+</a>
+{% endif %}
 {% if lanca_presenca %}
 <a class="btn btn-outline-primary w-100 fc-app-acao mb-2" href="{{ url_for('equipes.app_equipe') }}">
   <i class="bi bi-people"></i> Equipe de hoje (presença)

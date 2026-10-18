@@ -117,6 +117,12 @@ def montar(caminho_db):
             'supervisor_id': pessoas['sueli@e2e.test'].id}, admin)
         db.session.flush()
         visitas.gerar_visitas(tempo.hoje())
+        # Fase 7: detergente no estoque do local.
+        from facilities.materiais import servico as materiais
+        det = materiais.salvar_material(None, {'nome': 'Detergente neutro', 'unidade': 'L',
+                                               'preco_unitario': '12,90'})
+        materiais.movimentar(admin, local, {'material_id': det.id, 'quantidade': '10'},
+                             'entrada')
         db.session.commit()
     return app
 

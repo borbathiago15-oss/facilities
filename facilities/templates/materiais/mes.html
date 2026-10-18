@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% block title %}{{ local.name }} — consumo do mês{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item"><a href="{{ url_for('materiais.local', cid=local.id) }}">Estoque · {{ local.name }}</a></li><li class="breadcrumb-item active" aria-current="page">Mês</li>{% endblock %}
+{% block content %}
+<h1 class="fc-titulo">Consumo · {{ primeiro.strftime('%m/%Y') }}</h1>
+<p class="fc-sub">{{ local.name }}. Custo operacional do local — não substitui nem alimenta o DRE.</p>
+<div class="d-flex flex-wrap gap-2 mb-3">
+  <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('materiais.mes', cid=local.id, m=anterior) }}"><i class="bi bi-chevron-left"></i> Mês anterior</a>
+  <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('materiais.mes', cid=local.id, m=seguinte) }}">Mês seguinte <i class="bi bi-chevron-right"></i></a>
+</div>
+<div class="fc-cartao py-2 px-3 mb-3 d-inline-block"><div class="small text-muted">Custo do mês</div><div class="fs-4 fw-bold">{{ total|reais }}</div></div>
+{% if sem_preco %}<div class="alert alert-warning small">Fora do custo (material sem preço): {% for x in sem_preco %}{{ x.material.nome }}{% if not loop.last %}, {% endif %}{% endfor %}.</div>{% endif %}
+<div class="fc-cartao p-0"><div class="fc-mes-rolar">
+  <table class="table table-sm mb-0">
+    <thead><tr><th scope="col">Material</th><th scope="col" class="text-end">Consumido</th><th scope="col" class="text-end">Lançamentos</th><th scope="col" class="text-end">Valor</th></tr></thead>
+    <tbody>
+    {% for x in linhas %}<tr><td>{{ x.material.nome }}</td><td class="text-end text-nowrap">{{ x.quantidade|qtd }} {{ x.material.unidade }}</td><td class="text-end">{{ x.vezes }}</td><td class="text-end text-nowrap">{{ x.valor|reais if x.valor is not none else 'sem preço' }}</td></tr>
+    {% else %}<tr><td colspan="4" class="fc-vazio">Nenhum consumo neste mês.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</div></div>
+{% endblock %}

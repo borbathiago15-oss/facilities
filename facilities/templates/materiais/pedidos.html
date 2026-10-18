@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block title %}Pedidos de insumo{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item"><a href="{{ url_for('materiais.catalogo') }}">Materiais</a></li><li class="breadcrumb-item active" aria-current="page">Pedidos de insumo</li>{% endblock %}
+{% block content %}
+<h1 class="fc-titulo">Pedidos de insumo</h1>
+<p class="fc-sub">O que o posto avisou que está faltando. A compra é feita no sistema de compras; aqui o gestor do contrato marca que viu.</p>
+<div class="fc-cartao">
+  {% for p in pedidos %}
+  <div class="border-top py-2">
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+      <span class="fw-semibold">{{ p.resumo }}</span>
+      <span class="badge {% if p.status == 'visto' %}text-bg-light{% elif p.prazo and agora > p.prazo %}fc-dem fc-dem-atrasada{% else %}fc-dem fc-dem-no_prazo{% endif %}">{{ p.situacao_rotulo }}{% if p.status == 'aberto' and p.prazo and agora > p.prazo %} · atrasado{% endif %}</span>
+    </div>
+    <div class="small text-muted">{{ p.local.name }} · {{ p.pessoa.name }} · {{ p.criado_em|hora_local }}{% if p.status == 'aberto' and p.prazo %} · prazo {{ p.prazo|hora_local('%d/%m %H:%M') }}{% endif %}{% if p.quem_viu %} · visto por {{ p.quem_viu.name }} em {{ p.visto_em|hora_local }}{% endif %}</div>
+    {% if p.foto_key %}<a class="small" href="{{ url_for('materiais.foto', pid=p.id) }}">Ver foto</a>{% endif %}
+    {% if p.status == 'aberto' and gestor_de[p.client_id] %}
+    <form method="post" action="{{ url_for('materiais.visto', pid=p.id) }}" class="mt-1">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-primary btn-sm" type="submit"><i class="bi bi-check2"></i> Marcar como visto</button>
+    </form>
+    {% endif %}
+  </div>
+  {% else %}<div class="fc-vazio">Nenhum pedido de insumo.</div>{% endfor %}
+</div>
+{% endblock %}

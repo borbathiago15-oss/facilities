@@ -184,7 +184,15 @@ def ver(chamado_id):
     ch = _chamado_autorizado(chamado_id)
     acoes = servico.acoes_disponiveis(current_user, ch)
     tecnicos = servico.tecnicos_do_contrato(ch.client_id) if 'atribuir' in acoes else []
+    from facilities.materiais import servico as materiais
+    from facilities.materiais.models import Material
+    pode_consumir = (servico.pode_agir(current_user, ch) and ch.status not in ('fechado', 'cancelado')
+                     and current_user._effective_role() in materiais.PERFIS_QUE_CONSOMEM)
     return render_template('chamados/ver.html', ch=ch, acoes=acoes, tecnicos=tecnicos,
+                           consumos=materiais.consumos_do_chamado(ch.id),
+                           ve_custo=materiais.ve_custo(current_user),
+                           materiais=Material.query.filter_by(is_active=True)
+                           .order_by(Material.nome).all() if pode_consumir else [],
                            prioridades=PRIORIDADES, status=STATUS, agora=datetime.utcnow(),
                            pode_anexar=servico.pode_agir(current_user, ch)
                            and ch.status not in ('fechado', 'cancelado'))
