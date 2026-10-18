@@ -5,6 +5,11 @@
 <h1 class="fc-titulo">Biblioteca de checklists da Trino</h1>
 <p class="fc-sub">Os modelos padrão da Trino. Cada local recebe uma CÓPIA e ajusta à sua realidade, sem mudar os outros locais. Para copiar, abra o local em Rotas.</p>
 {% if pode_montar %}
+<form method="post" action="{{ url_for('rotas.instalar_modelos_prontos') }}" class="fc-cartao mb-3 d-flex flex-wrap gap-2 align-items-center">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="flex-grow-1"><b>Modelos prontos de limpeza</b><div class="small text-muted">Banheiro, copa e cozinha, recepção e escritório, vestiário e área externa — cada pergunta com o "como fazer". Instalar de novo não duplica.</div></div>
+  <button class="btn btn-outline-primary fw-bold" type="submit"><i class="bi bi-magic" aria-hidden="true"></i> Instalar na biblioteca</button>
+</form>
 <details class="fc-cartao mb-3" {% if not modelos %}open{% endif %}>
   <summary class="fw-bold">Criar checklist na biblioteca</summary>
   <form method="post" action="{{ url_for('rotas.criar_na_biblioteca') }}" class="mt-3">

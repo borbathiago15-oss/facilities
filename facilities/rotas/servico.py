@@ -75,6 +75,19 @@ def _numero(bruto):
         raise RegraDaRota(f'"{bruto}" não é um número.')
 
 
+COMO_FAZER_MAX = 400
+CHAVE_DA_REFERENCIA = re.compile(r'^checklists/\d+/ref/[0-9a-f]{32}\.(jpg|png|webp)$')
+
+
+def guardar_referencia(modelo, arquivo):
+    """A foto de referência de um item (como deve ficar) → a chave guardada."""
+    from facilities.core.anexos import storage
+    dados, ext, mime = ler_imagem(arquivo)
+    chave = f'checklists/{modelo.id}/ref/{uuid.uuid4().hex}.{ext}'
+    storage().save(chave, dados, mime)
+    return chave
+
+
 def normalizar_itens(brutos):
     """Os itens do formulário → a lista que vai para a versão (ou erro)."""
     itens, codigos = [], set()
@@ -94,6 +107,15 @@ def normalizar_itens(brutos):
         item = {'codigo': codigo, 'texto': texto, 'tipo': tipo,
                 'obrigatorio': bool(b.get('obrigatorio')),
                 'exige_foto': bool(b.get('exige_foto'))}
+        # "Como fazer" e a foto de referência (como deve ficar): o que o ASG
+        # vê no celular embaixo da pergunta. Ficam no JSON da versão — não
+        # precisam de coluna — e a versão publicada não muda depois.
+        como = (b.get('como_fazer') or '').strip()[:COMO_FAZER_MAX]
+        if como:
+            item['como_fazer'] = como
+        ref = (b.get('foto_ref') or '').strip()
+        if ref and CHAVE_DA_REFERENCIA.match(ref):
+            item['foto_ref'] = ref
         if tipo == 'escolha':
             brutas = b.get('opcoes') or ''
             if isinstance(brutas, (list, tuple)):     # item já normalizado (cópia, nova versão)
@@ -307,6 +329,29 @@ def salvar_item(rota, item, dados):
         rota.itens.append(item)
     db.session.flush()
     return item
+
+
+def salvar_itens_em_lote(rota, ponto_ids, dados):
+    """Vários pontos de uma vez, com o mesmo checklist e os mesmos horários
+    (ex.: os 10 banheiros da rota de limpeza). Tudo ou nada: um ponto inválido
+    recusa o lote inteiro, dizendo qual."""
+    ids = []
+    for bruto in ponto_ids:
+        bruto = str(bruto).strip()
+        if bruto.isdigit() and int(bruto) not in ids:
+            ids.append(int(bruto))
+    if not ids:
+        raise RegraDaRota('Marque pelo menos um ponto.')
+    proxima = max([i.ordem or 0 for i in rota.itens] or [0]) + 1
+    base = str(dados.get('ordem') or '').strip()
+    inicio = int(base) if base.isdigit() else proxima
+    itens = []
+    for n, pid in enumerate(ids):
+        linha = {k: dados.get(k) for k in ('modelo_id', 'horarios', 'frequencia_min')}
+        linha['ponto_id'] = pid
+        linha['ordem'] = str(inicio + n)
+        itens.append(salvar_item(rota, None, linha))
+    return itens
 
 
 def pessoas_escalaveis(local_id):

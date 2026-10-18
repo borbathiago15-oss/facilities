@@ -132,6 +132,19 @@ def biblioteca():
                            pode_montar=_perfil() == 'master')
 
 
+@bp.post('/rotas/biblioteca/modelos-prontos')
+@login_required
+def instalar_modelos_prontos():
+    from facilities.rotas.biblioteca_pronta import semear
+    if _perfil() != 'master':
+        raise Forbidden('A biblioteca da Trino é mantida pelo administrador.')
+    criados = semear(current_user)
+    db.session.commit()
+    flash(f'{len(criados)} modelo(s) instalado(s): {", ".join(criados)}.' if criados
+          else 'Os modelos prontos já estavam na biblioteca.', 'success')
+    return redirect(url_for('rotas.biblioteca'))
+
+
 @bp.post('/rotas/biblioteca')
 @login_required
 def criar_na_biblioteca():
@@ -184,15 +197,21 @@ def modelo(mid):
                            pode_montar=pode)
 
 
-def _itens_do_formulario(form):
+def _itens_do_formulario(form, arquivos=None, modelo=None):
     campos = ('texto', 'tipo', 'opcoes', 'minimo', 'maximo', 'problema_se', 'mostrar_se',
-              'codigo', 'ordem')
+              'codigo', 'ordem', 'como_fazer', 'foto_ref')
     linhas = []
     n = len(form.getlist('texto'))
     for i in range(n):
         linha = {c: (form.getlist(c)[i] if i < len(form.getlist(c)) else '') for c in campos}
         linha['obrigatorio'] = str(i) in form.getlist('obrigatorio')
         linha['exige_foto'] = str(i) in form.getlist('exige_foto')
+        if str(i) in form.getlist('tirar_foto_ref'):
+            linha['foto_ref'] = ''
+        nova = arquivos.get(f'foto_ref_{i}') if arquivos is not None else None
+        if nova is not None and nova.filename and modelo is not None \
+                and (linha.get('texto') or '').strip():
+            linha['foto_ref'] = servico.guardar_referencia(modelo, nova)
         linhas.append(linha)
 
     def ordem(par):
@@ -207,7 +226,7 @@ def _itens_do_formulario(form):
 def publicar(mid):
     m = _modelo(mid, montar=True)
     try:
-        itens = servico.normalizar_itens(_itens_do_formulario(request.form))
+        itens = servico.normalizar_itens(_itens_do_formulario(request.form, request.files, m))
         v, publicou = servico.publicar(m, itens, request.form, current_user)
         m.is_active = True
         db.session.commit()
@@ -285,6 +304,12 @@ def ativo_rota(rid):
 @login_required
 def criar_item(rid):
     r = _rota(rid, montar=True)
+    ids = request.form.getlist('ponto_id')
+    if len(ids) > 1:
+        return _gravar(servico.salvar_itens_em_lote, r, ids, request.form,
+                       sucesso=f'{len(ids)} pontos incluídos na rota, com o mesmo checklist e '
+                               'os mesmos horários.',
+                       destino=url_for('rotas.rota', rid=r.id))
     return _gravar(servico.salvar_item, r, None, request.form,
                    sucesso='Atividade incluída na rota.', destino=url_for('rotas.rota', rid=r.id))
 
@@ -501,7 +526,7 @@ def _dados_do_turno(locais):
 
     def v_json(v):
         return {'id': v.id, 'modelo': v.modelo.nome, 'numero': v.numero,
-                'procedimento': v.modelo.descricao or '', 'itens': servico.itens_da_versao(v),
+                'procedimento': v.modelo.descricao or '', 'itens': _itens_com_referencia(v),
                 'foto_antes': v.exige_foto_antes, 'foto_depois': v.exige_foto_depois}
     return {
         'usuario': current_user.id,
@@ -533,6 +558,43 @@ def _dados_do_turno(locais):
             'atrasada': ocorrencias.atrasada(o, agora),
         } for o in ocorrencias.abertas(ids)],
     }
+
+
+def _itens_com_referencia(versao):
+    """Os itens da versão com o endereço da foto de referência (quando há)."""
+    itens = []
+    for it in servico.itens_da_versao(versao):
+        it = dict(it)
+        if it.get('foto_ref'):
+            it['foto_ref_url'] = url_for('rotas.referencia', vid=versao.id, codigo=it['codigo'])
+        it.pop('foto_ref', None)
+        itens.append(it)
+    return itens
+
+
+@bp.get('/rotas/referencias/<int:vid>/<codigo>')
+@login_required
+def referencia(vid, codigo):
+    """A foto de "como deve ficar" de um item do checklist. A da biblioteca
+    da Trino é genérica (sem dado de cliente); a do local segue a carteira."""
+    from facilities.core.anexos import storage
+    from facilities.rotas.models import ChecklistVersao
+    v = db.get_or_404(ChecklistVersao, vid)
+    if v.modelo.client_id is not None:
+        require_client(v.modelo.client_id)
+    chave = next((it.get('foto_ref') for it in servico.itens_da_versao(v)
+                  if it.get('codigo') == codigo), None)
+    if not chave:
+        abort(404)
+    try:
+        dados = storage().load(chave)
+    except Exception:
+        abort(404)
+    ext = chave.rsplit('.', 1)[-1]
+    tipo = {'jpg': 'image/jpeg', 'png': 'image/png', 'webp': 'image/webp'}.get(ext, 'image/jpeg')
+    resp = send_file(io.BytesIO(dados), mimetype=tipo)
+    resp.headers['Cache-Control'] = 'private, max-age=604800'
+    return resp
 
 
 @bp.get('/app/turno')

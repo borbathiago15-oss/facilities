@@ -40,7 +40,7 @@
   {% if not pontos or not modelos %}
   <div class="alert alert-warning small mt-2">Para incluir atividades, o local precisa de {% if not pontos %}<a href="{{ url_for('cadastros.local', cid=rota.client_id) }}">pontos com QR</a>{% endif %}{% if not pontos and not modelos %} e de {% endif %}{% if not modelos %}<a href="{{ url_for('rotas.local', cid=rota.client_id) }}">checklist publicado</a>{% endif %}.</div>
   {% else %}
-  <details class="mt-2" {% if not rota.itens %}open{% endif %}><summary class="fw-semibold">+ Incluir atividade</summary>
+  <details class="mt-2" {% if not rota.itens %}open{% endif %}><summary class="fw-semibold">+ Incluir pontos na rota</summary>
     <form method="post" action="{{ url_for('rotas.criar_item', rid=rota.id) }}" class="mt-2">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       {% set item = none %}{% include 'rotas/_campos_item.html' %}
