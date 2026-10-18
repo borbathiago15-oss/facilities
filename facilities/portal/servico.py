@@ -119,7 +119,8 @@ def _avisar_coordenacao(cob, titulo, texto):
     from facilities.core.rotas import avisar
     ids = coordenacao_do_local(cob.client_id)
     link = f'/cobrancas/{cob.id}'
-    avisar(ids, f'{cob.numero} · {titulo}', texto, link=link, tipo='cobranca')
+    ids = avisar(ids, f'{cob.numero} · {titulo}', texto, link=link, tipo='cobranca',
+                 client_id=cob.client_id)
     push.avisar(ids, f'{titulo} — {cob.local.name}', cob.titulo, link=link,
                 marca=f'cobranca-{cob.id}')
     return ids
@@ -130,9 +131,8 @@ def _avisar_cliente(cob, titulo, texto):
     autor = cob.autor
     if autor is None or not autor.is_active or autor.is_deleted:
         return set()
-    avisar({autor.id}, f'{cob.numero} · {titulo}', texto, link=f'/cliente/cobrancas/{cob.id}',
-           tipo='cobranca')
-    return {autor.id}
+    return avisar({autor.id}, f'{cob.numero} · {titulo}', texto,
+                  link=f'/cliente/cobrancas/{cob.id}', tipo='cobranca', client_id=cob.client_id)
 
 
 def _evento(cob, tipo, autor, texto=None, agora=None):

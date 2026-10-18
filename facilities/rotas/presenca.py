@@ -19,8 +19,9 @@ from datetime import datetime, timedelta
 
 from facilities import tempo
 from facilities.extensions import db
-from facilities.rotas.models import (PRESENCA_CONFIRMADA, PRESENCA_PENDENTE,
-                                     PRESENCA_SEM_RESPOSTA, ConfirmacaoPresenca, Rota)
+from facilities.rotas.models import (PRESENCA_CONFIRMADA, PRESENCA_NAO_ENVIADA,
+                                     PRESENCA_PENDENTE, PRESENCA_SEM_RESPOSTA,
+                                     ConfirmacaoPresenca, Rota)
 
 FOLGA = timedelta(minutes=30)
 
@@ -44,16 +45,20 @@ def horarios_sorteados(rota, dia, user_id):
     return [de + timedelta(minutes=i * faixa + sorteio.randrange(faixa)) for i in range(n)]
 
 
-def gerar(rota, dia, user_id):
+def gerar(rota, dia, user_id, agora_utc=None):
+    """Cria os pedidos do dia. Horário que JÁ PASSOU não vira pedido (rota
+    criada ou cobertura lançada no meio do turno): ninguém pode responder a um
+    pedido que nunca chegou."""
     if not user_id:
         return 0
+    agora_utc = agora_utc or datetime.utcnow()
     criados = 0
     existentes = {c.pedido_em for c in ConfirmacaoPresenca.query.filter_by(
         rota_id=rota.id, user_id=user_id, data=dia)}
     prazo = timedelta(minutes=rota.presenca_prazo_min or 10)
     for m in horarios_sorteados(rota, dia, user_id):
         pedido = tempo.para_utc(m.date(), m.time())
-        if pedido in existentes:
+        if pedido in existentes or pedido < agora_utc:
             continue
         db.session.add(ConfirmacaoPresenca(rota_id=rota.id, client_id=rota.client_id,
                                            user_id=user_id, data=dia, pedido_em=pedido,
@@ -88,10 +93,10 @@ def avisar_e_fechar(agora_utc):
             ConfirmacaoPresenca.pedido_em <= agora_utc,
             ConfirmacaoPresenca.prazo_ate >= agora_utc).all():
         link = f'/app/?presenca={c.id}'
-        avisar_no_sino([c.user_id], 'Confirme que você está no posto',
-                       f'Toque para confirmar até {tempo.fmt(c.prazo_ate, "%H:%M")}.', link,
-                       tipo='presenca')
-        push.avisar([c.user_id], 'Confirme que você está no posto',
+        quem = avisar_no_sino([c.user_id], 'Confirme que você está no posto',
+                              f'Toque para confirmar até {tempo.fmt(c.prazo_ate, "%H:%M")}.',
+                              link, tipo='presenca', client_id=c.client_id)
+        push.avisar(quem, 'Confirme que você está no posto',
                     f'Toque para confirmar até {tempo.fmt(c.prazo_ate, "%H:%M")}.', link,
                     marca=f'presenca-{c.id}')
         c.avisado_em = agora_utc
@@ -99,13 +104,20 @@ def avisar_e_fechar(agora_utc):
     for c in ConfirmacaoPresenca.query.filter(
             ConfirmacaoPresenca.status == PRESENCA_PENDENTE,
             ConfirmacaoPresenca.prazo_ate < agora_utc).all():
+        if c.avisado_em is None:
+            # O agendador atrasou e o pedido nunca saiu: não há falta de
+            # resposta de ninguém (risco trabalhista — análise de 18/10/2026).
+            c.status = PRESENCA_NAO_ENVIADA
+            fechados += 1
+            continue
         c.status = PRESENCA_SEM_RESPOSTA
         if not c.supervisor_avisado:
             quem = _quem_alertar(c)
             texto = (f'{c.pessoa.name} não confirmou a presença das '
                      f'{tempo.fmt(c.pedido_em, "%H:%M")} ({c.rota.nome}).')
-            avisar_no_sino(quem, 'Presença sem resposta', texto,
-                           f'/rotas/locais/{c.client_id}/dia', tipo='presenca')
+            quem = avisar_no_sino(quem, 'Presença sem resposta', texto,
+                                  f'/rotas/locais/{c.client_id}/dia', tipo='presenca',
+                                  client_id=c.client_id)
             push.avisar(quem, 'Presença sem resposta', texto,
                         f'/rotas/locais/{c.client_id}/dia', marca=f'sem-resposta-{c.id}')
             c.supervisor_avisado = True

@@ -334,11 +334,11 @@ def registrar_cobertura(user, presenca, dados, agora_utc=None):
                   registrada_em=agora_utc)
     db.session.add(c)
     db.session.flush()
-    passadas = reescalar_rota(presenca, quem)
+    passadas = reescalar_rota(presenca, quem, agora_utc)
     return c, passadas
 
 
-def reescalar_rota(presenca, quem_cobre):
+def reescalar_rota(presenca, quem_cobre, agora_utc=None):
     """As tarefas ainda previstas do dia, de quem faltou, vão para quem cobre.
     Devolve quantas passaram. Sem login, quem cobre não recebe aviso no
     celular: as tarefas ficam sem escalado (qualquer um do local faz)."""
@@ -357,7 +357,7 @@ def reescalar_rota(presenca, quem_cobre):
         t.avisada_em = None
         n += 1
     if para:
-        pedidos.gerar(rota, presenca.data, para)
+        pedidos.gerar(rota, presenca.data, para, agora_utc)
     return n
 
 

@@ -83,11 +83,13 @@ def abrir(ponto, tipo, texto, foto=None, agora_utc=None):
     link_campo = f'/app/turno?ponto={ponto.codigo_qr}'
     link_gestao = f'/rotas/locais/{ponto.client_id}/dia'
     if na_rota:
-        avisar_no_sino(na_rota, titulo, onde, link_campo, tipo='ocorrencia')
-        push.avisar(na_rota, titulo, onde, link_campo, marca=f'ocorrencia-{oc.id}')
+        quem = avisar_no_sino(na_rota, titulo, onde, link_campo, tipo='ocorrencia',
+                              client_id=ponto.client_id)
+        push.avisar(quem, titulo, onde, link_campo, marca=f'ocorrencia-{oc.id}')
     so_gestao = acompanham - na_rota
-    avisar_no_sino(so_gestao, titulo, onde, link_gestao, tipo='ocorrencia')
-    push.avisar(so_gestao, titulo, onde, link_gestao, marca=f'ocorrencia-{oc.id}')
+    quem = avisar_no_sino(so_gestao, titulo, onde, link_gestao, tipo='ocorrencia',
+                          client_id=ponto.client_id)
+    push.avisar(quem, titulo, onde, link_gestao, marca=f'ocorrencia-{oc.id}')
     return oc
 
 

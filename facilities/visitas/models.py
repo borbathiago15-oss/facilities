@@ -12,7 +12,10 @@ from facilities.extensions import db
 
 PREVISTA = 'prevista'
 FEITA = 'feita'
-SITUACOES_VISITA = {PREVISTA: 'A fazer', FEITA: 'Feita'}
+# Venceu e não foi feita (o agendador fecha, depois de uma folga): sai da fila
+# de "a fazer" e conta como não conforme no painel, como já contava.
+PERDIDA = 'perdida'
+SITUACOES_VISITA = {PREVISTA: 'A fazer', FEITA: 'Feita', PERDIDA: 'Não feita (venceu)'}
 
 
 class VisitaProgramada(db.Model):

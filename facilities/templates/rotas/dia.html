@@ -23,7 +23,7 @@
     <span class="badge fc-sit fc-sit-{{ s }}">{{ situacoes.get(s, s) }}</span>
     <span class="small ms-auto">
       {% if t.execucoes %}{% set ex = t.execucoes[0] %}
-        <a href="{{ url_for('rotas.execucao', eid=ex.id) }}">{{ ex.pessoa.name }} · {{ ex.iniciada_em|hora_local('%H:%M') }}–{{ ex.concluida_em|hora_local('%H:%M') }}{% if ex.sem_sinal %} · feito sem sinal{% endif %}{% if ex.n_nao_conformes %} · {{ ex.n_nao_conformes }} não conforme(s){% endif %}</a>
+        <a href="{{ url_for('rotas.execucao', eid=ex.id) }}">{{ ex.pessoa.name }} · {{ ex.iniciada_em|hora_local('%H:%M') }}–{{ ex.concluida_em|hora_local('%H:%M') }}{% if ex.sem_sinal %} · hora do celular{% endif %}{% if ex.n_nao_conformes %} · {{ ex.n_nao_conformes }} não conforme(s){% endif %}</a>
       {% elif t.status == 'nao_realizada' %}
         {{ motivos.get(t.motivo, t.motivo) }}{% if t.motivo_texto %}: {{ t.motivo_texto }}{% endif %}{% if t.chamado_id %} · <a href="{{ url_for('chamados.ver', chamado_id=t.chamado_id) }}">chamado</a>{% endif %}
       {% else %}
@@ -70,7 +70,7 @@
   <div class="d-flex flex-wrap gap-2 align-items-center border-bottom px-3 py-2">
     <span class="fw-bold">{{ c.pedido_em|hora_local('%H:%M') }}</span><span>{{ c.pessoa.name }}</span><span class="small text-muted">{{ c.rota.nome }}</span>
     <span class="ms-auto badge {% if c.status == 'confirmada' %}text-bg-success{% elif c.status == 'sem_resposta' %}text-bg-danger{% else %}text-bg-light{% endif %}">
-      {% if c.status == 'confirmada' %}Confirmada às {{ c.respondida_em|hora_local('%H:%M') }}{% elif c.status == 'sem_resposta' %}Sem resposta{% if c.respondida_em %} (respondeu às {{ c.respondida_em|hora_local('%H:%M') }}){% endif %}{% elif c.status == 'dispensada' %}Dispensada (falta lançada){% else %}Aguardando{% endif %}</span>
+      {% if c.status == 'confirmada' %}Confirmada às {{ c.respondida_em|hora_local('%H:%M') }}{% elif c.status == 'sem_resposta' %}Sem resposta{% if c.respondida_em %} (respondeu às {{ c.respondida_em|hora_local('%H:%M') }}){% endif %}{% elif c.status == 'dispensada' %}Dispensada (falta lançada){% elif c.status == 'nao_enviada' %}Não enviada (o sistema atrasou){% else %}Aguardando{% endif %}</span>
   </div>
   {% endfor %}
 </div>

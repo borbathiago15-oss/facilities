@@ -146,9 +146,14 @@
   }
 
   // ── O ponto (depois de ler o QR) ──────────────────────────────────────
-  function lerNoServidor(codigo) {
+  // O selo (hora do servidor) é a prova de que a pessoa leu o QR no ponto: só
+  // é pedido quando a CÂMERA leu agora (``lido=camera`` vindo do leitor). O
+  // link de um aviso, o código digitado e a página recarregada abrem o ponto,
+  // mas a execução fica com a hora do celular — marcada para a gestão.
+  function lerNoServidor(codigo, comCamera) {
+    if (leitura && leitura.ponto === codigo) return;     // voltou ao mesmo ponto
     leitura = {ponto: codigo, selo: null, lido_em: new Date().toISOString()};
-    if (navigator.onLine === false || !window.fetch) return;
+    if (!comCamera || navigator.onLine === false || !window.fetch) return;
     fetch('/app/api/leitura', {method: 'POST', headers: {'Content-Type': 'application/json'},
                                body: JSON.stringify({ponto: codigo})})
       .then(function (r) { return r.ok ? r.json() : null; })
@@ -156,7 +161,7 @@
       .catch(function () { /* sem sinal: fica a hora do aparelho */ });
   }
 
-  function abrirPonto(codigo) {
+  function abrirPonto(codigo, comCamera) {
     var p = dados.pontos[codigo];
     secLista.hidden = true; secExec.hidden = true; secPonto.hidden = false;
     limpar(secPonto);
@@ -168,8 +173,13 @@
         onclick: mostrarLista}, ['Voltar ao meu turno']));
       return;
     }
-    lerNoServidor(codigo);
+    lerNoServidor(codigo, comCamera);
     secPonto.appendChild(el('h1', {classe: 'fc-titulo', texto: p.nome}));
+    if (!leitura.selo && !comCamera) {
+      secPonto.appendChild(el('p', {classe: 'small text-muted',
+        texto: 'Aberto sem ler o QR com a câmera: o que você fizer aqui fica com a hora do ' +
+               'celular. Para valer como feito no ponto, leia o QR do local.'}));
+    }
     secPonto.appendChild(el('p', {classe: 'fc-sub', texto: p.ambiente + ' · ' + p.local}));
     if (p.descricao) {
       secPonto.appendChild(el('div', {classe: 'fc-cartao mb-3'}, [
@@ -483,7 +493,7 @@
     if (tarefa) { tarefa.status = res.x.status; }
     tirarPreventiva();
     dizer('Registrado: ' + res.x.situacao + '.' +
-          (res.x.nao_conformes ? ' ' + res.x.nao_conformes + ' item(ns) não conforme(s) avisado(s) à gestão.' : ''),
+          (res.x.nao_conformes ? ' ' + res.x.nao_conformes + ' item(ns) não conforme(s): chamado aberto para a gestão.' : ''),
           res.x.nao_conformes ? 'warning' : 'success');
     if (codigo) abrirPonto(codigo); else mostrarLista();
   }
@@ -542,6 +552,13 @@
     try { localStorage.setItem(CHAVE_LOCAL, JSON.stringify(f)); } catch (e) {}
   });
 
-  var ponto = new URLSearchParams(location.search).get('ponto');
-  if (ponto) abrirPonto(ponto); else mostrarLista();
+  var params = new URLSearchParams(location.search);
+  var ponto = params.get('ponto');
+  var comCamera = params.get('lido') === 'camera';
+  if (comCamera && window.history && history.replaceState) {
+    // Recarregar a tela não vale como uma nova leitura do QR.
+    params.delete('lido');
+    history.replaceState(null, '', location.pathname + '?' + params.toString());
+  }
+  if (ponto) abrirPonto(ponto, comCamera); else mostrarLista();
 })();

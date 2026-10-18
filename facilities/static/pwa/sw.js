@@ -22,7 +22,8 @@
 //
 // Trocar VERSAO força o navegador a instalar a versão nova e apagar a antiga.
 // v4: identidade nova — ícone e página "Sem conexão" guardados de novo.
-const VERSAO = 'facilities-app-v5';
+// v6: cópia por TELA (a mais recente), com idade máxima e tempo-limite de rede.
+const VERSAO = 'facilities-app-v6';
 const TELAS = 'trino-telas';
 const ESTATICOS = 'trino-estaticos-v3';
 const OFFLINE = '/static/pwa/offline.html';
@@ -65,21 +66,49 @@ function eTelaSemInternet(url) {
 // Rede primeiro; com resposta boa, guarda a cópia. Sem rede, a cópia; sem
 // cópia, a página "Sem conexão". Só guarda 200 de verdade da própria tela —
 // nunca o login para onde uma sessão vencida redirecionaria.
+//
+// A cópia é UMA por tela (o caminho, sem o ?ponto=…): é sempre a da última
+// vez que a tela abriu com rede — antes valia qualquer cópia antiga com outro
+// endereço, até de dias atrás. As telas do turno não usam cópia com mais de
+// IDADE_MAXIMA (a lista de ontem enganaria quem está no posto). Sinal fraco
+// não prende a tela: depois de ESPERA_DA_REDE, vale a cópia.
+const IDADE_MAXIMA_MS = 20 * 60 * 60 * 1000;
+const ESPERA_DA_REDE_MS = 8000;
+const COM_IDADE_MAXIMA = [/^\/app\/?$/, /^\/app\/turno\/?$/];
+
+function chaveDaTela(url) {
+  return url.origin + url.pathname;
+}
+
+function comLimite(promessa, ms) {
+  return new Promise((ok, erro) => {
+    const t = setTimeout(() => erro(new Error('rede lenta')), ms);
+    promessa.then((r) => { clearTimeout(t); ok(r); }, (e) => { clearTimeout(t); erro(e); });
+  });
+}
+
 async function telaSemInternet(pedido) {
+  const url = new URL(pedido.url);
+  const rede = fetch(pedido);
   try {
-    const resposta = await fetch(pedido);
+    const resposta = await comLimite(rede, ESPERA_DA_REDE_MS);
     if (resposta.ok && !resposta.redirected && resposta.type === 'basic') {
+      const corpo = await resposta.clone().blob();
+      const cabecalhos = new Headers(resposta.headers);
+      cabecalhos.set('x-guardada-em', String(Date.now()));
       const cache = await caches.open(TELAS);
-      await cache.put(pedido.url, resposta.clone());
+      await cache.put(chaveDaTela(url), new Response(corpo, {
+        status: resposta.status, statusText: resposta.statusText, headers: cabecalhos }));
     }
     return resposta;
   } catch (e) {
     const cache = await caches.open(TELAS);
-    const guardada = (await cache.match(pedido.url))
-      // A passagem aberta com outro ?client_id= ainda serve: é a mesma tela,
-      // do mesmo usuário, e o contrato se troca nela.
-      || (await cache.match(pedido.url, { ignoreSearch: true }));
-    return guardada || caches.match(OFFLINE, { cacheName: VERSAO });
+    const guardada = await cache.match(chaveDaTela(url));
+    const idade = guardada ? Date.now() - Number(guardada.headers.get('x-guardada-em') || 0) : 0;
+    const velha = COM_IDADE_MAXIMA.some((re) => re.test(url.pathname)) && idade > IDADE_MAXIMA_MS;
+    if (guardada && !velha) return guardada;
+    // Rede só lenta (não caída) e sem cópia boa: espera a rede mesmo.
+    try { return await rede; } catch (e2) { return caches.match(OFFLINE, { cacheName: VERSAO }); }
   }
 }
 

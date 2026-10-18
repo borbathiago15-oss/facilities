@@ -446,6 +446,8 @@ def agendador_http():
         db.session.rollback()
         current_app.logger.exception('agendador falhou')
         return jsonify({'ok': False}), 500
+    if reg is None:
+        return jsonify({'ok': True, 'pulada': 'outra rodada em andamento'})
     return jsonify({'ok': True, 'geradas': reg.tarefas_geradas,
                     'perdidas': reg.tarefas_perdidas})
 
@@ -578,7 +580,8 @@ def api_execucao():
     return jsonify({'id': ex.id, 'nova': nova, 'status': t.status if t else 'extra',
                     'situacao': SITUACOES.get(t.status) if t else (
                         'Preventiva feita — a ordem ficou resolvida' if ex.chamado_id
-                        else 'Atividade extra'),
+                        else f'Registrada como atividade extra ({ex.virou_extra})'
+                        if getattr(ex, 'virou_extra', None) else 'Atividade extra'),
                     'nao_conformes': ex.n_nao_conformes}), 201 if nova else 200
 
 

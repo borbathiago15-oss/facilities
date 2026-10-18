@@ -233,6 +233,24 @@ tokens do `app.css` (os mesmos do Intelligence). A paleta sugerida pela base
 de design (verde, fonte serifada) foi descartada: a identidade é a do Trino.
 `e2e/test_visual.py` confere login, gaveta e ausência de rolagem lateral.
 
+Bloco A — pronto para o piloto (18/10/2026), da análise de rotas e fluxos:
+
+| Problema | Como ficou |
+|---|---|
+| Presença "sem resposta" falsa | pedido que nunca saiu (agendador atrasou) vira `nao_enviada`, sem alerta; horário que já passou não vira pedido (rota criada ou cobertura no meio do turno) |
+| Agendador | trava no Postgres (`pg_try_advisory_xact_lock`): duas rodadas ao mesmo tempo, a segunda não faz nada; a rodada que falha fica registrada em `agendador_execucoes` com o erro |
+| Item não conforme da rota | abre UM chamado por execução (decisão do dono), com os itens e as fotos; a preventiva com item não conforme também; a mensagem do app passou a ser verdadeira |
+| QR | o selo do servidor ("leu no ponto") só sai com a câmera; link de aviso e código digitado ficam com a hora do celular (marcado na execução) |
+| Envio recusado na fila | tarefa já feita por outra pessoa ou turno encerrado → vira atividade extra, com o motivo na observação; antes só "descartar" |
+| Duas pessoas, mesma tarefa | a tarefa é travada até o commit |
+| Avisos (presença, visita, insumo, ocorrência, cobrança) | só para quem está ativo e ainda tem o local na carteira |
+| Chamado | urgente vai ao celular da gestão; resolvido avisa quem abriu no celular e, sem confirmação em 24 h, lembra UMA vez (não fecha sozinho — decisão do dono); reaberto ganha prazo novo pela régua e volta a avisar |
+| Visita vencida | vira "Não feita (venceu)" dois dias depois do vencimento |
+| Cópia sem sinal do app | uma por tela (a mais recente), no máximo 20 h para o turno, e rede lenta não prende a tela (8 s) |
+
+Sem migração: os estados novos (`nao_enviada`, `perdida`) cabem nas colunas
+de texto que já existem.
+
 ATENÇÃO: a presença lançada pelo supervisor tem o mesmo risco da D48
 (controle de jornada): validar com RH e jurídico antes do piloto e constar no
 aviso aos colaboradores (D25).

@@ -34,7 +34,10 @@
   }
   window.TrinoLeitorQR = { destino: destino };
 
-  function abrir(texto) {
+  // ``digitado``: o código foi escrito à mão, não lido pela câmera — a
+  // execução fica com a hora do celular (marcada para a gestão), sem o selo
+  // do servidor, que vale como "leu o QR no ponto".
+  function abrir(texto, digitado) {
     var alvo = destino(texto);
     if (!alvo) {
       dizer('Este QR não é do Trino Facilities. Procure a etiqueta do local.');
@@ -45,7 +48,8 @@
     if (navigator.vibrate) { try { navigator.vibrate(80); } catch (e) {} }
     // No aplicativo, o QR abre o turno já no ponto lido: essa tela tem cópia
     // no aparelho e funciona também sem sinal.
-    location.assign('/app/turno?ponto=' + encodeURIComponent(alvo.slice(3)));
+    location.assign('/app/turno?ponto=' + encodeURIComponent(alvo.slice(3)) +
+                    (digitado ? '' : '&lido=camera'));
     return true;
   }
 
@@ -111,8 +115,8 @@
   form.addEventListener('submit', function (ev) {
     ev.preventDefault();
     var bruto = (campo.value || '').trim();
-    if (CODIGO.test(bruto)) { abrir(location.origin + '/q/' + bruto); return; }
-    if (!abrir(bruto)) { dizer('Código inválido. Confira as letras embaixo do QR.'); }
+    if (CODIGO.test(bruto)) { abrir(location.origin + '/q/' + bruto, true); return; }
+    if (!abrir(bruto, true)) { dizer('Código inválido. Confira as letras embaixo do QR.'); }
   });
   tentar.addEventListener('click', iniciar);
   document.addEventListener('visibilitychange', function () {

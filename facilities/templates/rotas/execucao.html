@@ -9,7 +9,7 @@
     <div class="col-6 col-md-3"><div class="text-muted">Quem fez</div><div class="fw-semibold">{{ ex.pessoa.name }}</div></div>
     <div class="col-6 col-md-3"><div class="text-muted">QR lido</div><div class="fw-semibold">{{ ex.lido_em|hora_local }}</div></div>
     <div class="col-6 col-md-3"><div class="text-muted">Concluído</div><div class="fw-semibold">{{ ex.concluida_em|hora_local }}</div></div>
-    <div class="col-6 col-md-3"><div class="text-muted">Registro</div><div class="fw-semibold">{% if ex.sem_sinal %}Feito sem sinal (horário do celular), recebido {{ ex.recebida_em|hora_local }}{% else %}Horário do sistema{% endif %}</div></div>
+    <div class="col-6 col-md-3"><div class="text-muted">Registro</div><div class="fw-semibold">{% if ex.sem_sinal %}Horário do celular (sem sinal ou sem leitura do QR pela câmera), recebido {{ ex.recebida_em|hora_local }}{% else %}Horário do sistema{% endif %}</div></div>
   </div>
   {% if ex.tarefa %}<p class="small mt-2 mb-0">Tarefa das {{ ex.tarefa.previsto_para|hora_local('%H:%M') }} da rota "{{ ex.tarefa.rota.nome }}".</p>{% endif %}
 </div>
