@@ -106,7 +106,8 @@ def test_modelos_prontos_de_limpeza(app_module, auth_client):
     from facilities.rotas.models import ChecklistModelo
     from facilities.rotas.servico import conferir_respostas, itens_da_versao
     r = auth_client.post('/rotas/biblioteca/modelos-prontos', follow_redirects=True)
-    assert f'{len(MODELOS)} modelo(s) instalado(s)' in r.get_data(as_text=True)
+    from facilities.rotas.biblioteca_pronta import ROTAS
+    assert f'{len(MODELOS) + len(ROTAS)} modelo(s) instalado(s)' in r.get_data(as_text=True)
     r = auth_client.post('/rotas/biblioteca/modelos-prontos', follow_redirects=True)
     assert 'já estavam na biblioteca' in r.get_data(as_text=True)
     with app_module.app.app_context():

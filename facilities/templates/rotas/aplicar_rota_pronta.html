@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+{% block title %}Aplicar rota pronta{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item"><a href="{{ url_for('rotas.inicio') }}">Rotas</a></li><li class="breadcrumb-item"><a href="{{ url_for('rotas.local', cid=local.id) }}">{{ local.name }}</a></li><li class="breadcrumb-item active" aria-current="page">Aplicar rota pronta</li>{% endblock %}
+{% block content %}
+<h1 class="fc-titulo">Aplicar rota pronta</h1>
+<p class="fc-sub">{{ local.name }} · escolha o modelo, confira a lista e tire o que este local não tem. O sistema cria o que faltar: setores, ambientes, pontos com QR, os checklists e a rota com os horários.</p>
+
+<form method="get" class="fc-cartao mb-3 d-flex flex-wrap gap-2 align-items-end">
+  <div class="flex-grow-1"><label class="form-label small fw-semibold" for="escolha">Rota pronta</label>
+    <select class="form-select" id="escolha" name="modelo">
+      <option value="">Escolha…</option>
+      {% for o in opcoes %}<option value="{{ o.id }}" {% if modelo and o.id == modelo.id %}selected{% endif %}>{{ o.segmento }} · {{ o.nome }}</option>{% endfor %}
+    </select></div>
+  <button class="btn btn-outline-primary fw-bold" type="submit">Ver a prévia</button>
+</form>
+{% if not opcoes %}
+<div class="fc-vazio">Ainda não há rotas prontas. O administrador instala na Biblioteca ("Instalar na biblioteca").</div>
+{% endif %}
+
+{% if modelo %}
+<form method="post" action="{{ url_for('rotas.aplicar_rota_pronta_post', cid=local.id, rmid=modelo.id) }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  {% if modelo.descricao %}<div class="alert alert-light border small">{{ modelo.descricao }}</div>{% endif %}
+  <section class="fc-cartao mb-3" aria-labelledby="tit-turno">
+    <h2 class="h6 fw-bold" id="tit-turno">A rota que será criada</h2>
+    {% set m = modelo %}{% set editavel = true %}{% include 'rotas/_campos_rota_pronta.html' %}
+    <p class="form-text mb-0">A confirmação de presença começa desligada (0 por turno). Ligue na rota depois da validação de RH e jurídico.</p>
+  </section>
+  <section class="fc-cartao mb-3" aria-labelledby="tit-amb">
+    <h2 class="h6 fw-bold" id="tit-amb">Ambientes ({{ linhas|length }})</h2>
+    <p class="small text-muted">Desmarque o que este local não tem. Pode mudar o nome do ambiente (ex.: "Banheiro masculino 2º andar") e os horários. Ambiente com o mesmo nome no mesmo setor é reaproveitado, sem duplicar.</p>
+    <div class="table-responsive">
+    <table class="table table-sm align-middle mb-0">
+      <thead><tr><th scope="col">Incluir</th><th scope="col">Setor</th><th scope="col">Ambiente</th><th scope="col">Checklist</th><th scope="col">Horários</th></tr></thead>
+      <tbody>
+      {% for ln in linhas %}{% set i = loop.index0 %}
+      <tr>
+        <td><label class="visually-hidden" for="inc{{ i }}">Incluir {{ ln.ambiente }}</label><input class="form-check-input" type="checkbox" id="inc{{ i }}" name="incluir" value="{{ i }}" checked></td>
+        <td><label class="visually-hidden" for="s{{ i }}">Setor</label><input class="form-control form-control-sm" id="s{{ i }}" name="setor" maxlength="120" value="{{ ln.setor }}"></td>
+        <td><label class="visually-hidden" for="a{{ i }}">Ambiente</label><input class="form-control form-control-sm" id="a{{ i }}" name="ambiente" maxlength="120" value="{{ ln.ambiente }}"></td>
+        <td class="small">{{ ln.checklist }}<input type="hidden" name="checklist_id" value="{{ ln.checklist_id }}"></td>
+        <td><label class="visually-hidden" for="h{{ i }}">Horários</label><input class="form-control form-control-sm" id="h{{ i }}" name="horarios" maxlength="300" value="{{ ln.horarios }}"></td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </section>
+  <button class="btn btn-primary fw-bold" type="submit"><i class="bi bi-magic" aria-hidden="true"></i> Criar a rota neste local</button>
+</form>
+{% endif %}
+{% endblock %}

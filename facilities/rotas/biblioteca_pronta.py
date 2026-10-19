@@ -1,11 +1,14 @@
 """Modelos prontos de limpeza para a biblioteca da Trino (decisão do dono,
-18/10/2026): banheiro, copa, recepção/escritório, vestiário e área externa.
+18/10/2026): banheiro, copa, recepção/escritório, vestiário, área externa e
+(19/10/2026) piso operacional de armazém. E as ROTAS prontas (19/10/2026):
+escritório corporativo e centro de distribuição.
 
 Cada pergunta traz o "como fazer" — o que o ASG lê embaixo da pergunta, no
 celular — em linguagem do posto. O administrador instala uma vez (botão na
 biblioteca ou ``flask --app facilities semear-checklists``); cada local copia
 e ajusta. Instalar de novo não duplica: modelo com o mesmo nome é pulado.
 """
+from facilities.extensions import db
 from facilities.rotas.models import ChecklistModelo
 
 _DANO = {'codigo': 'dano', 'texto': 'Viu algum vazamento, dano ou lâmpada queimada?',
@@ -108,6 +111,100 @@ MODELOS = [
 ]
 
 
+MODELOS.append(
+    {'nome': 'Piso operacional, docas e armazém — padrão Trino',
+     'descricao': 'Rotina do piso de operação: corredores livres, piso sem derramamento e '
+                  'lixo no lugar. Atenção às empilhadeiras: use colete e não entre em '
+                  'corredor com máquina operando.',
+     'exige_foto_depois': True,
+     'itens': [
+         {'texto': 'Corredores e faixas de pedestre livres?', 'tipo': 'sim_nao',
+          'obrigatorio': True, 'problema_se': 'nao',
+          'como_fazer': 'Nada de palete, caixa ou filme no corredor nem sobre a faixa '
+                        'amarela. Se tiver, avise o líder do turno.'},
+         {'texto': 'Piso sem óleo, água ou produto derramado', 'tipo': 'conforme',
+          'obrigatorio': True,
+          'como_fazer': 'Derramamento: isole com cone, use o absorvente do kit e só depois '
+                        'lave. Óleo nunca vai para o ralo.'},
+         {'texto': 'Filme, papelão e lixo nos coletores certos', 'tipo': 'conforme',
+          'obrigatorio': True,
+          'como_fazer': 'Papelão dobrado no coletor de papelão; filme stretch no de plástico; '
+                        'o resto no lixo comum.'},
+         {'texto': 'Docas varridas e niveladoras sem detritos', 'tipo': 'conforme',
+          'obrigatorio': True,
+          'como_fazer': 'Varra a doca só com o caminhão fora ou a porta fechada.'},
+         {'codigo': 'risco',
+          'texto': 'Viu algum risco (palete quebrado, piso solto, luz apagada, vazamento)?',
+          'tipo': 'sim_nao', 'obrigatorio': True, 'problema_se': 'sim',
+          'como_fazer': 'Se sim, isole com cone e conte onde abaixo.'},
+         {'texto': 'O que e onde?', 'tipo': 'texto', 'obrigatorio': True,
+          'mostrar_se': 'risco=sim'}]})
+
+_BANHEIRO = 'Limpeza de banheiro — padrão Trino'
+_COPA = 'Limpeza de copa e cozinha — padrão Trino'
+_RECEPCAO = 'Limpeza de recepção e escritório — padrão Trino'
+_VESTIARIO = 'Limpeza de vestiário — padrão Trino'
+_EXTERNA = 'Área externa e calçada — padrão Trino'
+_PISO = 'Piso operacional, docas e armazém — padrão Trino'
+
+# Rotas prontas. As frequências são o ponto de partida usual de mercado e o
+# administrador ajusta na tela; a referência legal é a NR-24 (instalações
+# sanitárias, vestiários e refeitórios em permanente estado de limpeza) e,
+# para refeitório e copa, a RDC 216/2004 da ANVISA (boas práticas em serviços
+# de alimentação).
+ROTAS = [
+    {'nome': 'Escritório corporativo — turno diurno', 'segmento': 'Escritório / corporativo',
+     'descricao': 'Banheiros a cada 2 horas no expediente, copa depois de cada pico (manhã, '
+                  'almoço e tarde), recepção na abertura e depois do almoço, salas uma vez '
+                  'ao dia antes da chegada das pessoas.',
+     'turno': 'Diurno', 'hora_inicio': '06:00', 'hora_fim': '18:00', 'tolerancia_min': 30,
+     'dias_semana': '12345',
+     'itens': [
+         ('Administrativo', 'Banheiro masculino', _BANHEIRO, '08:00, 10:00, 12:00, 14:00, 16:00', 1),
+         ('Administrativo', 'Banheiro feminino', _BANHEIRO, '08:00, 10:00, 12:00, 14:00, 16:00', 1),
+         ('Administrativo', 'Copa', _COPA, '09:30, 13:30, 16:30', 1),
+         ('Administrativo', 'Recepção', _RECEPCAO, '07:30, 13:00', 1),
+         ('Administrativo', 'Salas e estações de trabalho', _RECEPCAO, '07:00', 1),
+         ('Área externa', 'Entrada e calçada', _EXTERNA, '07:00', 1)]},
+    {'nome': 'Centro de distribuição — turno A (manhã)',
+     'segmento': 'Centro de distribuição / galpão',
+     'descricao': 'Vestiários na troca de turno e no meio dele, banheiros da operação a cada '
+                  '2 horas, refeitório antes e depois do almoço, piso e docas duas vezes no '
+                  'turno, administrativo na abertura.',
+     'turno': 'Turno A', 'hora_inicio': '06:00', 'hora_fim': '14:20', 'tolerancia_min': 30,
+     'dias_semana': '123456',
+     'itens': [
+         ('Apoio', 'Vestiário masculino', _VESTIARIO, '06:30, 10:00, 13:45', 1),
+         ('Apoio', 'Vestiário feminino', _VESTIARIO, '06:30, 10:00, 13:45', 1),
+         ('Operação', 'Banheiro da operação', _BANHEIRO, '07:00, 09:00, 11:00, 13:00', 2),
+         ('Apoio', 'Refeitório', _COPA, '10:30, 13:00', 1),
+         ('Operação', 'Armazém e docas', _PISO, '08:00, 12:00', 1),
+         ('Administrativo', 'Escritório administrativo', _RECEPCAO, '07:00', 1),
+         ('Área externa', 'Portaria e pátio', _EXTERNA, '08:30', 1)]},
+]
+
+
+def semear_rotas():
+    """Instala as rotas prontas que ainda não existem (precisa dos checklists
+    da biblioteca). → nomes criados."""
+    from facilities.rotas import rotas_prontas
+    from facilities.rotas.models import RotaModelo
+    criados = []
+    for dados in ROTAS:
+        if RotaModelo.query.filter_by(nome=dados['nome']).first():
+            continue
+        linhas = []
+        for setor, ambiente, checklist, horarios, qtd in dados['itens']:
+            m = ChecklistModelo.query.filter(ChecklistModelo.client_id.is_(None),
+                                             ChecklistModelo.nome == checklist).first()
+            linhas.append({'setor': setor, 'ambiente': ambiente,
+                           'checklist_id': m.id if m else '', 'horarios': horarios,
+                           'quantidade': qtd})
+        rotas_prontas.salvar_modelo(None, dados, linhas)
+        criados.append(dados['nome'])
+    return criados
+
+
 def semear(autor=None):
     """Instala na biblioteca os modelos que ainda não existem. → nomes criados."""
     from facilities.rotas import servico
@@ -123,4 +220,5 @@ def semear(autor=None):
         servico.publicar(m, itens, {'descricao': dados['descricao'],
                                     'exige_foto_depois': dados.get('exige_foto_depois')}, autor)
         criados.append(m.nome)
-    return criados
+    db.session.flush()
+    return criados + semear_rotas()

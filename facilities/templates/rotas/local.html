@@ -57,8 +57,9 @@
   <p class="small text-muted">Nenhuma rota ainda.</p>
   {% endfor %}
   {% if pode_montar %}
-  <details class="mt-2" {% if not rotas %}open{% endif %}>
-    <summary class="fw-semibold">Criar rota</summary>
+  <a class="btn btn-outline-primary fw-bold mt-2" href="{{ url_for('rotas.aplicar_rota_pronta', cid=local.id) }}"><i class="bi bi-magic" aria-hidden="true"></i> Usar uma rota pronta</a>
+  <details class="mt-2">
+    <summary class="fw-semibold">Criar rota do zero</summary>
     <form method="post" action="{{ url_for('rotas.criar_rota', cid=local.id) }}" class="mt-2">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       {% include 'rotas/_campos_rota.html' %}

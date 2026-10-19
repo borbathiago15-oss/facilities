@@ -1,13 +1,13 @@
 {% extends 'base.html' %}
-{% block title %}Biblioteca de checklists{% endblock %}
+{% block title %}Biblioteca de checklists e rotas{% endblock %}
 {% block breadcrumb %}<li class="breadcrumb-item"><a href="{{ url_for('rotas.inicio') }}">Rotas</a></li><li class="breadcrumb-item active" aria-current="page">Biblioteca</li>{% endblock %}
 {% block content %}
-<h1 class="fc-titulo">Biblioteca de checklists da Trino</h1>
-<p class="fc-sub">Os modelos padrão da Trino. Cada local recebe uma CÓPIA e ajusta à sua realidade, sem mudar os outros locais. Para copiar, abra o local em Rotas.</p>
+<h1 class="fc-titulo">Biblioteca da Trino</h1>
+<p class="fc-sub">Rotas prontas por tipo de local e os checklists padrão. Cada local recebe uma CÓPIA e ajusta à sua realidade, sem mudar os outros locais. Para aplicar, abra o local em Rotas.</p>
 {% if pode_montar %}
 <form method="post" action="{{ url_for('rotas.instalar_modelos_prontos') }}" class="fc-cartao mb-3 d-flex flex-wrap gap-2 align-items-center">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-  <div class="flex-grow-1"><b>Modelos prontos de limpeza</b><div class="small text-muted">Banheiro, copa e cozinha, recepção e escritório, vestiário e área externa — cada pergunta com o "como fazer". Instalar de novo não duplica.</div></div>
+  <div class="flex-grow-1"><b>Modelos prontos</b><div class="small text-muted">Checklists de banheiro, copa e cozinha, recepção e escritório, vestiário, área externa e piso de armazém — cada pergunta com o "como fazer" — e as rotas prontas de escritório e de centro de distribuição. Instalar de novo não duplica.</div></div>
   <button class="btn btn-outline-primary fw-bold" type="submit"><i class="bi bi-magic" aria-hidden="true"></i> Instalar na biblioteca</button>
 </form>
 <details class="fc-cartao mb-3" {% if not modelos %}open{% endif %}>
@@ -22,6 +22,26 @@
   </form>
 </details>
 {% endif %}
+<section class="mb-4" aria-labelledby="tit-rp">
+  <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+    <h2 class="h5 fw-bold mb-0" id="tit-rp">Rotas prontas</h2>
+    {% if pode_montar %}<a class="btn btn-sm btn-outline-primary ms-auto" href="{{ url_for('rotas.rota_pronta') }}"><i class="bi bi-plus-lg" aria-hidden="true"></i> Nova rota pronta</a>{% endif %}
+  </div>
+  <div class="fc-cartao p-0">
+    {% for r in rotas_prontas %}
+    <a class="d-flex flex-wrap gap-2 align-items-center border-bottom px-3 py-2 text-reset text-decoration-none" href="{{ url_for('rotas.rota_pronta', rmid=r.id) }}">
+      <span class="badge text-bg-light">{{ r.segmento }}</span>
+      <strong>{{ r.nome }}</strong>
+      <span class="small text-muted">{{ r.itens|length }} tipo(s) de ambiente · {{ r.hora_inicio.strftime('%H:%M') }} às {{ r.hora_fim.strftime('%H:%M') }}</span>
+      {% if not r.is_active %}<span class="badge text-bg-secondary">desativada</span>{% endif %}
+      <i class="bi bi-chevron-right ms-auto"></i>
+    </a>
+    {% else %}
+    <div class="fc-vazio">Nenhuma rota pronta ainda{% if pode_montar %} — use "Instalar na biblioteca" acima{% endif %}.</div>
+    {% endfor %}
+  </div>
+</section>
+<h2 class="h5 fw-bold">Checklists</h2>
 <div class="fc-cartao p-0">
   {% for m in modelos %}
   <a class="d-flex flex-wrap gap-2 align-items-center border-bottom px-3 py-2 text-reset text-decoration-none" href="{{ url_for('rotas.modelo', mid=m.id) }}">
