@@ -9,5 +9,8 @@ if [ "$#" -gt 0 ]; then
   exec "$@"
 fi
 flask --app facilities db upgrade
+# Primeiro administrador pelo painel da hospedagem (ADMIN_INICIAL_EMAIL): só
+# age quando não há administrador ativo. Falhar aqui não derruba o site.
+flask --app facilities admin-inicial || echo "admin-inicial: falhou (o site sobe assim mesmo)"
 exec gunicorn app:app --bind "0.0.0.0:${PORT:-8080}" --workers "${WEB_CONCURRENCY:-2}" \
   --threads 4 --timeout 60 --access-logfile -

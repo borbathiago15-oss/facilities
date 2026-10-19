@@ -68,20 +68,31 @@ Onde os dados ficam, e o que apaga:
    `flask --app facilities agendador rodar` e *Cron Schedule* `*/5 * * * *`.
    Sem volume e sem domínio. (Ele só mexe no banco; rodar duas vezes não
    duplica nada.)
-7. **Primeiro administrador:** com a CLI do Railway na sua máquina
-   (`npm i -g @railway/cli`, `railway login`, `railway link`):
+7. **Primeiro administrador (sem terminal):** nas variáveis do `web`, acrescente
 
    ```
-   railway ssh --service web
-   flask --app facilities criar-admin --email voce@grupotrino.com.br --nome "Seu nome"
+   ADMIN_INICIAL_EMAIL=voce@grupotrino.com.br
+   ADMIN_INICIAL_NOME=Seu nome
    ```
 
-   A senha temporária aparece só no seu terminal; o sistema pede a troca no
-   primeiro login. Em seguida ele leva à tela *Segurança da conta*: a
-   segunda etapa (código do aplicativo autenticador — Google Authenticator,
-   Microsoft Authenticator ou similar) é **obrigatória** para administrador,
-   gerente, coordenador e diretoria; sem ela nenhuma outra tela abre. Tenha
-   o aplicativo instalado no celular antes do primeiro acesso.
+   e faça o deploy. Ao subir, o site cria o administrador **só se ainda não
+   houver nenhum ativo** (a variável pode ficar; depois do primeiro, ela não
+   faz nada). A senha temporária aparece **uma vez** no *Deploy Log*, na
+   linha `admin-inicial: administrador ... Senha temporária: ...`. Se
+   preferir não ver a senha no log, defina também `ADMIN_INICIAL_SENHA` (8+
+   caracteres) — ela vale só para o primeiro login.
+
+   No primeiro login o sistema pede a troca da senha e, em seguida, leva à
+   tela *Segurança da conta*: a segunda etapa (código do aplicativo
+   autenticador — Google Authenticator, Microsoft Authenticator ou similar)
+   é **obrigatória** para administrador, gerente, coordenador e diretoria;
+   sem ela nenhuma outra tela abre. Tenha o aplicativo instalado no celular
+   antes do primeiro acesso. Depois, apague `ADMIN_INICIAL_SENHA` se tiver
+   usado.
+
+   Alternativa com terminal (`railway ssh --service web`):
+   `flask --app facilities criar-admin --email ... --nome "..."` — também
+   serve para gerar uma senha nova quando o administrador perder a dele.
 8. **Avisos no celular (opcional, recomendado):** no mesmo `railway ssh`,
    `flask --app facilities push chaves` e cole as três linhas
    (`VAPID_PRIVATE_KEY`, `VAPID_PUBLIC_KEY`, `VAPID_SUBJECT`) nas variáveis do

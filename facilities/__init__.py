@@ -423,6 +423,48 @@ def _comandos(app):
         db.session.commit()
         click.echo(f'Administrador {u.email} pronto. Senha temporária: {senha}')
 
+    @app.cli.command('admin-inicial')
+    def admin_inicial():
+        """Primeiro administrador, sem terminal: lido de ``ADMIN_INICIAL_EMAIL``
+        (e ``ADMIN_INICIAL_NOME``) a cada subida do site. Só age quando NÃO há
+        administrador ativo — com a variável esquecida no painel, não faz nada.
+        A senha é temporária (troca obrigatória no primeiro login, e a segunda
+        etapa vem logo depois): ``ADMIN_INICIAL_SENHA`` se definida (mínimo de
+        8 caracteres), senão uma sorteada, mostrada uma vez no log do deploy."""
+        from facilities.core.admin import _senha_temporaria
+        from facilities.core.models import User
+        email = (os.environ.get('ADMIN_INICIAL_EMAIL') or '').strip().lower()
+        if not email:
+            return
+        if User.query.filter_by(role='master', is_active=True, is_deleted=False).first():
+            click.echo('admin-inicial: já existe administrador ativo; nada a fazer.')
+            return
+        senha = os.environ.get('ADMIN_INICIAL_SENHA') or ''
+        informada = len(senha) >= 8
+        if senha and not informada:
+            click.echo('admin-inicial: ADMIN_INICIAL_SENHA tem menos de 8 caracteres; '
+                       'usando uma senha sorteada.')
+        if not informada:
+            senha = _senha_temporaria()
+        u = User.query.filter(db.func.lower(User.email) == email).first()
+        if u is None:
+            u = User(email=email)
+            db.session.add(u)
+        u.name = (os.environ.get('ADMIN_INICIAL_NOME') or '').strip() or u.name or email
+        u.role = 'master'
+        u.is_active, u.is_deleted = True, False
+        u.set_password(senha)
+        u.must_change_password = True
+        u.failed_login_count, u.lockout_until = 0, None
+        u.session_epoch = (u.session_epoch or 0) + 1
+        db.session.commit()
+        if informada:
+            click.echo(f'admin-inicial: administrador {u.email} pronto, com a senha de '
+                       'ADMIN_INICIAL_SENHA (troca obrigatória no primeiro login).')
+        else:
+            click.echo(f'admin-inicial: administrador {u.email} pronto. Senha temporária: '
+                       f'{senha} (troca obrigatória no primeiro login).')
+
     @app.cli.group('agendador')
     def agendador():
         """O relógio das rotas: gera as tarefas do dia e fecha as perdidas."""
