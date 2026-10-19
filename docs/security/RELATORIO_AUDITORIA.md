@@ -262,8 +262,8 @@ Decisões do dono em 19/10/2026: blocos A e C agora; bloco D antes da produção
 | Bloco | Achados | Situação | Testes de regressão |
 |---|---|---|---|
 | A. Login forte | SEC-001, 002, 003, 007, 011, 018 | corrigido (migração `2d942c7ab282`) | `tests/test_seguranca_login.py` |
-| C. Arquivos e relatório | SEC-005, 009, 014, 019, 025 | pendente | — |
-| D. Implantação | SEC-008, 015, 023 | antes da produção | — |
+| C. Arquivos e relatório | SEC-005, 009, 014, 019, 025 | corrigido | `tests/test_seguranca_arquivos.py` |
+| D. Implantação | SEC-008, 015, 023 (+ fixar o `pillow`, dependência do reportlab sem versão fixa) | antes da produção | — |
 | B. Limites compartilhados | SEC-004, 006, 016 | a decidir (precisa de Redis no Railway) | — |
 | E. Sessão e higiene | SEC-010, 012, 013, 017, 021, 022 | a decidir | — |
 

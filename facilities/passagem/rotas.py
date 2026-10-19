@@ -2231,6 +2231,10 @@ def anexar_no_turno(turno_id):
         if assinaturas and not any(dados.startswith(a) for a in assinaturas):
             recusar(nome, f'O conteúdo do arquivo não é um {ext.upper()} de verdade')
             continue
+        from facilities.core.anexos import imagem_aceitavel
+        if not imagem_aceitavel(dados, ext):
+            recusar(nome, 'A imagem não abre ou é grande demais (mais de 50 megapixels)')
+            continue
 
         try:
             _storage.save(chave, dados, content_type=ACAO_ANEXO_TIPOS[ext])

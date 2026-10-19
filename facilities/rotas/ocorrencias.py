@@ -94,7 +94,7 @@ def abrir(ponto, tipo, texto, foto=None, agora_utc=None):
 
 
 def _guardar_foto(oc, foto):
-    from facilities.core.anexos import ANEXO_ASSINATURA, ANEXO_TIPOS, storage
+    from facilities.core.anexos import ANEXO_ASSINATURA, ANEXO_TIPOS, imagem_aceitavel, storage
     from facilities.rotas.servico import RegraDaRota
     nome = (foto.filename or '').lower()
     ext = nome.rsplit('.', 1)[-1] if '.' in nome else 'jpg'
@@ -103,7 +103,8 @@ def _guardar_foto(oc, foto):
     if not dados:
         return
     if ext not in ('jpg', 'png', 'webp') or len(dados) > FOTO_MAX or \
-            not any(dados.startswith(a) for a in ANEXO_ASSINATURA[ext]):
+            not any(dados.startswith(a) for a in ANEXO_ASSINATURA[ext]) or \
+            not imagem_aceitavel(dados, ext):
         raise RegraDaRota('A foto não foi aceita (formato ou tamanho). Envie sem foto ou '
                           'tire outra.')
     oc.foto_key = f'ocorrencias/{uuid.uuid4().hex}.{ext}'

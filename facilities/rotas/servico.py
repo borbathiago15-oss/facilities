@@ -88,8 +88,16 @@ def guardar_referencia(modelo, arquivo):
     return chave
 
 
-def normalizar_itens(brutos):
-    """Os itens do formulário → a lista que vai para a versão (ou erro)."""
+def normalizar_itens(brutos, modelo=None):
+    """Os itens do formulário → a lista que vai para a versão (ou erro).
+
+    Com ``modelo``, a foto de referência só vale se a chave for deste
+    checklist (ou do modelo da biblioteca de onde ele foi copiado): a chave
+    de outro local, conhecida por quem já teve acesso a ele, não é aceita
+    (auditoria SEC-019)."""
+    donos = None
+    if modelo is not None:
+        donos = {str(modelo.id)} | ({str(modelo.origem_id)} if modelo.origem_id else set())
     itens, codigos = [], set()
     for b in brutos:
         texto = (b.get('texto') or '').strip()[:300]
@@ -114,7 +122,8 @@ def normalizar_itens(brutos):
         if como:
             item['como_fazer'] = como
         ref = (b.get('foto_ref') or '').strip()
-        if ref and CHAVE_DA_REFERENCIA.match(ref):
+        if ref and CHAVE_DA_REFERENCIA.match(ref) and (
+                donos is None or ref.split('/')[1] in donos):
             item['foto_ref'] = ref
         if tipo == 'escolha':
             brutas = b.get('opcoes') or ''
@@ -198,7 +207,8 @@ DOCUMENTOS_POR_CHECKLIST = 10
 def anexar_documento(modelo, arquivo, autor):
     """Guarda o POP/FIT (PDF, Excel, Word ou imagem — extensão E assinatura
     conferidas, a mesma regra dos anexos da casa)."""
-    from facilities.core.anexos import ANEXO_ASSINATURA, ANEXO_MAX, ANEXO_TIPOS, storage
+    from facilities.core.anexos import (ANEXO_ASSINATURA, ANEXO_MAX, ANEXO_TIPOS,
+                                        imagem_aceitavel, storage)
     from facilities.rotas.models import ChecklistDocumento
     if arquivo is None or not getattr(arquivo, 'filename', ''):
         raise RegraDaRota('Escolha o arquivo do POP ou da FIT.')
@@ -210,7 +220,8 @@ def anexar_documento(modelo, arquivo, autor):
     dados = arquivo.read(ANEXO_MAX + 1)
     assinaturas = ANEXO_ASSINATURA.get(ext)
     if ext not in ANEXO_TIPOS or ext == 'csv' or not dados or len(dados) > ANEXO_MAX \
-            or (assinaturas and not any(dados.startswith(a) for a in assinaturas)):
+            or (assinaturas and not any(dados.startswith(a) for a in assinaturas)) \
+            or not imagem_aceitavel(dados, ext):
         raise RegraDaRota('Envie o POP/FIT em PDF, Excel, Word ou imagem (até 25 MB).')
     chave = f'checklists/{modelo.id}/docs/{uuid.uuid4().hex}.{ext}'
     storage().save(chave, dados, ANEXO_TIPOS[ext])
@@ -738,13 +749,15 @@ def ler_imagem(arquivo):
     """Lê e confere a foto (extensão E assinatura, tamanho) → (dados, ext, mime).
 
     Também usada pela visita de supervisão (Fase 10)."""
-    from facilities.core.anexos import ANEXO_ASSINATURA, ANEXO_MAX, ANEXO_TIPOS
+    from facilities.core.anexos import (ANEXO_ASSINATURA, ANEXO_MAX, ANEXO_TIPOS,
+                                        imagem_aceitavel)
     nome = (getattr(arquivo, 'filename', '') or 'foto.jpg').lower()
     ext = nome.rsplit('.', 1)[-1] if '.' in nome else 'jpg'
     ext = 'jpg' if ext == 'jpeg' else ext
     dados = arquivo.read(ANEXO_MAX + 1)
     if ext not in ('jpg', 'png', 'webp') or not dados or len(dados) > ANEXO_MAX or \
-            not any(dados.startswith(a) for a in ANEXO_ASSINATURA[ext]):
+            not any(dados.startswith(a) for a in ANEXO_ASSINATURA[ext]) or \
+            not imagem_aceitavel(dados, ext):
         raise RegraDaRota('Uma das fotos não é imagem (ou é grande demais). Tire de novo.')
     return dados, ext, ANEXO_TIPOS[ext]
 

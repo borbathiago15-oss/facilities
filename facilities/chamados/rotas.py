@@ -14,7 +14,8 @@ from werkzeug.utils import secure_filename
 
 from facilities.extensions import db
 from facilities.core.acesso import allowed_client_ids_or_none, clientes_visiveis, module_required
-from facilities.core.anexos import ANEXO_ASSINATURA, ANEXO_MAX, ANEXO_TIPOS, storage
+from facilities.core.anexos import (ANEXO_ASSINATURA, ANEXO_MAX, ANEXO_TIPOS,
+                                    imagem_aceitavel, storage)
 from facilities.chamados import servico
 from facilities.chamados.models import (
     CATEGORIAS, ORDEM_DA_PRIORIDADE, PRIORIDADES, RESOLVIDO, STATUS, STATUS_CONTA_PRAZO,
@@ -253,7 +254,8 @@ def _guardar_anexos(ch, arquivos, momento):
         dados = arq.read(ANEXO_MAX + 1)
         assinaturas = ANEXO_ASSINATURA.get(ext)
         if (ext not in ANEXO_TIPOS or len(dados) > ANEXO_MAX or not dados
-                or (assinaturas and not any(dados.startswith(a) for a in assinaturas))):
+                or (assinaturas and not any(dados.startswith(a) for a in assinaturas))
+                or not imagem_aceitavel(dados, ext)):
             recusados.append(arq.filename)
             continue
         chave = f'chamados/{ch.id}/{uuid.uuid4().hex}.{ext}'

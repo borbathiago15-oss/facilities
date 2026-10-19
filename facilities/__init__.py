@@ -350,6 +350,14 @@ def _sessao(app):
 
     @app.after_request
     def _cabecalhos(resp):
+        # Tela e arquivo de quem está logado não ficam no cache do navegador:
+        # no celular do posto, compartilhado, o próximo não vê pelo "voltar"
+        # nem pelo cache o que o anterior abriu (auditoria SEC-014). A cópia
+        # do modo sem sinal é do service worker, que se apaga ao sair.
+        ep = request.endpoint or ''
+        if (current_user.is_authenticated and ep != 'static'
+                and not ep.startswith('app_instalavel.') and ep != 'campo.manifesto'):
+            resp.headers['Cache-Control'] = 'no-store'
         resp.headers.setdefault('X-Content-Type-Options', 'nosniff')
         resp.headers.setdefault('X-Frame-Options', 'SAMEORIGIN')
         resp.headers.setdefault('Referrer-Policy', 'same-origin')

@@ -227,7 +227,8 @@ def _itens_do_formulario(form, arquivos=None, modelo=None):
 def publicar(mid):
     m = _modelo(mid, montar=True)
     try:
-        itens = servico.normalizar_itens(_itens_do_formulario(request.form, request.files, m))
+        itens = servico.normalizar_itens(_itens_do_formulario(request.form, request.files, m),
+                                          modelo=m)
         v, publicou = servico.publicar(m, itens, request.form, current_user)
         m.is_active = True
         db.session.commit()
@@ -284,7 +285,6 @@ def enviar_documento(doc):
         abort(404)
     resp = send_file(io.BytesIO(dados), mimetype=doc.mime or 'application/octet-stream',
                      as_attachment=True, download_name=doc.nome)
-    resp.headers['Cache-Control'] = 'private, max-age=86400'
     return resp
 
 
@@ -657,7 +657,6 @@ def referencia(vid, codigo):
     ext = chave.rsplit('.', 1)[-1]
     tipo = {'jpg': 'image/jpeg', 'png': 'image/png', 'webp': 'image/webp'}.get(ext, 'image/jpeg')
     resp = send_file(io.BytesIO(dados), mimetype=tipo)
-    resp.headers['Cache-Control'] = 'private, max-age=604800'
     return resp
 
 
