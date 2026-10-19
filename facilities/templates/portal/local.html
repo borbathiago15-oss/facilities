@@ -80,4 +80,19 @@
     {% endfor %}
   </div>
 </section>
+{% if documentos %}
+<section class="mt-4" aria-labelledby="tit-docs">
+  <h2 class="h5 fw-bold" id="tit-docs">Procedimentos (POP/FIT)</h2>
+  <div class="fc-cartao p-0">
+    {% for d in documentos %}
+    <a class="d-flex flex-wrap gap-2 align-items-center border-bottom px-3 py-2 text-reset text-decoration-none" href="{{ url_for('portal.documento', did=d.id) }}">
+      <i class="bi bi-file-earmark-text" aria-hidden="true"></i>
+      <span class="fw-semibold">{{ d.modelo.nome }}</span>
+      <span class="small text-muted">{{ d.nome }}</span>
+      <span class="small ms-auto">Baixar</span>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
 {% endblock %}

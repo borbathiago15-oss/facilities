@@ -89,6 +89,31 @@ class ChecklistModelo(db.Model):
         return self.versoes[-1] if self.versoes else None
 
 
+class ChecklistDocumento(db.Model):
+    """O POP ou a FIT do checklist (PDF, Excel, Word ou imagem), guardado
+    para consulta. O RESUMO que o ASG lê no celular é o procedimento do
+    checklist (``ChecklistModelo.descricao``), escrito pela gestão (decisão do
+    dono, 18/10/2026). Trocar o documento não apaga o antigo: ele sai de uso
+    (``is_active``) e fica no histórico."""
+    __tablename__ = 'checklist_documentos'
+    id = db.Column(db.Integer, primary_key=True)
+    modelo_id = db.Column(db.Integer, db.ForeignKey('checklist_modelos.id', ondelete='RESTRICT'),
+                          nullable=False, index=True)
+    nome = db.Column(db.String(200), nullable=False)
+    mime = db.Column(db.String(100))
+    tamanho = db.Column(db.Integer)
+    storage_key = db.Column(db.String(300), nullable=False)
+    # O cliente só vê o documento que a gestão marcar (é know-how da Trino).
+    visivel_cliente = db.Column(db.Boolean, default=False, nullable=False,
+                                server_default=db.false())
+    is_active = db.Column(db.Boolean, default=True, nullable=False, server_default=db.true())
+    enviado_por = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='RESTRICT'))
+    enviado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    modelo = db.relationship('ChecklistModelo', backref=db.backref(
+        'documentos', order_by='ChecklistDocumento.id'))
+
+
 class ChecklistVersao(db.Model):
     """Uma versão PUBLICADA: as perguntas daquele momento. Não se edita."""
     __tablename__ = 'checklist_versoes'
@@ -412,5 +437,6 @@ class ConfirmacaoPresenca(db.Model):
 
 MODELOS_EM_ORDEM_DE_LIMPEZA = (ConfirmacaoPresenca, OcorrenciaPublica, ExecucaoCorrecao,
                                NaoConformidade, ExecucaoFoto, Execucao, TarefaDia, RotaEscala,
-                               RotaItem, Rota, ChecklistVersao, ChecklistModelo,
+                               RotaItem, Rota, ChecklistDocumento, ChecklistVersao,
+                               ChecklistModelo,
                                AgendadorExecucao)

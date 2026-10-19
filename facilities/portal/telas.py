@@ -79,7 +79,31 @@ def local(cid):
                            fotos={ch.id: servico.fotos_do_chamado(ch) for ch in chamados},
                            execucoes=servico.execucoes_do_local(loc.id),
                            visitas=servico.visitas_do_local(loc.id),
+                           documentos=_documentos_do_local(loc.id),
                            quem_fez=servico.quem_fez, agora=datetime.utcnow())
+
+
+def _documentos_do_local(cid):
+    """Os POP/FIT que a gestão marcou para o cliente ver (e só esses)."""
+    from facilities.rotas.models import ChecklistDocumento, ChecklistModelo
+    return (ChecklistDocumento.query.join(ChecklistModelo)
+            .filter(ChecklistModelo.client_id == cid, ChecklistModelo.is_active.is_(True),
+                    ChecklistDocumento.is_active.is_(True),
+                    ChecklistDocumento.visivel_cliente.is_(True))
+            .order_by(ChecklistModelo.nome, ChecklistDocumento.id).all())
+
+
+@bp.get('/documentos/<int:did>')
+@login_required
+def documento(did):
+    from facilities.rotas.models import ChecklistDocumento
+    from facilities.rotas.telas import enviar_documento
+    _so_cliente()
+    doc = db.session.get(ChecklistDocumento, did)
+    if doc is None or doc.modelo.client_id is None or doc not in _documentos_do_local(
+            _local(doc.modelo.client_id).id):
+        abort(404)
+    return enviar_documento(doc)
 
 
 @bp.get('/chamados/<int:chamado_id>')

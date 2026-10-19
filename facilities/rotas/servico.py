@@ -190,6 +190,44 @@ def publicar(modelo, itens, dados, autor):
     return v, True
 
 
+# ── POP / FIT do checklist ────────────────────────────────────────────────
+
+DOCUMENTOS_POR_CHECKLIST = 10
+
+
+def anexar_documento(modelo, arquivo, autor):
+    """Guarda o POP/FIT (PDF, Excel, Word ou imagem — extensão E assinatura
+    conferidas, a mesma regra dos anexos da casa)."""
+    from facilities.core.anexos import ANEXO_ASSINATURA, ANEXO_MAX, ANEXO_TIPOS, storage
+    from facilities.rotas.models import ChecklistDocumento
+    if arquivo is None or not getattr(arquivo, 'filename', ''):
+        raise RegraDaRota('Escolha o arquivo do POP ou da FIT.')
+    if len(documentos_ativos(modelo)) >= DOCUMENTOS_POR_CHECKLIST:
+        raise RegraDaRota(f'No máximo {DOCUMENTOS_POR_CHECKLIST} documentos por checklist. '
+                          'Retire um antigo antes.')
+    nome = arquivo.filename.replace('\\', '/').rsplit('/', 1)[-1].strip()[:200] or 'documento'
+    ext = nome.rsplit('.', 1)[-1].lower() if '.' in nome else ''
+    dados = arquivo.read(ANEXO_MAX + 1)
+    assinaturas = ANEXO_ASSINATURA.get(ext)
+    if ext not in ANEXO_TIPOS or ext == 'csv' or not dados or len(dados) > ANEXO_MAX \
+            or (assinaturas and not any(dados.startswith(a) for a in assinaturas)):
+        raise RegraDaRota('Envie o POP/FIT em PDF, Excel, Word ou imagem (até 25 MB).')
+    chave = f'checklists/{modelo.id}/docs/{uuid.uuid4().hex}.{ext}'
+    storage().save(chave, dados, ANEXO_TIPOS[ext])
+    doc = ChecklistDocumento(modelo_id=modelo.id, nome=nome, mime=ANEXO_TIPOS[ext],
+                             tamanho=len(dados), storage_key=chave,
+                             enviado_por=autor.id if autor else None)
+    db.session.add(doc)
+    db.session.flush()
+    return doc
+
+
+def documentos_ativos(modelo):
+    from facilities.rotas.models import ChecklistDocumento
+    return (ChecklistDocumento.query.filter_by(modelo_id=modelo.id, is_active=True)
+            .order_by(ChecklistDocumento.id).all())
+
+
 def copiar_da_biblioteca(origem, client_id, autor):
     if origem.client_id is not None or origem.versao_atual is None:
         raise RegraDaRota('Escolha um checklist publicado da biblioteca.')
@@ -204,6 +242,12 @@ def copiar_da_biblioteca(origem, client_id, autor):
                         origem_id=origem.id)
     db.session.add(m)
     db.session.flush()
+    # O POP/FIT da biblioteca vai junto (o mesmo arquivo; interno ao copiar).
+    from facilities.rotas.models import ChecklistDocumento
+    for doc in documentos_ativos(origem):
+        db.session.add(ChecklistDocumento(modelo_id=m.id, nome=doc.nome, mime=doc.mime,
+                                          tamanho=doc.tamanho, storage_key=doc.storage_key,
+                                          enviado_por=autor.id if autor else None))
     v = origem.versao_atual
     publicar(m, json.loads(v.itens_json), {'exige_foto_antes': v.exige_foto_antes,
                                            'exige_foto_depois': v.exige_foto_depois}, autor)

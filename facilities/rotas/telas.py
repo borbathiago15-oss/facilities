@@ -194,7 +194,8 @@ def modelo(mid):
     pode = (_perfil() == 'master') if m.client_id is None else _pode_montar()
     return render_template('rotas/modelo.html', modelo=m, itens=itens,
                            linhas=itens + [{}] * LINHAS_EM_BRANCO, tipos=TIPOS_DE_ITEM,
-                           pode_montar=pode)
+                           pode_montar=pode, documentos=servico.documentos_ativos(m),
+                           limite_docs=servico.DOCUMENTOS_POR_CHECKLIST)
 
 
 def _itens_do_formulario(form, arquivos=None, modelo=None):
@@ -238,6 +239,67 @@ def publicar(mid):
           'versão; o que já foi feito continua com as perguntas da época.' if publicou
           else 'Nada mudou: a versão publicada continua a mesma.', 'success')
     return redirect(url_for('rotas.modelo', mid=m.id))
+
+
+# ── POP / FIT do checklist ────────────────────────────────────────────────
+
+@bp.post('/rotas/modelos/<int:mid>/documentos')
+@login_required
+def anexar_documento(mid):
+    m = _modelo(mid, montar=True)
+    return _gravar(servico.anexar_documento, m, request.files.get('arquivo'), current_user,
+                   sucesso=lambda d: f'"{d.nome}" guardado. Quem faz o checklist vê o resumo '
+                   'e pode abrir o documento completo.',
+                   destino=url_for('rotas.modelo', mid=m.id))
+
+
+@bp.post('/rotas/documentos/<int:did>/<acao>')
+@login_required
+def acao_documento(did, acao):
+    from facilities.rotas.models import ChecklistDocumento
+    doc = db.get_or_404(ChecklistDocumento, did)
+    m = _modelo(doc.modelo_id, montar=True)
+    if not doc.is_active or acao not in ('cliente', 'interno', 'retirar') \
+            or (acao == 'cliente' and m.client_id is None):
+        abort(404)
+    if acao == 'retirar':
+        # Sai de uso, mas o registro e o arquivo ficam (nada se perde).
+        doc.is_active = False
+        msg = f'"{doc.nome}" retirado do checklist.'
+    else:
+        doc.visivel_cliente = acao == 'cliente'
+        msg = (f'"{doc.nome}" agora aparece no portal do cliente.' if doc.visivel_cliente
+               else f'"{doc.nome}" voltou a ser só da equipe.')
+    db.session.commit()
+    flash(msg, 'success')
+    return redirect(url_for('rotas.modelo', mid=m.id))
+
+
+def enviar_documento(doc):
+    """Entrega o POP/FIT para baixar (nunca abre no navegador como página)."""
+    from facilities.core.anexos import storage
+    try:
+        dados = storage().load(doc.storage_key)
+    except Exception:
+        abort(404)
+    resp = send_file(io.BytesIO(dados), mimetype=doc.mime or 'application/octet-stream',
+                     as_attachment=True, download_name=doc.nome)
+    resp.headers['Cache-Control'] = 'private, max-age=86400'
+    return resp
+
+
+@bp.get('/rotas/documentos/<int:did>')
+@login_required
+def documento(did):
+    """O documento completo. Quem executa o checklist (pelo aplicativo) também
+    abre: a regra é a da carteira do local; o da biblioteca é da Trino."""
+    from facilities.rotas.models import ChecklistDocumento
+    doc = db.get_or_404(ChecklistDocumento, did)
+    if not doc.is_active:
+        abort(404)
+    if doc.modelo.client_id is not None:
+        require_client(doc.modelo.client_id)
+    return enviar_documento(doc)
 
 
 # ── Rotas, itens e escala ─────────────────────────────────────────────────
@@ -527,6 +589,8 @@ def _dados_do_turno(locais):
     def v_json(v):
         return {'id': v.id, 'modelo': v.modelo.nome, 'numero': v.numero,
                 'procedimento': v.modelo.descricao or '', 'itens': _itens_com_referencia(v),
+                'documentos': [{'nome': d.nome, 'url': url_for('rotas.documento', did=d.id)}
+                               for d in servico.documentos_ativos(v.modelo)],
                 'foto_antes': v.exige_foto_antes, 'foto_depois': v.exige_foto_depois}
     return {
         'usuario': current_user.id,

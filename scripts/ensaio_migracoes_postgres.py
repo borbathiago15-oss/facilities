@@ -197,6 +197,11 @@ SEMENTES = [
     "atualizado_em) SELECT c.id,'2026-09-01','[\"execucao:1\"]','Reforço no 2º andar',now(),"
     "u.id,now() FROM clients c, users u WHERE c.name='GL Armazém 1' "
     "AND u.email='gerente@ensaio'",
+    # POP/FIT: um documento guardado num checklist do local, visível ao cliente.
+    "INSERT INTO checklist_documentos (modelo_id,nome,mime,tamanho,storage_key,visivel_cliente,"
+    "is_active,enviado_por,enviado_em) SELECT m.id,'POP Banheiro.pdf','application/pdf',2048,"
+    "'checklists/1/docs/a.pdf',true,true,u.id,now() FROM checklist_modelos m, users u "
+    "WHERE m.client_id IS NOT NULL AND u.email='gerente@ensaio'",
 ]
 
 

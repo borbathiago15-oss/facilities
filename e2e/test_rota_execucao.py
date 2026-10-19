@@ -76,7 +76,7 @@ def test_sem_sinal_a_execucao_sobe_depois_uma_vez(servidor, navegador, perfil, t
 
 def test_roteiro_numerado_e_como_fazer(servidor, navegador, perfil):
     """O turno aparece como roteiro (1, 2, 3…) com a próxima destacada; no
-    checklist, o "como fazer" de cada pergunta."""
+    checklist, o "como fazer" de cada pergunta e o POP."""
     b, ctx = abrir_contexto(navegador, perfil)
     try:
         pg = ctx.new_page()
@@ -89,6 +89,11 @@ def test_roteiro_numerado_e_como_fazer(servidor, navegador, perfil):
         assert pg.locator('text=Aberto sem ler o QR').count() == 1
         pg.get_by_role('button', name='Fazer agora').first.click()
         assert pg.locator('text=Deixe 2 rolos em cada cabine.').is_visible()
+        # O resumo do POP e o documento completo, à parte.
+        pg.locator('summary', has_text='Como fazer (resumo do POP)').click()
+        assert pg.locator('text=Repor papel, limpar e secar o piso.').is_visible()
+        pop = pg.get_by_role('link', name='Ver o POP completo: POP Banheiro.pdf')
+        assert pop.is_visible() and '/rotas/documentos/' in pop.get_attribute('href')
         largura = pg.evaluate('document.documentElement.scrollWidth')
         assert largura <= pg.viewport_size['width']
     finally:
