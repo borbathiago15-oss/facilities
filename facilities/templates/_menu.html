@@ -15,6 +15,7 @@
 {% set ve_cadastros = current_user.e_gestao() or r == 'visualizador' %}
 {% set na_rotina = ep.startswith(('rotas.', 'preventiva.', 'equipes.', 'visitas.')) %}
 {% set na_config = ep.startswith(('cadastros.', 'admin.', 'integracao.')) %}
+{% set na_cadastro = ep.startswith(('cadastros.', 'admin.')) or ep in ('rotas.biblioteca', 'rotas.modelo') %}
 
 {% macro item(endpoint, rotulo, icone, ativo=none, url=none) -%}
 {%- set aceso = ativo if ativo is not none else ep == endpoint -%}
@@ -49,7 +50,7 @@
       {% endif %}
     </div>
     {% if ve_chamados or current_user.can_view('diario_operacional') or ve_rotina %}
-    <details class="fc-lat-grupo" {% if not na_config %}open{% endif %}>
+    <details class="fc-lat-grupo" {% if not na_cadastro %}open{% endif %}>
       <summary class="fc-lat-titulo">Operação</summary>
       {% if ve_chamados %}{{ item('chamados.index', 'Chamados', 'bi-tools', ep.startswith('chamados.')) }}{% endif %}
       {% if current_user.can_view('diario_operacional') %}{{ item('diario_operacional.index', 'Passagem de turno', 'bi-journal-text', ep.startswith('diario_operacional.')) }}{% endif %}
@@ -63,15 +64,28 @@
     </details>
     {% endif %}
     {% if ve_cadastros %}
-    <details class="fc-lat-grupo" {% if na_config %}open{% endif %}>
-      <summary class="fc-lat-titulo">Configuração</summary>
-      {{ item('cadastros.inicio', 'Cadastros', 'bi-diagram-3', ep.startswith('cadastros.')) }}
+    {#- Cadastros: na ordem em que se monta um contrato (empresa → cliente →
+        estados → locais → estrutura e QR → pessoas → checklists). -#}
+    <details class="fc-lat-grupo" open>
+      <summary class="fc-lat-titulo">Cadastros</summary>
       {% if r == 'master' %}
+      {{ item('cadastros.empresas', 'Empresas do grupo', 'bi-building') }}
+      {{ item('cadastros.clientes', 'Clientes', 'bi-briefcase') }}
+      {{ item('cadastros.estados', 'Estados em uso', 'bi-map') }}
       {{ item('admin.contratos', 'Locais', 'bi-geo-alt') }}
-      {{ item('admin.usuarios', 'Pessoas', 'bi-people') }}
-      {{ item('integracao.chaves', 'Integração', 'bi-plug', ep.startswith('integracao.')) }}
       {% endif %}
+      {{ item('cadastros.inicio', 'Estrutura e QR dos locais', 'bi-diagram-3', ep in ('cadastros.inicio', 'cadastros.local', 'cadastros.ponto', 'cadastros.trilha', 'cadastros.trilha_local')) }}
+      {% if r == 'master' %}
+      {{ item('admin.usuarios', 'Pessoas e acessos', 'bi-people') }}
+      {% endif %}
+      {% if ve_rotina %}{{ item('rotas.biblioteca', 'Biblioteca de checklists', 'bi-book', ep == 'rotas.biblioteca') }}{% endif %}
     </details>
+    {% if r == 'master' %}
+    <details class="fc-lat-grupo" {% if ep.startswith('integracao.') %}open{% endif %}>
+      <summary class="fc-lat-titulo">Configuração</summary>
+      {{ item('integracao.chaves', 'Integração', 'bi-plug', ep.startswith('integracao.')) }}
+    </details>
+    {% endif %}
     {% endif %}
     <div class="fc-lat-grupo-fixo">
       {{ item('campo.inicio', 'Aplicativo de campo', 'bi-phone') }}
