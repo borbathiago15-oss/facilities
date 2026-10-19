@@ -56,6 +56,11 @@ PERFIS_DE_GESTAO = ('master', 'gerente', 'pleno')
 NIVEL_NA_CADEIA = {'gerente': 1, 'pleno': 2, 'supervisor': 3,
                    'encarregado': 4, 'tecnico': 4}
 
+# Segunda etapa obrigatória (auditoria SEC-001, decisão do dono 19/10/2026):
+# quem enxerga vários locais não entra só com a senha. O cliente já era
+# obrigado (Fase 9B).
+PERFIS_COM_SEGUNDA_ETAPA = PERFIS_DE_GESTAO + ('visualizador',)
+
 # O perfil cliente existe desde a Fase 2; entra no portal só com
 # CLIENTE_EXTERNO_LIBERADO ligado (Fase 9B).
 PERFIS_SEM_LOGIN = ('cliente',)
@@ -153,6 +158,11 @@ class User(db.Model, UserMixin):
     totp_ativo = db.Column(db.Boolean, default=False, nullable=False,
                            server_default=db.false())
     totp_ultimo_passo = db.Column(db.BigInteger, nullable=True)
+    # Erros de código guardados NO SERVIDOR (auditoria SEC-003): antes a conta
+    # ficava no cookie, e repetir o cookie antigo zerava as tentativas. O
+    # login com a senha certa não zera; só o código certo.
+    totp_falhas = db.Column(db.Integer, default=0, nullable=False, server_default='0')
+    totp_bloqueio_ate = db.Column(db.DateTime, nullable=True)
 
     clients = db.relationship('Client', secondary=user_clients, backref='linked_users')
     superior = db.relationship('User', remote_side=[id], foreign_keys=[superior_id],

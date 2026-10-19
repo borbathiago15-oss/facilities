@@ -202,6 +202,9 @@ SEMENTES = [
     "is_active,enviado_por,enviado_em) SELECT m.id,'POP Banheiro.pdf','application/pdf',2048,"
     "'checklists/1/docs/a.pdf',true,true,u.id,now() FROM checklist_modelos m, users u "
     "WHERE m.client_id IS NOT NULL AND u.email='gerente@ensaio'",
+    # Auditoria SEC-003: uma conta com o código travado no servidor.
+    "UPDATE users SET totp_falhas=3, totp_bloqueio_ate='2026-10-19 12:00' "
+    "WHERE email='gerente@ensaio'",
 ]
 
 

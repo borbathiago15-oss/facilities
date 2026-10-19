@@ -12,6 +12,11 @@
   passa pela senha E pelo código. Entre as duas etapas a pessoa NÃO está
   logada — só o id fica guardado na sessão, por 5 minutos e 5 tentativas.
 * O perfil cliente ainda não entra (liberação na Fase 9).
+* Auditoria de segurança (19/10/2026): o erro de senha é contado com UPDATE
+  atômico (rajadas em paralelo não escapam do bloqueio); os erros de código
+  ficam no servidor, não no cookie; a gestão é obrigada a usar a segunda
+  etapa (``exige_segunda_etapa``); e trocar a senha ou desligar o código
+  também contam os erros da senha atual.
 """
 import functools
 from datetime import datetime, timedelta
@@ -19,12 +24,14 @@ from urllib.parse import urlparse
 
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 from flask_limiter.util import get_remote_address
+from flask import current_app
 from flask_login import current_user, login_required, login_user, logout_user
+from sqlalchemy import or_, update
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from facilities.extensions import db, limiter
 from facilities.core import totp
-from facilities.core.models import PERFIS_SEM_LOGIN, User
+from facilities.core.models import PERFIS_COM_SEGUNDA_ETAPA, PERFIS_SEM_LOGIN, User
 
 bp = Blueprint('auth', __name__)
 
@@ -38,10 +45,91 @@ MSG_CLIENTE_SEM_ACESSO = ('O acesso de clientes ao Trino Facilities ainda não f
                           'liberado. Fale com o seu gerente na Trino.')
 MINUTOS_PARA_O_CODIGO = 5
 TENTATIVAS_DO_CODIGO = 5
+MINUTOS_DE_BLOQUEIO_DO_CODIGO = 15
+
+MSG_CODIGO_TRAVADO = (f'Código errado {TENTATIVAS_DO_CODIGO} vezes. Por segurança, a entrada '
+                      f'por código fica travada por {MINUTOS_DE_BLOQUEIO_DO_CODIGO} minutos.')
 
 MSG_LOGIN_RECUSADO = (f'E-mail ou senha incorretos. Depois de {TENTATIVAS_ANTES_DO_BLOQUEIO} '
                       f'tentativas erradas, o acesso fica bloqueado por '
                       f'{MINUTOS_DE_BLOQUEIO} minutos.')
+
+
+def exige_segunda_etapa(u):
+    """A pessoa é obrigada a usar o código do aplicativo? O cliente sempre
+    (Fase 9B); a gestão e a diretoria, salvo ``MFA_OBRIGATORIO_GESTAO=0``
+    (só os testes desligam)."""
+    papel = u._effective_role()
+    if papel == 'cliente':
+        return True
+    return (papel in PERFIS_COM_SEGUNDA_ETAPA
+            and current_app.config.get('MFA_OBRIGATORIO_GESTAO', True))
+
+
+def _contar_erro_de_senha(u, agora):
+    """Soma um erro de senha NO BANCO (UPDATE atômico) e bloqueia ao chegar
+    no limite. Antes era ler-somar-gravar em Python: 12 tentativas em
+    paralelo terminavam contando 1 (auditoria SEC-002). Devolve True quando
+    esta tentativa bloqueou a conta."""
+    n = db.session.execute(
+        update(User).where(User.id == u.id)
+        .values(failed_login_count=User.failed_login_count + 1)
+        .returning(User.failed_login_count)).scalar()
+    bloqueou = (n or 0) >= TENTATIVAS_ANTES_DO_BLOQUEIO
+    if bloqueou:
+        db.session.execute(
+            update(User).where(User.id == u.id)
+            .values(lockout_until=agora + timedelta(minutes=MINUTOS_DE_BLOQUEIO),
+                    failed_login_count=0))
+    db.session.commit()
+    db.session.expire(u)
+    return bloqueou
+
+
+def _contar_erro_de_codigo(u, agora):
+    """Soma um erro de código no servidor e trava a segunda etapa ao chegar
+    no limite. Devolve True quando travou."""
+    n = db.session.execute(
+        update(User).where(User.id == u.id)
+        .values(totp_falhas=User.totp_falhas + 1)
+        .returning(User.totp_falhas)).scalar()
+    travou = (n or 0) >= TENTATIVAS_DO_CODIGO
+    if travou:
+        db.session.execute(
+            update(User).where(User.id == u.id)
+            .values(totp_bloqueio_ate=agora + timedelta(minutes=MINUTOS_DE_BLOQUEIO_DO_CODIGO),
+                    totp_falhas=0))
+    db.session.commit()
+    db.session.expire(u)
+    return travou
+
+
+def _marcar_codigo_usado(u, passo):
+    """Grava o passo aceito SÓ se ninguém gravou este passo antes (dois
+    envios simultâneos do mesmo código: um só entra — auditoria SEC-018)."""
+    r = db.session.execute(
+        update(User).where(User.id == u.id,
+                           or_(User.totp_ultimo_passo.is_(None),
+                               User.totp_ultimo_passo < passo))
+        .values(totp_ultimo_passo=passo, totp_falhas=0, totp_bloqueio_ate=None))
+    db.session.commit()
+    db.session.expire(u)
+    return r.rowcount == 1
+
+
+def _senha_atual_errada(u):
+    """A senha atual errou numa tela de quem já está logado (trocar a senha,
+    desligar o código): conta como erro de login. No limite, a conta bloqueia
+    e a sessão cai — quem roubou a sessão não descobre a senha por tentativa
+    (auditoria SEC-011). Devolve a resposta quando derrubou a sessão."""
+    if not _contar_erro_de_senha(u, datetime.utcnow()):
+        return None
+    u.session_epoch = (u.session_epoch or 0) + 1
+    db.session.commit()
+    logout_user()
+    session.clear()
+    flash(MSG_LOGIN_RECUSADO, 'danger')
+    return redirect(url_for('auth.login'))
 
 
 @functools.lru_cache(maxsize=1)
@@ -111,11 +199,8 @@ def login():
             # Durante o bloqueio não se conta erro: o prazo não se estende
             # sozinho enquanto alguém insiste.
             if u is not None and not bloqueada:
-                u.failed_login_count = (u.failed_login_count or 0) + 1
-                if u.failed_login_count >= TENTATIVAS_ANTES_DO_BLOQUEIO:
-                    u.lockout_until = agora + timedelta(minutes=MINUTOS_DE_BLOQUEIO)
-                    u.failed_login_count = 0
-                db.session.commit()
+                if _contar_erro_de_senha(u, agora):
+                    _avisar_bloqueio(u)
             flash(MSG_LOGIN_RECUSADO, 'danger')
             return render_template('core/login.html', email=email), 401
         # Fase 9B: o cliente só entra com o portal liberado (padrão: não) e
@@ -131,12 +216,35 @@ def login():
             session['_2fa'] = {'uid': u.id, 'epoca': u.session_epoch or 0,
                                'lembrar': bool(request.form.get('lembrar')),
                                'next': _destino_seguro(request.args.get('next')),
-                               'ate': (agora + timedelta(minutes=MINUTOS_PARA_O_CODIGO)).isoformat(),
-                               'erros': 0}
+                               'ate': (agora + timedelta(minutes=MINUTOS_PARA_O_CODIGO)).isoformat()}
             return redirect(url_for('auth.codigo'))
         return _concluir_login(u, bool(request.form.get('lembrar')),
                                _destino_seguro(request.args.get('next')))
     return render_template('core/login.html', email='')
+
+
+def _avisar_bloqueio(u):
+    """Conta bloqueada por senha errada: o administrador fica sabendo (no
+    sino e no celular). Quem trava a conta de propósito não passa
+    despercebido (auditoria SEC-007)."""
+    try:
+        from facilities.core import push
+        from facilities.core.rotas import avisar
+        admins = [a.id for a in User.query.filter_by(role='master', is_active=True,
+                                                      is_deleted=False)]
+        titulo = f'Conta bloqueada por senha errada: {u.email}'
+        texto = (f'{TENTATIVAS_ANTES_DO_BLOQUEIO} tentativas erradas seguidas. O acesso volta '
+                 f'sozinho em {MINUTOS_DE_BLOQUEIO} minutos. Se não foi a própria pessoa, '
+                 'alguém está tentando entrar nesta conta.')
+        link = url_for('admin.usuarios')
+        avisados = avisar(admins, titulo, texto, link)
+        db.session.commit()
+        push.avisar(list(avisados), titulo, texto, link=link, marca=f'bloqueio-{u.id}')
+        db.session.commit()
+    except Exception:
+        # O aviso nunca impede a resposta do login.
+        db.session.rollback()
+        current_app.logger.exception('Falha ao avisar o bloqueio de conta.')
 
 
 def _portal_liberado():
@@ -186,20 +294,21 @@ def codigo():
         flash('Entre de novo com o e-mail e a senha.', 'warning')
         return redirect(url_for('auth.login'))
     if request.method == 'POST':
+        agora = datetime.utcnow()
+        if u.totp_bloqueio_ate and u.totp_bloqueio_ate > agora:
+            session.pop('_2fa', None)
+            flash(MSG_CODIGO_TRAVADO, 'danger')
+            return redirect(url_for('auth.login'))
         aceito = totp.verificar(u.totp_segredo, request.form.get('codigo'),
                                 ultimo_passo=u.totp_ultimo_passo)
-        if aceito is None:
-            p['erros'] = p.get('erros', 0) + 1
-            if p['erros'] >= TENTATIVAS_DO_CODIGO:
+        if aceito is None or not _marcar_codigo_usado(u, aceito):
+            if _contar_erro_de_codigo(u, agora):
                 session.pop('_2fa', None)
-                flash('Código errado muitas vezes. Entre de novo com o e-mail e a senha.',
-                      'danger')
+                flash(MSG_CODIGO_TRAVADO, 'danger')
                 return redirect(url_for('auth.login'))
-            session['_2fa'] = p
             flash('Código incorreto ou já usado. Confira o aplicativo e digite o código '
                   'que aparece agora.', 'danger')
             return render_template('core/login_codigo.html'), 401
-        u.totp_ultimo_passo = aceito
         session.pop('_2fa', None)
         return _concluir_login(u, p.get('lembrar'), p.get('next'))
     return render_template('core/login_codigo.html')
@@ -247,8 +356,13 @@ def ativar_codigo():
     u.totp_segredo = segredo
     u.totp_ativo = True
     u.totp_ultimo_passo = aceito
+    u.totp_falhas = 0
+    u.totp_bloqueio_ate = None
+    # As outras sessões (abertas só com a senha) caem; este aparelho segue.
+    u.session_epoch = (u.session_epoch or 0) + 1
     session.pop('_totp_novo', None)
     db.session.commit()
+    login_user(u)
     flash('Segunda etapa ativada. A partir de agora, o login pede a senha e o código do '
           'aplicativo.', 'success')
     return redirect(url_for('auth.seguranca'))
@@ -258,12 +372,16 @@ def ativar_codigo():
 @login_required
 def desativar_codigo():
     u = current_user._get_current_object()
-    if u.role == 'cliente':
-        # Fase 9B: no portal a segunda etapa é obrigatória.
-        flash('Na conta de cliente a segunda etapa é obrigatória e não pode ser desligada.',
-              'warning')
+    if exige_segunda_etapa(u):
+        # Fase 9B (cliente) e auditoria SEC-001 (gestão): obrigatória.
+        flash('No seu perfil a segunda etapa é obrigatória e não pode ser desligada. '
+              'Trocou de celular? Peça ao administrador para zerar o código e cadastre '
+              'de novo.', 'warning')
         return redirect(url_for('auth.seguranca'))
     if not u.check_password(request.form.get('senha') or ''):
+        derrubou = _senha_atual_errada(u)
+        if derrubou:
+            return derrubou
         flash('A senha não confere.', 'danger')
         return redirect(url_for('auth.seguranca'))
     u.totp_ativo = False
@@ -283,6 +401,9 @@ def trocar_senha():
         confirma = request.form.get('confirma') or ''
         erro = None
         if not current_user.check_password(atual):
+            derrubou = _senha_atual_errada(current_user._get_current_object())
+            if derrubou:
+                return derrubou
             erro = 'A senha atual não confere.'
         elif len(nova) < SENHA_MINIMA:
             erro = f'A senha nova precisa ter pelo menos {SENHA_MINIMA} caracteres.'
