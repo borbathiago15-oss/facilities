@@ -254,12 +254,14 @@ def pedir(user, local, dados, foto=None, agora_utc=None):
 def _guardar_foto(pedido, arquivo):
     import uuid
     from werkzeug.utils import secure_filename
-    from facilities.core.anexos import ANEXO_ASSINATURA, ANEXO_MAX, ANEXO_TIPOS, storage
+    from facilities.core.anexos import (ANEXO_ASSINATURA, ANEXO_MAX, ANEXO_TIPOS,
+                                        imagem_aceitavel, storage)
     nome = secure_filename(arquivo.filename or '') or 'foto'
     ext = nome.rsplit('.', 1)[-1].lower() if '.' in nome else ''
     dados = arquivo.read(ANEXO_MAX + 1)
     if (ext not in ('png', 'jpg', 'jpeg', 'webp') or not dados or len(dados) > ANEXO_MAX
-            or not any(dados.startswith(a) for a in ANEXO_ASSINATURA[ext])):
+            or not any(dados.startswith(a) for a in ANEXO_ASSINATURA[ext])
+            or not imagem_aceitavel(dados, ext)):
         raise RegraDoMaterial('A foto não é imagem (ou é grande demais). Tire de novo.')
     chave = f'pedidos_insumo/{pedido.id}/{uuid.uuid4().hex}.{ext}'
     storage().save(chave, dados, ANEXO_TIPOS[ext])

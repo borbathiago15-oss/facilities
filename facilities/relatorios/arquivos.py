@@ -82,12 +82,27 @@ def _faixa_da_marca(largura):
     return t
 
 
+LADO_MAX_NO_PDF = 1600
+
+
 def _imagem(dados, largura, altura):
-    from reportlab.lib.utils import ImageReader
-    leitor = ImageReader(io.BytesIO(dados))
-    w, h = leitor.getSize()
+    """A foto reduzida para o PDF. Recusa (ValueError) a imagem acima do
+    limite de pixels ANTES de decodificar — uma "bomba" guardada antes da
+    regra do upload não derruba o relatório (auditoria SEC-005)."""
+    from PIL import Image as Pil
+    from facilities.core.anexos import PIXELS_MAX
+    with Pil.open(io.BytesIO(dados)) as im:
+        if im.size[0] * im.size[1] > PIXELS_MAX:
+            raise ValueError('imagem grande demais para o relatório')
+        im.draft('RGB', (LADO_MAX_NO_PDF, LADO_MAX_NO_PDF))   # JPEG: decodifica já reduzido
+        im = im.convert('RGB')
+        im.thumbnail((LADO_MAX_NO_PDF, LADO_MAX_NO_PDF))
+        saida = io.BytesIO()
+        im.save(saida, 'JPEG', quality=82)
+        w, h = im.size
+    saida.seek(0)
     escala = min(largura / w, altura / h)
-    return Image(io.BytesIO(dados), width=w * escala, height=h * escala)
+    return Image(saida, width=w * escala, height=h * escala)
 
 
 def pdf(d, fotos, carregar_foto, recado=None):
@@ -227,6 +242,12 @@ def excel(d):
             c.font, c.fill = cab, fundo
         for linha in linhas:
             ws.append(list(linha))
+            # Texto que começa com "=" (título de chamado, item de checklist)
+            # o openpyxl grava como FÓRMULA, que o Excel executa ao abrir.
+            # Aqui fica sempre texto (auditoria SEC-009).
+            for c in ws[ws.max_row]:
+                if isinstance(c.value, str) and c.value.startswith('='):
+                    c.data_type = 's'
         for col in ws.columns:
             ws.column_dimensions[col[0].column_letter].width = max(
                 12, min(60, max(len(str(c.value or '')) for c in col) + 2))

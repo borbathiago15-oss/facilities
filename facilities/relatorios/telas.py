@@ -2,9 +2,10 @@
 o relatório do mês, troca as fotos se quiser, deixa um recado e LIBERA; o
 cliente vê os liberados no portal (``portal.relatorios``). PDF e Excel nos
 dois lados."""
+import io
 from datetime import timedelta
 
-from flask import (Blueprint, Response, abort, flash, redirect, render_template, request,
+from flask import (Blueprint, abort, flash, redirect, render_template, request, send_file,
                    url_for)
 from flask_login import current_user, login_required
 from werkzeug.exceptions import Forbidden
@@ -89,8 +90,10 @@ def arquivo(local, primeiro, formato, so_liberado=False):
         ext = 'xlsx'
     else:
         abort(404)
-    return Response(corpo, mimetype=tipo, headers={
-        'Content-Disposition': f'attachment; filename="{nome}.{ext}"'})
+    # send_file monta o nome em ASCII + filename* (UTF-8): local com "ł" ou
+    # "中" no nome não quebra o cabeçalho (auditoria SEC-025).
+    return send_file(io.BytesIO(corpo), mimetype=tipo, as_attachment=True,
+                     download_name=f'{nome}.{ext}')
 
 
 # ── Gestão ────────────────────────────────────────────────────────────────
