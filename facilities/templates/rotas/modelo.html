@@ -5,7 +5,7 @@
 <h1 class="fc-titulo">{{ modelo.nome }}</h1>
 <p class="fc-sub">{% if modelo.versao_atual %}Versão publicada: {{ modelo.versao_atual.numero }}, em {{ modelo.versao_atual.publicada_em|hora_local }}.{% else %}Ainda não publicado.{% endif %} {% if modelo.client_id %}Checklist do local {{ modelo.local.name }}.{% else %}Modelo da biblioteca da Trino.{% endif %}</p>
 {% if pode_montar %}
-<form method="post" action="{{ url_for('rotas.publicar', mid=modelo.id) }}">
+<form method="post" action="{{ url_for('rotas.publicar', mid=modelo.id) }}" enctype="multipart/form-data">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <div class="fc-cartao mb-3">
     <label class="form-label small fw-semibold" for="mdesc">Procedimento (aparece para quem lê o QR)</label>
@@ -33,6 +33,15 @@
         <div class="col-md-2"><label class="form-label small" for="ps{{ i }}">Sim/não: é problema se</label>
           <select class="form-select" id="ps{{ i }}" name="problema_se"><option value="">nenhum</option><option value="nao" {% if it.problema_se == 'nao' %}selected{% endif %}>não</option><option value="sim" {% if it.problema_se == 'sim' %}selected{% endif %}>sim</option></select></div>
         <div class="col-md-2"><label class="form-label small" for="ms{{ i }}">Só aparece se</label><input class="form-control" id="ms{{ i }}" name="mostrar_se" value="{{ (it.mostrar_se.codigo ~ '=' ~ it.mostrar_se.valor) if it.mostrar_se else '' }}"></div>
+        <div class="col-md-8"><label class="form-label small" for="cf{{ i }}">Como fazer <span class="text-muted">(aparece embaixo da pergunta, no celular)</span></label>
+          <textarea class="form-control" id="cf{{ i }}" name="como_fazer" rows="2" maxlength="400" placeholder="Ex.: Repor 2 rolos no suporte e conferir o papel-toalha.">{{ it.como_fazer or '' }}</textarea></div>
+        <div class="col-md-4"><label class="form-label small" for="fr{{ i }}">Foto de referência <span class="text-muted">(como deve ficar)</span></label>
+          {% if it.foto_ref and modelo.versao_atual %}
+          <div class="d-flex align-items-center gap-2 mb-1"><img class="fc-miniatura fc-miniatura-p" src="{{ url_for('rotas.referencia', vid=modelo.versao_atual.id, codigo=it.codigo) }}" alt="Referência de {{ it.texto }}">
+            <label class="small"><input type="checkbox" name="tirar_foto_ref" value="{{ i }}"> Tirar</label></div>
+          {% endif %}
+          <input class="form-control form-control-sm" type="file" id="fr{{ i }}" name="foto_ref_{{ i }}" accept="image/*" data-foto-leve></div>
+        <input type="hidden" name="foto_ref" value="{{ it.foto_ref or '' }}">
         <input type="hidden" name="codigo" value="{{ it.codigo or '' }}">
       </div>
       {% if it.codigo %}<div class="small text-muted mt-1">Código: <code>{{ it.codigo }}</code></div>{% endif %}
@@ -45,7 +54,9 @@
 {% else %}
 <div class="fc-cartao">
   {% if modelo.descricao %}<p>{{ modelo.descricao }}</p>{% endif %}
-  <ol class="mb-0">{% for it in itens %}<li>{{ it.texto }} <span class="small text-muted">({{ tipos.get(it.tipo) }}{% if it.obrigatorio %}, obrigatória{% endif %}{% if it.exige_foto %}, com foto{% endif %})</span></li>{% endfor %}</ol>
+  <ol class="mb-0">{% for it in itens %}<li class="mb-2">{{ it.texto }} <span class="small text-muted">({{ tipos.get(it.tipo) }}{% if it.obrigatorio %}, obrigatória{% endif %}{% if it.exige_foto %}, com foto{% endif %})</span>
+    {% if it.como_fazer %}<div class="small fc-como-fazer">{{ it.como_fazer }}</div>{% endif %}
+    {% if it.foto_ref and modelo.versao_atual %}<img class="fc-miniatura fc-miniatura-p mt-1" src="{{ url_for('rotas.referencia', vid=modelo.versao_atual.id, codigo=it.codigo) }}" alt="Como deve ficar: {{ it.texto }}" loading="lazy">{% endif %}</li>{% endfor %}</ol>
 </div>
 {% endif %}
 {% endblock %}

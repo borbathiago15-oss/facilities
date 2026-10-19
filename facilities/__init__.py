@@ -420,6 +420,15 @@ def _comandos(app):
         click.echo(f'VAPID_PUBLIC_KEY={publica}')
         click.echo('VAPID_SUBJECT=mailto:seu-email@grupotrino.com.br')
 
+    @app.cli.command('semear-checklists')
+    def semear_checklists():
+        """Instala na biblioteca os checklists prontos de limpeza (não duplica)."""
+        from facilities.rotas.biblioteca_pronta import semear
+        criados = semear()
+        db.session.commit()
+        click.echo(f'{len(criados)} modelo(s) instalado(s)' + (': ' + ', '.join(criados)
+                                                              if criados else '.'))
+
     @app.cli.command('semear-modelos')
     @click.option('--contrato', 'contrato_id', type=int, required=True,
                   help='Id do contrato que recebe os modelos prontos.')

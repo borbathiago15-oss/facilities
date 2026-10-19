@@ -208,7 +208,7 @@ def _rotas_de_a(app_module, a, ids):
             'funcionario': func.id, 'posto': posto.id, 'escala_trabalho': esc.id,
             'falta': falta.id, 'programada': prog.id,
             'visita': Visita.query.filter_by(programada_id=prog.id).one().id,
-            'modelo': m.id, 'rota': rota.id, 'item': item.id,
+            'modelo': m.id, 'versao': m.versao_atual.id, 'rota': rota.id, 'item': item.id,
             'escala': RotaEscala.query.filter_by(rota_id=rota.id).one().id,
             'tarefa_rota': tarefa.id, 'execucao': ex.id,
             'foto': ExecucaoFoto.query.filter_by(execucao_id=ex.id).first().id,
@@ -262,7 +262,7 @@ def _valor_do_parametro(nome, ids, entidade=None, endpoint=''):
         por_rota = {'eid': ids['escala'] if 'escala' in endpoint else ids['execucao'],
                     'rid': ids['rota'], 'iid': ids['item'], 'mid': ids['modelo'],
                     'nid': ids['nc'], 'fid': ids['foto'], 'tid': ids['tarefa_rota'],
-                    'cid': ids['local']}
+                    'cid': ids['local'], 'vid': ids['versao']}
         if nome in por_rota:
             return por_rota[nome]
     if endpoint.startswith(('portal.', 'cobrancas.')):

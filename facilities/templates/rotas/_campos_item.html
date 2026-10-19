@@ -1,10 +1,19 @@
 {% set sfx = item.id if item else 'novo' %}
 <div class="row g-2">
+  {% if item %}
   <div class="col-md-5"><label class="form-label small fw-semibold" for="ip{{ sfx }}">Ponto (com QR)</label>
     <select class="form-select" id="ip{{ sfx }}" name="ponto_id" required>{% for p in pontos %}<option value="{{ p.id }}" {% if item and item.ponto_id == p.id %}selected{% endif %}>{{ p.ambiente.setor.nome }} · {{ p.ambiente.nome }} · {{ p.nome }}</option>{% endfor %}</select></div>
+  {% else %}
+  <fieldset class="col-12">
+    <legend class="form-label small fw-semibold mb-1">Pontos (com QR) — marque um ou vários: todos recebem o mesmo checklist e os mesmos horários</legend>
+    <div class="fc-pontos-lote">
+      {% for p in pontos %}<label class="fc-ponto-opcao"><input class="form-check-input" type="checkbox" name="ponto_id" value="{{ p.id }}"> <span>{{ p.ambiente.nome }} · {{ p.nome }}<small>{{ p.ambiente.setor.nome }}</small></span></label>{% endfor %}
+    </div>
+  </fieldset>
+  {% endif %}
   <div class="col-md-4"><label class="form-label small fw-semibold" for="im{{ sfx }}">Checklist</label>
     <select class="form-select" id="im{{ sfx }}" name="modelo_id" required>{% for m in modelos %}<option value="{{ m.id }}" {% if item and item.modelo_id == m.id %}selected{% endif %}>{{ m.nome }}</option>{% endfor %}</select></div>
-  <div class="col-md-3"><label class="form-label small fw-semibold" for="io{{ sfx }}">Ordem</label>
+  <div class="col-md-3"><label class="form-label small fw-semibold" for="io{{ sfx }}">Ordem{% if not item %} (do primeiro){% endif %}</label>
     <input class="form-control" id="io{{ sfx }}" name="ordem" inputmode="numeric" value="{{ item.ordem if item else '' }}"></div>
   <div class="col-md-7"><label class="form-label small fw-semibold" for="ih{{ sfx }}">Horários fixos</label>
     <input class="form-control" id="ih{{ sfx }}" name="horarios" value="{{ (item.horarios or '') if item else '' }}" placeholder="Ex.: 07:00, 09:00, 11:00, 13:00"></div>

@@ -76,7 +76,8 @@ def montar(caminho_db):
                                admin)
         rotas.publicar(m, rotas.normalizar_itens([
             {'texto': 'Papel higiênico reposto?', 'tipo': 'sim_nao', 'obrigatorio': True,
-             'problema_se': 'nao'}]), {'exige_foto_depois': '1'}, admin)
+             'problema_se': 'nao', 'como_fazer': 'Deixe 2 rolos em cada cabine.'}]),
+            {'exige_foto_depois': '1'}, admin)
         rota = rotas.salvar_rota(local, None, {
             'nome': 'Limpeza 2º andar', 'turno': '1º Turno', 'hora_inicio': '00:00',
             'hora_fim': '23:59', 'tolerancia_min': '240', 'dias_semana': '1234567'})

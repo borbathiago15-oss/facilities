@@ -41,6 +41,8 @@ def test_ana_le_o_qr_e_faz_o_checklist(servidor, navegador, perfil, tmp_path):
         pg.wait_for_url('**/app/turno?ponto=*', timeout=20000)
         assert pg.get_by_role('heading', name='Porta do banheiro').is_visible()
         pg.wait_for_timeout(500)          # o selo de leitura volta do servidor
+        # Lido pela câmera: não aparece o aviso de "aberto sem ler o QR".
+        assert pg.locator('text=Aberto sem ler o QR').count() == 0
         _fazer_checklist(pg, _foto(tmp_path))
         pg.wait_for_selector('text=Registrado: Concluída no prazo', timeout=15000)
         assert _execucoes(servidor) == [(0, 'ana@e2e.test', 'concluida_no_prazo')]
@@ -70,3 +72,25 @@ def test_sem_sinal_a_execucao_sobe_depois_uma_vez(servidor, navegador, perfil, t
         assert _execucoes(servidor) == [(1, 'ana@e2e.test', 'concluida_no_prazo')]
     finally:
         b.close()
+
+
+def test_roteiro_numerado_e_como_fazer(servidor, navegador, perfil):
+    """O turno aparece como roteiro (1, 2, 3…) com a próxima destacada; no
+    checklist, o "como fazer" de cada pergunta."""
+    b, ctx = abrir_contexto(navegador, perfil)
+    try:
+        pg = ctx.new_page()
+        entrar(pg, servidor['base'], 'ana@e2e.test')
+        pg.goto(servidor['base'] + '/app/turno')
+        assert pg.locator('.fc-roteiro-n').first.inner_text() == '1'
+        assert pg.locator('.fc-proxima').count() == 1
+        # Aberto pelo endereço (como o link de um aviso): vale a hora do celular.
+        pg.goto(servidor['base'] + '/app/turno?ponto=' + servidor['qr'])
+        assert pg.locator('text=Aberto sem ler o QR').count() == 1
+        pg.get_by_role('button', name='Fazer agora').first.click()
+        assert pg.locator('text=Deixe 2 rolos em cada cabine.').is_visible()
+        largura = pg.evaluate('document.documentElement.scrollWidth')
+        assert largura <= pg.viewport_size['width']
+    finally:
+        b.close()
+

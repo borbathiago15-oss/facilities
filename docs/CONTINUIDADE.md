@@ -251,6 +251,15 @@ Bloco A — pronto para o piloto (18/10/2026), da análise de rotas e fluxos:
 Sem migração: os estados novos (`nao_enviada`, `perdida`) cabem nas colunas
 de texto que já existem.
 
+Rota e checklist simples (18/10/2026), decisões do dono:
+
+| O quê | Como ficou |
+|---|---|
+| "Como fazer" + foto de referência | cada pergunta do checklist tem um texto curto e uma foto de como deve ficar; ficam no JSON da versão (`como_fazer`, `foto_ref` — chave `checklists/<modelo>/ref/<hex>.<ext>`, conferida por padrão; chave forjada é ignorada) e aparecem embaixo da pergunta no celular; a foto sai por `/rotas/referencias/<versão>/<código>` (do local, pela carteira; da biblioteca, para quem está logado) |
+| Vários pontos de uma vez | na rota, "Incluir pontos": marque os banheiros, um checklist e os horários; tudo ou nada; ordem em sequência |
+| Roteiro numerado | o "Meu turno" lista as tarefas na ordem dos horários (1, 2, 3…), com a próxima destacada e quantos passos tem cada uma |
+| Modelos prontos de limpeza | banheiro, copa e cozinha, recepção e escritório, vestiário e área externa, com o "como fazer" (`facilities/rotas/biblioteca_pronta.py`); o administrador instala pela biblioteca ou `flask --app facilities semear-checklists`; não duplica |
+
 ATENÇÃO: a presença lançada pelo supervisor tem o mesmo risco da D48
 (controle de jornada): validar com RH e jurídico antes do piloto e constar no
 aviso aos colaboradores (D25).

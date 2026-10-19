@@ -85,18 +85,24 @@
   }
 
   // ── Lista do turno ────────────────────────────────────────────────────
-  function cartaoTarefa(t, comBotoes) {
+  // ``n``: o número da tarefa no roteiro do dia (1, 2, 3…); ``proxima``: a
+  // que a pessoa deve fazer agora — fica destacada.
+  function cartaoTarefa(t, comBotoes, n, proxima) {
     var s = situacao(t);
-    var linha = el('div', {classe: 'fc-app-item'}, [
+    var v = dados.versoes[t.versao];
+    var passos = v && v.itens ? v.itens.length : 0;
+    var linha = el('div', {classe: 'fc-app-item' + (proxima ? ' fc-proxima' : '')}, [
       el('div', {classe: 'd-flex align-items-center gap-2'}, [
+        n ? el('span', {classe: 'fc-roteiro-n', texto: String(n), 'aria-label': 'Passo ' + n + ' do roteiro'}) : null,
         el('span', {classe: 'fs-5 fw-bold', texto: t.hora}),
+        proxima ? el('span', {classe: 'badge text-bg-danger', texto: 'Próxima'}) : null,
         el('span', {classe: 'badge fc-sit fc-sit-' + s.cod, texto: s.rotulo}),
         t.minha ? el('span', {classe: 'badge text-bg-light', texto: 'Sua'}) : null
       ]),
       el('span', {classe: 'fw-semibold', texto: t.ambiente + ' · ' + t.ponto_nome}),
       el('span', {classe: 'small text-muted',
-                  texto: dados.versoes[t.versao].modelo + ' · ' + t.local +
-                         (t.escalado && !t.minha ? ' · escala: ' + t.escalado : '')})
+                  texto: v.modelo + (passos ? ' · ' + passos + (passos > 1 ? ' passos' : ' passo') : '') +
+                         ' · ' + t.local + (t.escalado && !t.minha ? ' · escala: ' + t.escalado : '')})
     ]);
     if (comBotoes && (s.cod === 'prevista' || s.cod === 'no_horario' || s.cod === 'atrasada')) {
       var barra = el('div', {classe: 'd-flex gap-2 mt-2'});
@@ -119,12 +125,17 @@
   function mostrarLista() {
     secPonto.hidden = true; secExec.hidden = true; secLista.hidden = false;
     limpar(caixaItens);
-    var ordem = {atrasada: 0, no_horario: 1, prevista: 2, guardada: 3};
+    // O roteiro do dia na ordem dos horários (1, 2, 3…), como a rota foi
+    // pensada; a próxima a fazer fica destacada — a atrasada ou a da hora
+    // primeiro, senão a primeira que ainda vai chegar.
     var tarefas = dados.tarefas.slice().sort(function (a, b) {
-      var sa = ordem[situacao(a).cod] !== undefined ? ordem[situacao(a).cod] : 4;
-      var sb = ordem[situacao(b).cod] !== undefined ? ordem[situacao(b).cod] : 4;
-      return sa - sb || Date.parse(a.previsto) - Date.parse(b.previsto);
+      return Date.parse(a.previsto) - Date.parse(b.previsto);
     });
+    var abertas = tarefas.filter(function (t) {
+      var c = situacao(t).cod;
+      return c === 'atrasada' || c === 'no_horario';
+    });
+    var proxima = abertas[0] || tarefas.filter(function (t) { return situacao(t).cod === 'prevista'; })[0];
     if ((dados.preventivas || []).length) {
       caixaItens.appendChild(el('div', {classe: 'alert alert-info',
         texto: dados.preventivas.length + ' preventiva(s) em aberto. Leia o QR do ponto para fazer o checklist.'}));
@@ -139,7 +150,7 @@
       return;
     }
     var cartao = el('div', {classe: 'fc-cartao'});
-    tarefas.forEach(function (t) { cartao.appendChild(cartaoTarefa(t, false)); });
+    tarefas.forEach(function (t, i) { cartao.appendChild(cartaoTarefa(t, false, i + 1, t === proxima)); });
     caixaItens.appendChild(cartao);
     caixaItens.appendChild(el('p', {classe: 'small text-muted mt-2',
       texto: 'Para fazer uma tarefa, leia o QR do local: o checklist abre na hora.'}));
@@ -309,7 +320,15 @@
       corpo = el('input', {classe: 'form-control form-control-lg', name: nome, maxlength: '300',
                            'aria-label': it.texto});
     }
-    var bloco = el('div', {classe: 'fc-cartao mb-2 fc-item', 'data-codigo': it.codigo}, [titulo, corpo]);
+    // "Como fazer" e a foto de como deve ficar, cadastrados no checklist.
+    var ajuda = [];
+    if (it.como_fazer) ajuda.push(el('div', {classe: 'small fc-como-fazer', texto: it.como_fazer}));
+    if (it.foto_ref_url) {
+      ajuda.push(el('img', {classe: 'fc-ref', src: it.foto_ref_url, loading: 'lazy',
+                            alt: 'Como deve ficar: ' + it.texto}));
+    }
+    var bloco = el('div', {classe: 'fc-cartao mb-2 fc-item', 'data-codigo': it.codigo},
+                   [titulo].concat(ajuda, [corpo]));
     if (it.exige_foto) bloco.appendChild(campoFoto('item:' + it.codigo, 'Foto deste item *'));
     return bloco;
   }
