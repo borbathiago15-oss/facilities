@@ -5,7 +5,7 @@
 {% block content %}
 <div class="fc-ola"><div>
   <h1 class="fc-titulo">{{ d.local.name }}</h1>
-  <p class="fc-sub mb-0">{% if d.cliente %}{{ d.cliente }} · {% endif %}<span class="text-capitalize">{{ d.nome_do_mes }}</span> · {% if registro and registro.liberado_em %}<span class="text-success fw-semibold">liberado ao cliente em {{ registro.liberado_em|hora_local }}</span>{% else %}ainda não liberado ao cliente{% endif %}</p>
+  <p class="fc-sub mb-0">{% if d.cliente %}{{ d.cliente }} · {% endif %}<span>{{ d.nome_do_mes|capitalize }}</span> · {% if registro and registro.liberado_em %}<span class="text-success fw-semibold">liberado ao cliente em {{ registro.liberado_em|hora_local }}</span>{% else %}ainda não liberado ao cliente{% endif %}</p>
 </div>
 <div class="d-flex flex-wrap gap-2">
   <a class="btn btn-outline-primary" href="{{ url_for('relatorios.baixar', cid=d.local.id, mes=mes, formato='pdf') }}"><i class="bi bi-file-earmark-pdf" aria-hidden="true"></i> PDF</a>

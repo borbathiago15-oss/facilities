@@ -7,7 +7,7 @@
 </div></div>
 <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
   <a class="btn btn-outline-secondary" href="{{ url_for('relatorios.inicio', mes=anterior) }}" aria-label="Mês anterior"><i class="bi bi-chevron-left"></i></a>
-  <span class="fw-bold text-capitalize">{{ nome_do_mes }}</span>
+  <span class="fw-bold">{{ nome_do_mes|capitalize }}</span>
   <a class="btn btn-outline-secondary" href="{{ url_for('relatorios.inicio', mes=seguinte) }}" aria-label="Mês seguinte"><i class="bi bi-chevron-right"></i></a>
 </div>
 <div class="fc-cartao p-0">

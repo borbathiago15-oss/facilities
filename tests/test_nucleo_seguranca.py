@@ -271,13 +271,15 @@ console.log(JSON.stringify(enviados));
 
 def test_menu_lateral_agrupa_os_modulos_e_marca_o_aberto(auth_client):
     """O menu lateral (padrão do Trino Intelligence): grupos Hoje, Operação,
-    Recursos e Configuração; o módulo aberto marcado (e o grupo dele aberto)."""
+    Recursos, Cadastros (pedido do dono, 19/10/2026) e Configuração; o módulo
+    aberto marcado (e o grupo dele aberto)."""
     html = auth_client.get('/chamados/').get_data(as_text=True)
     nav = re.search(r'<nav class="fc-lat-nav".*?</nav>', html, re.S).group(0)
-    for grupo in ('Hoje', 'Operação', 'Recursos', 'Configuração'):
+    for grupo in ('Hoje', 'Operação', 'Recursos', 'Cadastros', 'Configuração'):
         assert f'>{grupo}<' in nav
     for modulo in ('Início', 'Painel', 'Demandas', 'Chamados', 'Passagem de turno',
-                   'Rotina dos locais', 'Materiais e estoque', 'Cadastros', 'Locais', 'Pessoas'):
+                   'Rotina dos locais', 'Materiais e estoque', 'Estrutura e QR dos locais',
+                   'Locais', 'Pessoas e acessos'):
         assert f'<span>{modulo}</span>' in nav, modulo
     assert re.search(r'class="fc-lat-item ativo"[^>]*aria-current="page">\s*'
                      r'<i class="bi bi-tools"[^>]*></i><span>Chamados</span>', nav)
@@ -291,7 +293,8 @@ def test_menu_do_encarregado_so_mostra_o_que_ele_abre(app_module):
     html = fabrica.entrar(app_module, 'menu.enc@trino.com').get('/chamados/').get_data(as_text=True)
     nav = re.search(r'<nav class="fc-lat-nav".*?</nav>', html, re.S).group(0)
     assert '<span>Chamados</span>' in nav and '<span>Passagem de turno</span>' in nav
-    for escondido in ('Painel', 'Rotina dos locais', 'Materiais e estoque', 'Cadastros', 'Pessoas'):
+    for escondido in ('Painel', 'Rotina dos locais', 'Materiais e estoque',
+                      'Estrutura e QR dos locais', 'Pessoas e acessos'):
         assert f'<span>{escondido}</span>' not in nav, escondido
 
 

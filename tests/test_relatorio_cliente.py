@@ -145,7 +145,7 @@ def test_ciclo_gestao_e_cliente(app_module, cena):
     coord.post(url + '/liberar')
     with app_module.app.app_context():
         assert rel.relatorio_do_mes(cena['local'], SETEMBRO).liberado_em is not None
-    assert 'setembro de 2026' in cli.get('/cliente/relatorios').get_data(as_text=True)
+    assert 'Setembro de 2026' in cli.get('/cliente/relatorios').get_data(as_text=True)
     pag = cli.get(url_cli).get_data(as_text=True)
     assert 'Reforçamos o 2º andar.' in pag and 'Rotinas por ambiente' in pag
     for proibido in ('Ana Limpeza', 'Carla Coordenadora', 'R$', 'Liberar para o cliente'):

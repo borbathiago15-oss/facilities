@@ -6,7 +6,7 @@
 <div class="fc-cartao p-0">
   {% for r in relatorios %}
   <div class="fc-fila-item">
-    <span class="badge text-bg-light text-capitalize">{{ nome_do_mes(r.mes) }}</span>
+    <span class="badge text-bg-light">{{ nome_do_mes(r.mes)|capitalize }}</span>
     <span class="fc-fila-tit">{{ r.local.name }}</span>
     <a class="btn btn-sm btn-outline-primary" href="{{ url_for('portal.relatorio', cid=r.client_id, mes=r.mes.strftime('%Y-%m')) }}">Abrir</a>
     <a class="btn btn-sm btn-primary" href="{{ url_for('portal.relatorio_arquivo', cid=r.client_id, mes=r.mes.strftime('%Y-%m'), formato='pdf') }}"><i class="bi bi-file-earmark-pdf" aria-hidden="true"></i> PDF</a>
