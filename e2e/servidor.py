@@ -22,6 +22,7 @@ SENHA = 'senha12345'
 def montar(caminho_db):
     os.environ.update(DATABASE_URL=f'sqlite:///{caminho_db}', SECRET_KEY='e2e',
                       SESSION_COOKIE_SECURE='0', RATELIMIT_ENABLED='0',
+                      MFA_OBRIGATORIO_GESTAO='0',
                       STORAGE_BACKEND='local', UPLOAD_FOLDER=tempfile.mkdtemp(),
                       CLIENTE_EXTERNO_LIBERADO='1')
     from facilities import create_app

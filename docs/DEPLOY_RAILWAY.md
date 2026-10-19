@@ -77,7 +77,11 @@ Onde os dados ficam, e o que apaga:
    ```
 
    A senha temporária aparece só no seu terminal; o sistema pede a troca no
-   primeiro login. Depois ative a segunda etapa em *Segurança da conta*.
+   primeiro login. Em seguida ele leva à tela *Segurança da conta*: a
+   segunda etapa (código do aplicativo autenticador — Google Authenticator,
+   Microsoft Authenticator ou similar) é **obrigatória** para administrador,
+   gerente, coordenador e diretoria; sem ela nenhuma outra tela abre. Tenha
+   o aplicativo instalado no celular antes do primeiro acesso.
 8. **Avisos no celular (opcional, recomendado):** no mesmo `railway ssh`,
    `flask --app facilities push chaves` e cole as três linhas
    (`VAPID_PRIVATE_KEY`, `VAPID_PUBLIC_KEY`, `VAPID_SUBJECT`) nas variáveis do

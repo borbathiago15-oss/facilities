@@ -14,6 +14,9 @@ os.environ.setdefault('SECRET_KEY', 'test-secret-key')
 os.environ.setdefault('ADMIN_PASSWORD', 'test-admin-pass')
 os.environ['SESSION_COOKIE_SECURE'] = '0'
 os.environ['RATELIMIT_ENABLED'] = '0'
+# A segunda etapa obrigatória da gestão (auditoria SEC-001) fica desligada na
+# suíte; tests/test_seguranca_login.py liga e confere.
+os.environ['MFA_OBRIGATORIO_GESTAO'] = '0'
 # Anexos de teste no disco temporário, SEMPRE: com as R2_* no ambiente de
 # quem roda, a suíte gravaria no bucket de verdade; e com Postgres a fábrica
 # exige o destino dos anexos declarado.
@@ -140,6 +143,7 @@ def clean_transactional_data(app_module):
         from facilities.relatorios import models as relatorios_models
         app_module.db.session.execute(integracao_models.chave_locais.delete())
         app_module.app.config['CLIENTE_EXTERNO_LIBERADO'] = False
+        app_module.app.config['MFA_OBRIGATORIO_GESTAO'] = False
         for model in (relatorios_models.MODELOS_EM_ORDEM_DE_LIMPEZA
                       + portal_models.MODELOS_EM_ORDEM_DE_LIMPEZA
                       + integracao_models.MODELOS_EM_ORDEM_DE_LIMPEZA

@@ -175,6 +175,9 @@ def create_app(config=None):
         REMEMBER_COOKIE_SECURE=cookie_seguro,
         REMEMBER_COOKIE_SAMESITE='Lax',
         RATELIMIT_ENABLED=_flag('RATELIMIT_ENABLED', True),
+        # Auditoria SEC-001: gestão e diretoria só entram com a segunda etapa.
+        # Desligar é só para os testes automatizados.
+        MFA_OBRIGATORIO_GESTAO=_flag('MFA_OBRIGATORIO_GESTAO', True),
         # memory:// conta POR PROCESSO: com N workers o limite real é N vezes
         # maior. Para valer igual em todos, aponte para um Redis
         # (redis://host:6379) — ver README.
@@ -316,6 +319,26 @@ def _sessao(app):
         if quer_json:
             return jsonify({'error': MSG_SO_DA_EQUIPE}), 403
         raise Forbidden(MSG_SO_DA_EQUIPE)
+
+    @app.before_request
+    def _segunda_etapa_obrigatoria():
+        """Auditoria SEC-001 (decisão do dono, 19/10/2026): quem enxerga
+        vários locais (gestão e diretoria) não usa o sistema só com a senha.
+        Até cadastrar o código do aplicativo autenticador, só abre a tela de
+        segurança (e trocar a senha, sair). O cliente tem a porta própria."""
+        if not current_user.is_authenticated or current_user._effective_role() == 'cliente':
+            return None
+        from facilities.core.auth import exige_segunda_etapa
+        if current_user.totp_ativo or not exige_segunda_etapa(current_user):
+            return None
+        if (request.endpoint or '') in _LIVRES_SEM_SEGUNDA_ETAPA:
+            return None
+        msg = ('Para continuar, ative a segunda etapa do login: o código do aplicativo '
+               'autenticador no seu celular. Leva um minuto.')
+        if request.is_json or request.method != 'GET':
+            return jsonify({'error': msg}), 403
+        flash(msg, 'warning')
+        return redirect(url_for('auth.seguranca'))
 
     @app.before_request
     def _troca_obrigatoria():
