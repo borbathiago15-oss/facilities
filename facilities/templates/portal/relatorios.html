@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% block title %}Relatórios{% endblock %}
+{% block content %}
+<h1 class="fc-titulo">Relatórios mensais</h1>
+<p class="fc-sub">O resumo de cada mês dos seus locais: a nota, as rotinas feitas, os chamados e as fotos. Abra na tela ou baixe em PDF.</p>
+<div class="fc-cartao p-0">
+  {% for r in relatorios %}
+  <div class="fc-fila-item">
+    <span class="badge text-bg-light text-capitalize">{{ nome_do_mes(r.mes) }}</span>
+    <span class="fc-fila-tit">{{ r.local.name }}</span>
+    <a class="btn btn-sm btn-outline-primary" href="{{ url_for('portal.relatorio', cid=r.client_id, mes=r.mes.strftime('%Y-%m')) }}">Abrir</a>
+    <a class="btn btn-sm btn-primary" href="{{ url_for('portal.relatorio_arquivo', cid=r.client_id, mes=r.mes.strftime('%Y-%m'), formato='pdf') }}"><i class="bi bi-file-earmark-pdf" aria-hidden="true"></i> PDF</a>
+  </div>
+  {% else %}<div class="fc-vazio">Nenhum relatório liberado ainda. Eles chegam no começo de cada mês.</div>{% endfor %}
+</div>
+{% endblock %}

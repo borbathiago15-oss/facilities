@@ -192,6 +192,11 @@ SEMENTES = [
     "INSERT INTO visita_fotos (visita_id,momento,item_codigo,mime,tamanho,storage_key,"
     "created_at) SELECT id,'livre',NULL,'image/jpeg',1234,'visitas/1/a.jpg',now() "
     "FROM visitas",
+    # Relatório do cliente: um mês liberado, com fotos e recado.
+    "INSERT INTO relatorios_cliente (client_id,mes,fotos_json,recado,liberado_em,liberado_por,"
+    "atualizado_em) SELECT c.id,'2026-09-01','[\"execucao:1\"]','Reforço no 2º andar',now(),"
+    "u.id,now() FROM clients c, users u WHERE c.name='GL Armazém 1' "
+    "AND u.email='gerente@ensaio'",
 ]
 
 

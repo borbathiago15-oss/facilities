@@ -35,12 +35,14 @@
       <span class="fc-lat-titulo">Portal</span>
       {{ item('portal.inicio', 'Seus locais', 'bi-buildings', ep in ('portal.inicio', 'portal.local', 'portal.chamado')) }}
       {{ item('portal.cobrancas', 'Cobranças', 'bi-megaphone', ep in ('portal.cobrancas', 'portal.cobranca')) }}
+      {{ item('portal.relatorios', 'Relatórios', 'bi-file-earmark-bar-graph', ep in ('portal.relatorios', 'portal.relatorio')) }}
     </div>
     {% else %}
     <div class="fc-lat-grupo-fixo">
       <span class="fc-lat-titulo">Hoje</span>
       {{ item('core.inicio', 'Início', 'bi-house-door') }}
-      {% if ve_painel %}{{ item('paineis.painel', 'Painel', 'bi-speedometer2') }}{% endif %}
+      {% if ve_painel %}{{ item('paineis.painel', 'Painel', 'bi-speedometer2') }}
+      {{ item('relatorios.inicio', 'Relatórios', 'bi-file-earmark-bar-graph', ep.startswith('relatorios.')) }}{% endif %}
       {% if ve_chamados %}
       {{ item('demandas.painel', 'Demandas', 'bi-inboxes', ep.startswith('demandas.')) }}
       {{ item('cobrancas.lista', 'Cobranças do cliente', 'bi-megaphone', ep.startswith('cobrancas.')) }}

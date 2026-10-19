@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% block title %}Relatórios{% endblock %}
+{% block content %}
+<div class="fc-ola"><div>
+  <h1 class="fc-titulo">Relatório do cliente</h1>
+  <p class="fc-sub mb-0">Um por local e por mês: a nota, as rotinas feitas, os chamados, o que foi corrigido e as fotos. Confira, troque as fotos se quiser e libere — o cliente vê no portal e baixa em PDF.</p>
+</div></div>
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+  <a class="btn btn-outline-secondary" href="{{ url_for('relatorios.inicio', mes=anterior) }}" aria-label="Mês anterior"><i class="bi bi-chevron-left"></i></a>
+  <span class="fw-bold text-capitalize">{{ nome_do_mes }}</span>
+  <a class="btn btn-outline-secondary" href="{{ url_for('relatorios.inicio', mes=seguinte) }}" aria-label="Mês seguinte"><i class="bi bi-chevron-right"></i></a>
+</div>
+<div class="fc-cartao p-0">
+  {% for l in locais %}{% set r = registros.get(l.id) %}
+  <a class="fc-fila-item" href="{{ url_for('relatorios.cliente', cid=l.id, mes=primeiro.strftime('%Y-%m')) }}">
+    <span class="badge {% if r and r.liberado_em %}text-bg-success{% else %}text-bg-light{% endif %}">{{ 'Liberado' if r and r.liberado_em else 'Não liberado' }}</span>
+    <span class="fc-fila-tit"><span class="small text-muted">{{ l.contratante.nome if l.contratante else 'Sem cliente' }}</span>{{ l.name }}</span>
+    <span class="small text-muted fc-fila-local">{% if r and r.liberado_em %}em {{ r.liberado_em|hora_local('%d/%m %H:%M') }}{% endif %}</span>
+    <i class="bi bi-chevron-right" aria-hidden="true"></i>
+  </a>
+  {% else %}<div class="fc-vazio">Nenhum local na sua carteira.</div>{% endfor %}
+</div>
+{% endblock %}

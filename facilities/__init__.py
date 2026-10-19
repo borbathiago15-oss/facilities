@@ -228,6 +228,7 @@ def _modelos(app):
     from facilities.materiais import models as _mat  # noqa: F401
     from facilities.integracao import models as _int  # noqa: F401
     from facilities.portal import models as _por  # noqa: F401
+    from facilities.relatorios import models as _rel  # noqa: F401
 
 
 def _rotas(app):
@@ -250,10 +251,11 @@ def _rotas(app):
     from facilities.integracao.api import bp as integracao_api_bp
     from facilities.integracao.telas import bp as integracao_bp
     from facilities.portal.telas import bp as portal_bp, bp_interno as cobrancas_bp
+    from facilities.relatorios.telas import bp as relatorios_bp
     for bp in (core_bp, auth_bp, admin_bp, app_bp, passagem_bp, chamados_bp, cadastros_bp,
                campo_bp, rotas_bp, publico_bp, preventiva_bp, demandas_bp,
                equipes_bp, visitas_bp, materiais_bp, paineis_bp, integracao_api_bp,
-               integracao_bp, portal_bp, cobrancas_bp):
+               integracao_bp, portal_bp, cobrancas_bp, relatorios_bp):
         app.register_blueprint(bp)
 
 

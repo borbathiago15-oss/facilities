@@ -142,6 +142,46 @@ def foto_visita(vfid):
     return _imagem(f.storage_key, f.mime or 'image/jpeg')
 
 
+@bp.get('/relatorios')
+@login_required
+def relatorios():
+    from facilities.relatorios.cliente import liberados, nome_do_mes
+    _so_cliente()
+    locais = servico.locais_do_cliente(current_user)
+    return render_template('portal/relatorios.html', relatorios=liberados([c.id for c in locais]),
+                           nome_do_mes=nome_do_mes)
+
+
+def _relatorio_liberado(cid, mes):
+    from facilities.relatorios.cliente import mes_de, relatorio_do_mes
+    loc = _local(cid)
+    primeiro = mes_de(mes)
+    registro = relatorio_do_mes(loc.id, primeiro)
+    if registro is None or registro.liberado_em is None:
+        abort(404)
+    return loc, primeiro
+
+
+@bp.get('/relatorios/<int:cid>/<mes>')
+@login_required
+def relatorio(cid, mes):
+    from facilities.relatorios.telas import montar, url_da_foto
+    _so_cliente()
+    loc, primeiro = _relatorio_liberado(cid, mes)
+    d, registro, _todas, fotos, _auto = montar(loc, primeiro)
+    return render_template('portal/relatorio.html', d=d, registro=registro, fotos=fotos,
+                           url_da_foto=url_da_foto, portal=True, mes=primeiro.strftime('%Y-%m'))
+
+
+@bp.get('/relatorios/<int:cid>/<mes>/arquivo.<formato>')
+@login_required
+def relatorio_arquivo(cid, mes, formato):
+    from facilities.relatorios.telas import arquivo
+    _so_cliente()
+    loc, primeiro = _relatorio_liberado(cid, mes)
+    return arquivo(loc, primeiro, formato, so_liberado=True)
+
+
 @bp.get('/cobrancas')
 @login_required
 def cobrancas():

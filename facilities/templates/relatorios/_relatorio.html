@@ -1,0 +1,65 @@
+{#- O corpo do relatório do cliente — o MESMO na tela da gestão e no portal.
+    Sem custo, sem nome de ninguém da equipe (F9-1, R5). -#}
+{% macro numero(v, casas=1, sufixo='') %}{% if v is none %}—{% else %}{{ ('%.' ~ casas ~ 'f')|format(v)|replace('.', ',') }}{{ sufixo }}{% endif %}{% endmacro %}
+{% macro corpo(d, fotos, url_da_foto, portal, recado) %}
+<section class="fc-cartao mb-3" aria-labelledby="r-nota">
+  <h2 class="h6 fw-bold" id="r-nota">Nota do mês</h2>
+  <div class="fc-rel-nota">
+    <div class="fc-rel-grande">
+      {% if d.nota.nota is not none %}<span class="badge fc-nota fc-nota-{{ d.nota.faixa }} fs-4">{{ numero(d.nota.nota) }} · {{ d.faixas[d.nota.faixa] }}</span>{% else %}<span class="text-muted">sem movimento no mês</span>{% endif %}
+      <div class="small text-muted mt-1">{% if d.variacao is none %}sem comparação com o mês anterior{% elif d.variacao == 0 %}igual ao mês anterior{% else %}{{ '+' if d.variacao > 0 }}{{ numero(d.variacao) }} ponto(s) sobre o mês anterior{% endif %}</div>
+    </div>
+    {% for k, rot in d.indicadores.items() %}{% set i = d.nota.indicadores[k] %}
+    <div class="fc-rel-ind"><div class="small text-muted">{{ rot }}</div><div class="fs-5 fw-bold">{{ numero(i.pct, 1, '%') }}</div><div class="small text-muted">{% if i.base %}{{ i.bom }} de {{ i.base }}{% else %}sem movimento{% endif %}</div></div>
+    {% endfor %}
+  </div>
+</section>
+{% if recado %}<section class="fc-cartao mb-3 fc-rel-recado"><h2 class="h6 fw-bold">Recado da coordenação</h2><p class="mb-0 fc-texto-livre">{{ recado }}</p></section>{% endif %}
+
+<section class="fc-cartao p-0 mb-3" aria-labelledby="r-rot">
+  <h2 class="h6 fw-bold px-3 pt-3" id="r-rot">Rotinas por ambiente</h2>
+  <div class="fc-mes-rolar"><table class="table table-sm mb-0 align-middle">
+    <thead><tr><th scope="col">Ambiente</th><th scope="col" class="text-end">Previstas</th><th scope="col" class="text-end">No prazo</th><th scope="col" class="text-end">Com atraso</th><th scope="col" class="text-end">Não feitas</th><th scope="col" class="text-end">Aderência</th></tr></thead>
+    <tbody>{% for r in d.rotinas %}<tr><th scope="row" class="small">{{ r.ambiente }}</th><td class="text-end">{{ r.previstas }}</td><td class="text-end">{{ r.no_prazo }}</td><td class="text-end">{{ r.com_atraso }}</td><td class="text-end">{{ r.nao_feitas }}</td><td class="text-end fw-semibold">{{ numero(r.pct, 1, '%') }}</td></tr>
+    {% else %}<tr><td colspan="6" class="fc-vazio">Sem rotinas programadas no mês.</td></tr>{% endfor %}</tbody>
+  </table></div>
+</section>
+
+{% set c = d.chamados %}
+<section class="fc-cartao mb-3" aria-labelledby="r-ch">
+  <h2 class="h6 fw-bold" id="r-ch">Chamados</h2>
+  <div class="d-flex flex-wrap gap-3 mb-2 small">
+    <span><b class="fs-5">{{ c.abertos }}</b> aberto(s)</span><span><b class="fs-5">{{ c.resolvidos }}</b> resolvido(s)</span>
+    <span><b class="fs-5">{{ numero(c.pct_no_prazo, 1, '%') }}</b> no prazo</span><span><b class="fs-5">{{ numero(c.tempo_medio_h, 1, ' h') }}</b> tempo médio de solução</span>
+    <span><b class="fs-5">{{ c.pendentes_no_fim }}</b> em aberto no fim do mês</span>
+  </div>
+  {% if c.lista %}
+  <div class="fc-mes-rolar"><table class="table table-sm mb-0 small">
+    <thead><tr><th scope="col">Nº</th><th scope="col">Assunto</th><th scope="col">Tipo</th><th scope="col">Aberto</th><th scope="col">Resolvido</th><th scope="col">Situação</th></tr></thead>
+    <tbody>{% for x in c.lista %}<tr><td>{{ x.numero }}</td><td>{{ x.titulo }}</td><td>{{ x.categoria }}</td><td>{{ x.aberto_em|hora_local('%d/%m %H:%M') }}</td><td>{{ x.resolvido_em|hora_local('%d/%m %H:%M') if x.resolvido_em else '—' }}</td><td>{{ x.situacao }}{% if x.no_prazo %} · no prazo{% elif x.no_prazo is sameas false %} · fora do prazo{% endif %}</td></tr>{% endfor %}</tbody>
+  </table></div>
+  {% if c.lista_cortada %}<p class="small text-muted mb-0 mt-1">A lista mostra os primeiros chamados; o Excel traz os mesmos números.</p>{% endif %}
+  {% endif %}
+</section>
+
+<div class="row g-3 mb-3">
+  <div class="col-md-6"><section class="fc-cartao h-100"><h2 class="h6 fw-bold">O que não estava conforme</h2>
+    <p class="small mb-1">{{ d.ncs.total }} item(ns) não conforme(s) nos checklists; {{ d.ncs.corrigidas }} já corrigido(s) por chamado.</p>
+    {% if d.ncs.itens %}<ol class="small mb-0">{% for item, vezes in d.ncs.itens %}<li>{{ item }} <span class="text-muted">({{ vezes }}×)</span></li>{% endfor %}</ol>{% endif %}
+  </section></div>
+  <div class="col-md-6"><section class="fc-cartao h-100"><h2 class="h6 fw-bold">Avisos do público, visitas e cobranças</h2>
+    <ul class="small mb-0">
+      <li>Avisos pelo QR: {{ d.ocorrencias.total }} recebido(s), {{ d.ocorrencias.resolvidas }} resolvido(s), {{ numero(d.ocorrencias.pct_no_prazo, 1, '%') }} no prazo, tempo médio {{ numero(d.ocorrencias.tempo_medio_min, 0, ' min') }}.</li>
+      <li>Visitas de supervisão: {{ d.visitas.feitas }} de {{ d.visitas.programadas }} feitas, {{ d.visitas.conformes }} sem item não conforme.</li>
+      <li>Cobranças: {{ d.cobrancas.abertas }} aberta(s), {{ d.cobrancas.respondidas }} respondida(s) ({{ d.cobrancas.no_prazo }} no prazo), {{ d.cobrancas.encerradas }} encerrada(s).</li>
+    </ul>
+  </section></div>
+</div>
+
+<section class="fc-cartao mb-3" aria-labelledby="r-fotos">
+  <h2 class="h6 fw-bold" id="r-fotos">Fotos do mês</h2>
+  {% if fotos %}
+  <div class="fc-rel-fotos">{% for f in fotos %}<figure class="m-0"><a href="{{ url_da_foto(f, portal) }}" target="_blank" rel="noopener"><img src="{{ url_da_foto(f, portal) }}" alt="{{ f.legenda }}" loading="lazy"></a><figcaption class="small text-muted">{{ f.legenda }}</figcaption></figure>{% endfor %}</div>
+  {% else %}<p class="small text-muted mb-0">Sem fotos no mês.</p>{% endif %}
+</section>
+{% endmacro %}

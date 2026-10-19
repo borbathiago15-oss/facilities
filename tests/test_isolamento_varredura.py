@@ -204,7 +204,13 @@ def _rotas_de_a(app_module, a, ids):
         'prazo': (tempo.hoje() + timedelta(days=3)).isoformat()})
     portal.responder(gestor, cob, {'texto': f'Resposta {MARCA}'})
     db.session.commit()
-    return {'cobranca': cob.id, 'cliente_a': cli_a, 'foto_visita': foto_visita, 'material': material.id, 'pedido': pedido.id, 'chave': chave.id,'ocorrencia_publica': oc.id, 'presenca': pres.id, 'plano': plano.id,
+    # Relatório do cliente: o mês passado de A, liberado, com recado.
+    from facilities.relatorios import cliente as relat
+    mes_rel = relat.mes_de('')
+    relat.salvar_recado(a, mes_rel, f'Recado {MARCA}', gestor)
+    relat.liberar(a, mes_rel, gestor)
+    db.session.commit()
+    return {'mes_relatorio': mes_rel.strftime('%Y-%m'), 'cobranca': cob.id, 'cliente_a': cli_a, 'foto_visita': foto_visita, 'material': material.id, 'pedido': pedido.id, 'chave': chave.id,'ocorrencia_publica': oc.id, 'presenca': pres.id, 'plano': plano.id,
             'funcionario': func.id, 'posto': posto.id, 'escala_trabalho': esc.id,
             'falta': falta.id, 'programada': prog.id,
             'visita': Visita.query.filter_by(programada_id=prog.id).one().id,
@@ -265,10 +271,16 @@ def _valor_do_parametro(nome, ids, entidade=None, endpoint=''):
                     'cid': ids['local'], 'vid': ids['versao']}
         if nome in por_rota:
             return por_rota[nome]
+    if endpoint.startswith('relatorios.'):
+        por_relatorio = {'cid': ids['local'], 'mes': ids['mes_relatorio'], 'acao': 'recolher',
+                         'formato': 'pdf'}
+        if nome in por_relatorio:
+            return por_relatorio[nome]
     if endpoint.startswith(('portal.', 'cobrancas.')):
         por_portal = {'cid': ids['local'], 'chamado_id': ids['chamado'], 'fid': ids['foto'],
                       'cobid': ids['cobranca'], 'acao': 'confirmar',
-                      'vfid': ids['foto_visita']}
+                      'vfid': ids['foto_visita'], 'mes': ids['mes_relatorio'],
+                      'formato': 'pdf'}
         if nome in por_portal:
             return por_portal[nome]
     mapa = {
@@ -394,3 +406,12 @@ def test_a_marca_aparece_para_o_cliente_de_a(app_module, local_a):
     c = fabrica.entrar_com_codigo(app_module, 'cliente.a@gl.com')
     assert MARCA in c.get(f"/cliente/cobrancas/{local_a['cobranca']}").get_data(as_text=True)
     assert MARCA in c.get(f"/cliente/chamados/{local_a['chamado']}").get_data(as_text=True)
+
+
+def test_relatorio_liberado_de_a_aparece_para_o_cliente_de_a(app_module, local_a):
+    app_module.app.config['CLIENTE_EXTERNO_LIBERADO'] = True
+    c = fabrica.entrar_com_codigo(app_module, 'cliente.a@gl.com')
+    url = f"/cliente/relatorios/{local_a['local']}/{local_a['mes_relatorio']}"
+    assert MARCA in c.get(url).get_data(as_text=True)
+    assert c.get(url + '/arquivo.pdf').mimetype == 'application/pdf'
+
