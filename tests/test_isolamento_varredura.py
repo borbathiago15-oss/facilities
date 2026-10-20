@@ -214,7 +214,17 @@ def _rotas_de_a(app_module, a, ids):
     doc = s.anexar_documento(m, Arquivo(b'%PDF-1.4 ' + MARCA.encode(), 'pop.pdf'), gestor)
     doc.visivel_cliente = True
     db.session.commit()
-    return {'documento': doc.id, 'mes_relatorio': mes_rel.strftime('%Y-%m'), 'cobranca': cob.id, 'cliente_a': cli_a, 'foto_visita': foto_visita, 'material': material.id, 'pedido': pedido.id, 'chave': chave.id,'ocorrencia_publica': oc.id, 'presenca': pres.id, 'plano': plano.id,
+    # Rotas prontas: um modelo da biblioteca (do grupo, sem dado de A).
+    from facilities.rotas import rotas_prontas
+    lib = s.criar_modelo(None, {'nome': 'Checklist da biblioteca (varredura)'}, None)
+    s.publicar(lib, s.normalizar_itens([{'texto': 'Limpo?', 'tipo': 'sim_nao'}]), {}, None)
+    pronta = rotas_prontas.salvar_modelo(None, {
+        'nome': 'Rota pronta da varredura', 'turno': 'Diurno', 'hora_inicio': '06:00',
+        'hora_fim': '18:00', 'dias_semana': '12345'}, [
+        {'setor': 'Sanitários', 'ambiente': 'Banheiro', 'checklist_id': str(lib.id),
+         'horarios': '08:00', 'quantidade': '1'}])
+    db.session.commit()
+    return {'rota_pronta': pronta.id, 'documento': doc.id, 'mes_relatorio': mes_rel.strftime('%Y-%m'), 'cobranca': cob.id, 'cliente_a': cli_a, 'foto_visita': foto_visita, 'material': material.id, 'pedido': pedido.id, 'chave': chave.id,'ocorrencia_publica': oc.id, 'presenca': pres.id, 'plano': plano.id,
             'funcionario': func.id, 'posto': posto.id, 'escala_trabalho': esc.id,
             'falta': falta.id, 'programada': prog.id,
             'visita': Visita.query.filter_by(programada_id=prog.id).one().id,
@@ -276,7 +286,7 @@ def _valor_do_parametro(nome, ids, entidade=None, endpoint=''):
                     'rid': ids['rota'], 'iid': ids['item'], 'mid': ids['modelo'],
                     'nid': ids['nc'], 'fid': ids['foto'], 'tid': ids['tarefa_rota'],
                     'cid': ids['local'], 'vid': ids['versao'], 'did': ids['documento'],
-                    'acao': 'retirar'}
+                    'rmid': ids['rota_pronta'], 'acao': 'retirar'}
         if nome in por_rota:
             return por_rota[nome]
     if endpoint.startswith('relatorios.'):

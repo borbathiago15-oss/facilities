@@ -119,6 +119,124 @@ def local(cid):
                            dias=servico.DIAS_DA_SEMANA)
 
 
+# ── Rotas prontas da biblioteca ───────────────────────────────────────────
+
+LINHAS_EM_BRANCO_ROTA = 3
+
+
+def _linhas_do_formulario(form):
+    campos = ('setor', 'ambiente', 'checklist_id', 'horarios', 'quantidade')
+    listas = {c: form.getlist(c) for c in campos}
+    n = len(listas['ambiente'])
+    return [{c: (listas[c][i] if i < len(listas[c]) else '') for c in campos}
+            for i in range(n)]
+
+
+def _rota_pronta(rmid):
+    from facilities.rotas.models import RotaModelo
+    if not _pode_acompanhar():
+        raise Forbidden('Sem acesso à biblioteca.')
+    return db.get_or_404(RotaModelo, rmid)
+
+
+def _checklists_da_biblioteca():
+    return [m for m in (ChecklistModelo.query.filter(ChecklistModelo.client_id.is_(None),
+                                                     ChecklistModelo.is_active.is_(True))
+                        .order_by(ChecklistModelo.nome)) if m.versao_atual]
+
+
+@bp.get('/rotas/biblioteca/rotas/nova')
+@bp.get('/rotas/biblioteca/rotas/<int:rmid>')
+@login_required
+def rota_pronta(rmid=None):
+    if rmid is None and _perfil() != 'master':
+        raise Forbidden('A biblioteca da Trino é mantida pelo administrador.')
+    m = _rota_pronta(rmid) if rmid else None
+    linhas = [{'setor': it.setor, 'ambiente': it.ambiente, 'checklist_id': it.checklist_id,
+               'horarios': it.horarios, 'quantidade': it.quantidade}
+              for it in (m.itens if m else [])]
+    return render_template('rotas/rota_pronta.html', modelo=m,
+                           linhas=linhas + [{}] * LINHAS_EM_BRANCO_ROTA,
+                           checklists=_checklists_da_biblioteca(), dias=servico.DIAS_DA_SEMANA,
+                           pode_montar=_perfil() == 'master')
+
+
+@bp.post('/rotas/biblioteca/rotas/nova')
+@bp.post('/rotas/biblioteca/rotas/<int:rmid>')
+@login_required
+def salvar_rota_pronta(rmid=None):
+    from facilities.rotas import rotas_prontas
+    if _perfil() != 'master':
+        raise Forbidden('A biblioteca da Trino é mantida pelo administrador.')
+    m = _rota_pronta(rmid) if rmid else None
+    destino = url_for('rotas.rota_pronta', rmid=rmid) if rmid else url_for('rotas.rota_pronta')
+    try:
+        m = rotas_prontas.salvar_modelo(m, _com_dias(request.form),
+                                        _linhas_do_formulario(request.form))
+        db.session.commit()
+    except RegraDaRota as erro:
+        db.session.rollback()
+        flash(erro.mensagem, 'danger')
+        return redirect(destino)
+    flash(f'Rota pronta "{m.nome}" salva. Os locais que já aplicaram não mudam.', 'success')
+    return redirect(url_for('rotas.rota_pronta', rmid=m.id))
+
+
+@bp.post('/rotas/biblioteca/rotas/<int:rmid>/ativo')
+@login_required
+def ativo_rota_pronta(rmid):
+    if _perfil() != 'master':
+        raise Forbidden('A biblioteca da Trino é mantida pelo administrador.')
+    m = _rota_pronta(rmid)
+    m.is_active = not m.is_active
+    db.session.commit()
+    flash('Rota pronta reativada.' if m.is_active else
+          'Rota pronta desativada: some da lista de quem aplica. Nada se apaga.', 'success')
+    return redirect(url_for('rotas.biblioteca'))
+
+
+@bp.get('/rotas/locais/<int:cid>/rota-pronta')
+@login_required
+def aplicar_rota_pronta(cid):
+    from facilities.rotas import rotas_prontas
+    from facilities.rotas.models import RotaModelo
+    loc = _local(cid, montar=True)
+    opcoes = (RotaModelo.query.filter_by(is_active=True)
+              .order_by(RotaModelo.segmento, RotaModelo.nome).all())
+    bruto = request.args.get('modelo', '')
+    escolhido = next((o for o in opcoes if str(o.id) == bruto), None)
+    return render_template('rotas/aplicar_rota_pronta.html', local=loc, opcoes=opcoes,
+                           modelo=escolhido, dias=servico.DIAS_DA_SEMANA,
+                           linhas=rotas_prontas.linhas_da_previa(escolhido) if escolhido
+                           else [])
+
+
+@bp.post('/rotas/locais/<int:cid>/rota-pronta/<int:rmid>')
+@login_required
+def aplicar_rota_pronta_post(cid, rmid):
+    from facilities.rotas import rotas_prontas
+    from facilities.rotas.models import RotaModelo
+    loc = _local(cid, montar=True)
+    m = db.get_or_404(RotaModelo, rmid)
+    if not m.is_active:
+        abort(404)
+    marcadas = set(request.form.getlist('incluir'))
+    linhas = [ln for i, ln in enumerate(_linhas_do_formulario(request.form))
+              if str(i) in marcadas]
+    try:
+        rota, r = rotas_prontas.aplicar(m, loc, _com_dias(request.form), linhas, current_user)
+        db.session.commit()
+    except RegraDaRota as erro:
+        db.session.rollback()
+        flash(erro.mensagem, 'danger')
+        return redirect(url_for('rotas.aplicar_rota_pronta', cid=loc.id, modelo=m.id))
+    flash(f'Rota "{rota.nome}" criada com {r["itens"]} ponto(s) de checklist. Novos neste '
+          f'local: {r["ambientes"]} ambiente(s), {r["pontos"]} ponto(s) com QR e '
+          f'{r["checklists"]} checklist(s). Falta a escala: quem faz esta rota. A '
+          'confirmação de presença começa desligada.', 'success')
+    return redirect(url_for('rotas.rota', rid=rota.id))
+
+
 # ── Checklists ────────────────────────────────────────────────────────────
 
 @bp.get('/rotas/biblioteca')
@@ -126,10 +244,13 @@ def local(cid):
 def biblioteca():
     if not _pode_acompanhar():
         raise Forbidden('Sem acesso aos checklists.')
+    from facilities.rotas.models import RotaModelo
     modelos = (ChecklistModelo.query.filter(ChecklistModelo.client_id.is_(None))
                .order_by(ChecklistModelo.is_active.desc(), ChecklistModelo.nome).all())
+    rotas_prontas = (RotaModelo.query.order_by(RotaModelo.is_active.desc(),
+                                               RotaModelo.segmento, RotaModelo.nome).all())
     return render_template('rotas/biblioteca.html', modelos=modelos,
-                           pode_montar=_perfil() == 'master')
+                           rotas_prontas=rotas_prontas, pode_montar=_perfil() == 'master')
 
 
 @bp.post('/rotas/biblioteca/modelos-prontos')

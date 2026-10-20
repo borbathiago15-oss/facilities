@@ -1,0 +1,20 @@
+{#- Campos do turno de uma rota pronta (ou da rota que será criada ao aplicar).
+    ``m`` é o RotaModelo (ou none). -#}
+<div class="row g-2">
+  <div class="col-md-5"><label class="form-label small fw-semibold" for="rpnome">Nome</label>
+    <input class="form-control" id="rpnome" name="nome" required maxlength="150" value="{{ m.nome if m else '' }}"{% if not editavel %} readonly{% endif %}></div>
+  <div class="col-md-3"><label class="form-label small fw-semibold" for="rpturno">Turno</label>
+    <input class="form-control" id="rpturno" name="turno" required maxlength="50" value="{{ m.turno if m else '' }}"{% if not editavel %} readonly{% endif %}></div>
+  <div class="col-6 col-md-2"><label class="form-label small fw-semibold" for="rpini">Início</label>
+    <input class="form-control" id="rpini" name="hora_inicio" type="time" required value="{{ m.hora_inicio.strftime('%H:%M') if m else '07:00' }}"{% if not editavel %} readonly{% endif %}></div>
+  <div class="col-6 col-md-2"><label class="form-label small fw-semibold" for="rpfim">Fim</label>
+    <input class="form-control" id="rpfim" name="hora_fim" type="time" required value="{{ m.hora_fim.strftime('%H:%M') if m else '15:00' }}"{% if not editavel %} readonly{% endif %}></div>
+  <div class="col-md-3"><label class="form-label small fw-semibold" for="rptol">Tolerância (minutos)</label>
+    <input class="form-control" id="rptol" name="tolerancia_min" type="number" min="0" max="240" value="{{ m.tolerancia_min if m else 30 }}"{% if not editavel %} readonly{% endif %}></div>
+  <fieldset class="col-md-9"><legend class="form-label small fw-semibold mb-1">Dias da semana</legend>
+    <div class="d-flex flex-wrap gap-2">
+      {% for k, v in dias.items() %}
+      <label class="border rounded px-2 py-1 small"><input type="checkbox" name="dias_semana" value="{{ k }}" {% if (m and k in m.dias_semana) or (not m and k in '12345') %}checked{% endif %}{% if not editavel %} disabled{% endif %}> {{ v }}</label>
+      {% endfor %}
+    </div></fieldset>
+</div>

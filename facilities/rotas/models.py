@@ -182,6 +182,48 @@ class RotaItem(db.Model):
     modelo = db.relationship('ChecklistModelo')
 
 
+class RotaModelo(db.Model):
+    """Rota pronta da biblioteca da Trino (pedido do dono, 19/10/2026): um
+    pacote por tipo de local — ambientes, checklist e horários — que a gestão
+    APLICA num local (``rotas/rotas_prontas.py``). O administrador edita na
+    tela; aplicar cria uma rota comum no local, que não muda se o modelo
+    mudar depois."""
+    __tablename__ = 'rota_modelos'
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(150), nullable=False, unique=True)
+    segmento = db.Column(db.String(60), nullable=False, default='Outro')
+    descricao = db.Column(db.Text)
+    turno = db.Column(db.String(50), nullable=False)
+    hora_inicio = db.Column(db.Time, nullable=False)
+    hora_fim = db.Column(db.Time, nullable=False)
+    tolerancia_min = db.Column(db.Integer, nullable=False, default=TOLERANCIA_PADRAO_MIN)
+    dias_semana = db.Column(db.String(7), nullable=False, default='12345')
+    is_active = db.Column(db.Boolean, default=True, nullable=False, server_default=db.true())
+    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    itens = db.relationship('RotaModeloItem', backref='rota_modelo',
+                            order_by='RotaModeloItem.ordem', cascade='all, delete-orphan')
+
+
+class RotaModeloItem(db.Model):
+    """Uma linha da rota pronta: em que setor e ambiente, com qual checklist
+    da biblioteca, em que horários e quantos ambientes iguais (ex.: 2
+    banheiros masculinos)."""
+    __tablename__ = 'rota_modelo_itens'
+    id = db.Column(db.Integer, primary_key=True)
+    rota_modelo_id = db.Column(db.Integer, db.ForeignKey('rota_modelos.id', ondelete='CASCADE'),
+                               nullable=False, index=True)
+    ordem = db.Column(db.Integer, nullable=False, default=0)
+    setor = db.Column(db.String(120), nullable=False)
+    ambiente = db.Column(db.String(120), nullable=False)
+    checklist_id = db.Column(db.Integer, db.ForeignKey('checklist_modelos.id',
+                                                       ondelete='RESTRICT'), nullable=False)
+    horarios = db.Column(db.String(300), nullable=False)
+    quantidade = db.Column(db.Integer, nullable=False, default=1, server_default='1')
+
+    checklist = db.relationship('ChecklistModelo')
+
+
 class RotaEscala(db.Model):
     """Quem executa a rota, em que dias, de quando a quando."""
     __tablename__ = 'rota_escalas'
@@ -437,6 +479,7 @@ class ConfirmacaoPresenca(db.Model):
 
 MODELOS_EM_ORDEM_DE_LIMPEZA = (ConfirmacaoPresenca, OcorrenciaPublica, ExecucaoCorrecao,
                                NaoConformidade, ExecucaoFoto, Execucao, TarefaDia, RotaEscala,
-                               RotaItem, Rota, ChecklistDocumento, ChecklistVersao,
+                               RotaItem, Rota, RotaModeloItem, RotaModelo,
+                               ChecklistDocumento, ChecklistVersao,
                                ChecklistModelo,
                                AgendadorExecucao)

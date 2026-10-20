@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+{% block title %}{{ modelo.nome if modelo else 'Nova rota pronta' }}{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item"><a href="{{ url_for('rotas.biblioteca') }}">Biblioteca</a></li><li class="breadcrumb-item active" aria-current="page">{{ modelo.nome if modelo else 'Nova rota pronta' }}</li>{% endblock %}
+{% block content %}
+<h1 class="fc-titulo">{{ modelo.nome if modelo else 'Nova rota pronta' }}</h1>
+<p class="fc-sub">Uma rota pronta é um pacote para um tipo de local: os ambientes, o checklist de cada um e os horários. A gestão aplica num local e ajusta antes de gravar. Mudar aqui não muda os locais que já aplicaram.</p>
+{% set editavel = pode_montar %}
+<form method="post" action="{{ url_for('rotas.salvar_rota_pronta', rmid=modelo.id) if modelo else url_for('rotas.salvar_rota_pronta') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <section class="fc-cartao mb-3" aria-labelledby="tit-turno">
+    <h2 class="h6 fw-bold" id="tit-turno">Turno</h2>
+    {% set m = modelo %}{% include 'rotas/_campos_rota_pronta.html' %}
+    <div class="row g-2 mt-1">
+      <div class="col-md-5"><label class="form-label small fw-semibold" for="rpseg">Tipo de local</label>
+        <input class="form-control" id="rpseg" name="segmento" maxlength="60" value="{{ modelo.segmento if modelo else '' }}" placeholder="Ex.: Escritório / corporativo"{% if not editavel %} readonly{% endif %}></div>
+      <div class="col-md-7"><label class="form-label small fw-semibold" for="rpdesc">Por que estes horários</label>
+        <textarea class="form-control" id="rpdesc" name="descricao" rows="2"{% if not editavel %} readonly{% endif %}>{{ modelo.descricao or '' if modelo else '' }}</textarea></div>
+    </div>
+  </section>
+  <section class="fc-cartao mb-3" aria-labelledby="tit-amb">
+    <h2 class="h6 fw-bold" id="tit-amb">Ambientes</h2>
+    <p class="small text-muted">Uma linha por tipo de ambiente. "Quantidade 2" cria dois ambientes iguais (ex.: Banheiro da operação 1 e 2). Horários separados por vírgula. Deixe o ambiente vazio para tirar a linha.</p>
+    <div class="table-responsive">
+    <table class="table table-sm align-middle mb-0">
+      <thead><tr><th scope="col">Setor</th><th scope="col">Ambiente</th><th scope="col">Checklist da biblioteca</th><th scope="col">Horários</th><th scope="col">Qtd.</th></tr></thead>
+      <tbody>
+      {% for ln in linhas %}{% set i = loop.index0 %}
+        <tr>
+          <td><label class="visually-hidden" for="s{{ i }}">Setor</label><input class="form-control form-control-sm" id="s{{ i }}" name="setor" maxlength="120" value="{{ ln.setor or '' }}"{% if not editavel %} readonly{% endif %}></td>
+          <td><label class="visually-hidden" for="a{{ i }}">Ambiente</label><input class="form-control form-control-sm" id="a{{ i }}" name="ambiente" maxlength="120" value="{{ ln.ambiente or '' }}"{% if not editavel %} readonly{% endif %}></td>
+          <td><label class="visually-hidden" for="c{{ i }}">Checklist</label>
+            <select class="form-select form-select-sm" id="c{{ i }}" name="checklist_id"{% if not editavel %} disabled{% endif %}>
+              <option value="">—</option>
+              {% for c in checklists %}<option value="{{ c.id }}" {% if ln.checklist_id == c.id %}selected{% endif %}>{{ c.nome }}</option>{% endfor %}
+            </select></td>
+          <td><label class="visually-hidden" for="h{{ i }}">Horários</label><input class="form-control form-control-sm" id="h{{ i }}" name="horarios" maxlength="300" value="{{ ln.horarios or '' }}" placeholder="08:00, 12:00"{% if not editavel %} readonly{% endif %}></td>
+          <td><label class="visually-hidden" for="q{{ i }}">Quantidade</label><input class="form-control form-control-sm" id="q{{ i }}" name="quantidade" type="number" min="1" max="10" value="{{ ln.quantidade or 1 }}"{% if not editavel %} readonly{% endif %}></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </section>
+  {% if editavel %}
+  <button class="btn btn-primary fw-bold" type="submit">Salvar rota pronta</button>
+  <span class="small text-muted ms-2">Precisa de mais linhas? Salve e as linhas em branco voltam.</span>
+  {% endif %}
+</form>
+{% if editavel and modelo %}
+<form method="post" action="{{ url_for('rotas.ativo_rota_pronta', rmid=modelo.id) }}" class="mt-3">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <button class="btn btn-outline-secondary" type="submit">{{ 'Desativar esta rota pronta' if modelo.is_active else 'Reativar esta rota pronta' }}</button>
+</form>
+{% endif %}
+{% endblock %}

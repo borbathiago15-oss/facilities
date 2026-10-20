@@ -205,6 +205,13 @@ SEMENTES = [
     # Auditoria SEC-003: uma conta com o código travado no servidor.
     "UPDATE users SET totp_falhas=3, totp_bloqueio_ate='2026-10-19 12:00' "
     "WHERE email='gerente@ensaio'",
+    # Rotas prontas: um modelo com uma linha apontando para um checklist da biblioteca.
+    "INSERT INTO rota_modelos (nome,segmento,descricao,turno,hora_inicio,hora_fim,"
+    "tolerancia_min,dias_semana,is_active,atualizado_em) VALUES ('Escritório — ensaio',"
+    "'Escritório / corporativo',NULL,'Diurno','06:00','18:00',30,'12345',true,now())",
+    "INSERT INTO rota_modelo_itens (rota_modelo_id,ordem,setor,ambiente,checklist_id,horarios,"
+    "quantidade) SELECT r.id,0,'Sanitários','Banheiro masculino',m.id,'08:00, 10:00',2 "
+    "FROM rota_modelos r, (SELECT min(id) AS id FROM checklist_modelos) m",
 ]
 
 
