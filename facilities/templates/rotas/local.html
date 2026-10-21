@@ -6,7 +6,7 @@
 <p class="fc-sub">Primeiro os checklists (o que fazer), depois as rotas (onde, quando e quem).</p>
 <div class="d-flex flex-wrap gap-2 mb-3">
   <a class="btn btn-primary btn-sm" href="{{ url_for('rotas.dia', cid=local.id) }}"><i class="bi bi-calendar-check"></i> Acompanhar hoje</a>
-  <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('cadastros.local', cid=local.id) }}"><i class="bi bi-diagram-3"></i> Pontos e QR do local</a>
+  {% if ve_estrutura %}<a class="btn btn-outline-secondary btn-sm" href="{{ url_for('cadastros.local', cid=local.id) }}"><i class="bi bi-diagram-3"></i> Pontos e QR do local</a>{% endif %}
   <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('preventiva.local', cid=local.id) }}"><i class="bi bi-calendar2-week"></i> Preventivas</a>
   <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('equipes.local', cid=local.id) }}"><i class="bi bi-people"></i> Equipe</a>
   <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('visitas.local', cid=local.id) }}"><i class="bi bi-clipboard-check"></i> Visitas de supervisão</a>

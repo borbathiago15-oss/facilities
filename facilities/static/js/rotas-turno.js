@@ -499,6 +499,7 @@
       corpo.sem_sinal = true;
       window.TrinoFila.guardar({tipo: 'execucao', rotulo: (tarefa ? tarefa.hora + ' · ' : '') +
                                  (dados.pontos[codigo] || {}).nome,
+                                tarefa_id: tarefa ? tarefa.id : null,
                                 corpo: corpo, fotos: fotos}).then(function () {
         if (tarefa) marcarFeita(tarefa.id, 'Guardada no aparelho');
         tirarPreventiva();
@@ -569,11 +570,13 @@
     secExec.appendChild(form);
   }
 
-  // A fila subiu uma execução guardada: some o "guardada no aparelho".
+  // A fila subiu uma execução guardada: só AQUELA tarefa deixa de ser
+  // "guardada no aparelho" — as outras ainda estão na fila.
   window.addEventListener('trino-fila:enviado', function (ev) {
-    if (!ev.detail || ev.detail.tipo !== 'execucao') return;
+    if (!ev.detail || ev.detail.tipo !== 'execucao' || !ev.detail.tarefa_id) return;
     var f = feitasNoAparelho();
-    Object.keys(f).forEach(function (k) { f[k] = 'Enviada'; });
+    if (!(ev.detail.tarefa_id in f)) return;
+    f[ev.detail.tarefa_id] = 'Enviada';
     try { localStorage.setItem(CHAVE_LOCAL, JSON.stringify(f)); } catch (e) {}
   });
 

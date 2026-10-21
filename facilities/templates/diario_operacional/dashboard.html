@@ -575,5 +575,6 @@
 
 {% block scripts %}
 <script type="application/json" id="dop-graficos">{{ {'pareto': (dados.pareto if dados else []), 'comparativo': (dados.turnos_comparativo if dados else []), 'burndown': (dados.burndown if dados else {'labels': [], 'criadas': [], 'resolvidas': []})}|tojson }}</script>
+<script src="{{ url_for('static', filename='vendor/chart/chart.umd.min.js') }}"></script>
 <script src="{{ url_for('static', filename='js/diario_dashboard.js') }}"></script>
 {% endblock %}

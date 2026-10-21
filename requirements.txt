@@ -9,6 +9,7 @@ Flask-WTF==1.2.1
 Flask-Limiter==3.8.0
 Werkzeug==3.1.6
 reportlab==4.4.1
+pillow==12.3.0
 # Relatório do cliente em Excel (licença MIT).
 openpyxl==3.1.5
 gunicorn==23.0.0

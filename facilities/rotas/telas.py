@@ -116,6 +116,7 @@ def local(cid):
     return render_template('rotas/local.html', local=loc, modelos=modelos,
                            biblioteca=[b for b in biblioteca if b.versao_atual],
                            rotas=rotas, pode_montar=_pode_montar(),
+                           ve_estrutura=_pode_montar() or _perfil() == 'visualizador',
                            dias=servico.DIAS_DA_SEMANA)
 
 
