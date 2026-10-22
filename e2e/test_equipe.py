@@ -28,9 +28,11 @@ def test_sueli_lanca_a_falta_e_a_cobertura(servidor, navegador, perfil):
         pg.wait_for_selector('text=Cobertura registrada: Mariana Lima')
         assert servidor['sql']("SELECT situacao FROM presencas") == [('faltou',)]
         assert servidor['sql']("SELECT motivo FROM coberturas") == [('atestado médico',)]
-        # Mariana não usa o aplicativo: as tarefas da rota ficam sem escalado.
+        # Mariana não usa o aplicativo: as tarefas da rota ficam sem escalado
+        # (as do outro local da Ana, o Armazém 2, não são deste posto).
         assert servidor['sql']("SELECT count(*) FROM tarefas_dia t JOIN users u "
-                               "ON u.id = t.user_id WHERE u.email='ana@e2e.test' "
+                               "ON u.id = t.user_id JOIN clients c ON c.id = t.client_id "
+                               "WHERE u.email='ana@e2e.test' AND c.name='GL Armazém 1' "
                                "AND t.status='prevista'") == [(0,)]
         _sem_rolagem_lateral(pg)
     finally:

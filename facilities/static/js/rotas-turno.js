@@ -1,29 +1,39 @@
-// "Meu turno" — o aplicativo de campo executando a rota (Fase 4A).
+// "Meu turno" — o aplicativo de campo executando a rota (Fase 4A; redesenho
+// do bloco do técnico, etapa 2, decisões do dono de 22/10/2026).
 //
-// A tela chega com TUDO que precisa num JSON (#turno-dados): as tarefas de
-// hoje, os checklists delas e os pontos pelo código do QR. Por isso ela
-// abre e funciona SEM internet (o service worker guarda a cópia):
+// A tela chega com TUDO que precisa num JSON (#turno-dados): os locais da
+// carteira (com o QR da entrada e a chegada de hoje), as tarefas de hoje, os
+// checklists delas e os pontos pelo código do QR. Por isso ela abre e
+// funciona SEM internet (o service worker guarda a cópia).
 //
-//   ler o QR → /app/turno?ponto=<código> → o ponto, o procedimento e as
-//   tarefas dele → "Fazer agora" → o checklist → Confirmar.
+//   /app/turno                → um cartão por local ("ler o QR da entrada" /
+//                               "Você está no X — Ver o turno")
+//   /app/turno?local=<id>     → o turno de hoje DAQUELE local
+//   /app/turno?ponto=<QR>     → QR da ENTRADA: registra a chegada e abre o
+//                               turno do local; QR comum: abre DIRETO no que
+//                               é para fazer agora ali (foto do antes → um
+//                               check por item → foto do depois → Pronto)
 //
 // Com sinal, a hora da leitura é a do SERVIDOR (o selo de /app/api/leitura).
 // Sem sinal, vale a hora do celular, e a execução vai marcada "feito sem
 // sinal" (R4); o envio fica na fila do aparelho (fila-offline.js) e sobe
 // sozinho quando o sinal volta. O mesmo envio nunca vira duas execuções
-// (envio_id).
+// (envio_id). O servidor é a verdade: quando ele já registrou a tarefa, a
+// marca local ("guardada"/"enviada") some (22/10).
 (function () {
   'use strict';
   var raiz = document.getElementById('turno-app');
   if (!raiz) return;
   var dados = JSON.parse(document.getElementById('turno-dados').textContent);
+  var URL_LER_QR = raiz.getAttribute('data-ler-qr') || '/app/ler-qr';
   var secLista = document.getElementById('turno-lista');
   var secPonto = document.getElementById('turno-ponto');
   var secExec = document.getElementById('turno-execucao');
-  var caixaItens = document.getElementById('turno-itens');
   var aviso = document.getElementById('turno-aviso');
-  var leitura = null;   // {ponto, selo, lido_em}
+  var leitura = null;   // {ponto, selo, lido_em, pronta (Promise)}
   var CHAVE_LOCAL = 'trino-turno-feitas-' + dados.usuario;
+  var CHAVE_CHEGADA = 'trino-turno-chegada-' + dados.usuario;
+  var materiaisPorLocal = {};
 
   // ── Ajudantes ─────────────────────────────────────────────────────────
   function el(tag, attrs, filhos) {
@@ -49,28 +59,60 @@
     aviso.appendChild(el('div', {classe: 'alert alert-' + (tipo || 'info'), texto: texto}));
     aviso.scrollIntoView({block: 'nearest'});
   }
+  function mostrarSo(sec) {
+    [secLista, secPonto, secExec].forEach(function (s) { s.hidden = s !== sec; });
+    limpar(sec);
+    window.scrollTo(0, 0);
+    return sec;
+  }
   function hora(iso) {
-    var d = new Date(iso);
+    var d = iso ? new Date(iso) : new Date();
     return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+  }
+  function hojeLocal() {
+    var d = new Date();
+    return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
   }
   function novoId() {
     if (window.TrinoFila && window.TrinoFila.novoId) return window.TrinoFila.novoId();
     return 'e' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
   }
-  function feitasNoAparelho() {
-    try { return JSON.parse(localStorage.getItem(CHAVE_LOCAL) || '{}'); } catch (e) { return {}; }
+  function lerJson(chave) {
+    try { return JSON.parse(localStorage.getItem(chave) || '{}'); } catch (e) { return {}; }
   }
-  function marcarFeita(id, rotulo) {
-    var f = feitasNoAparelho();
-    f[id] = rotulo;
-    try { localStorage.setItem(CHAVE_LOCAL, JSON.stringify(f)); } catch (e) {}
-  }
+  function gravarJson(chave, v) { try { localStorage.setItem(chave, JSON.stringify(v)); } catch (e) {} }
+  function feitasNoAparelho() { return lerJson(CHAVE_LOCAL); }
+  function marcarFeita(id, rotulo) { var f = feitasNoAparelho(); f[id] = rotulo; gravarJson(CHAVE_LOCAL, f); }
   function desmarcarFeita(id) {
     var f = feitasNoAparelho();
     if (!(id in f)) return;
     delete f[id];
-    try { localStorage.setItem(CHAVE_LOCAL, JSON.stringify(f)); } catch (e) {}
+    gravarJson(CHAVE_LOCAL, f);
   }
+  function irParaLerQr() { location.assign(URL_LER_QR); }
+  function botaoLerQr(classe) {
+    return el('a', {classe: classe || 'btn btn-primary btn-lg w-100 fc-app-acao', href: URL_LER_QR},
+      [el('i', {classe: 'bi bi-qr-code-scan'}), ' Ler o QR']);
+  }
+
+  // ── Locais e chegada ──────────────────────────────────────────────────
+  function localDe(id) {
+    return (dados.locais || []).filter(function (l) { return String(l.id) === String(id); })[0] || null;
+  }
+  // A chegada de hoje no local: a do servidor ou a guardada no aparelho (sem
+  // sinal) no mesmo dia.
+  function chegadaDe(local) {
+    if (!local) return null;
+    if (local.chegada) return local.chegada;
+    var m = lerJson(CHAVE_CHEGADA)[local.id];
+    return m && m.data === hojeLocal() ? m : null;
+  }
+  function marcarChegadaLocal(localId, h) {
+    var c = lerJson(CHAVE_CHEGADA);
+    c[localId] = {hora: h, data: hojeLocal(), guardada: true};
+    gravarJson(CHAVE_CHEGADA, c);
+  }
+  function exigeChegada(local) { return !!(local && local.entrada && !chegadaDe(local)); }
 
   // A situação AGORA (a do servidor envelhece com a tela aberta).
   function situacao(t) {
@@ -94,16 +136,72 @@
     var s = situacao(t).cod;
     return s === 'no_horario' || s === 'atrasada';
   }
+  function emAberto(t) {
+    var s = situacao(t).cod;
+    return s === 'prevista' || s === 'no_horario' || s === 'atrasada';
+  }
+  function tarefasDoLocal(localId) {
+    return dados.tarefas.filter(function (t) { return String(t.local_id) === String(localId); })
+      .sort(function (a, b) { return Date.parse(a.previsto) - Date.parse(b.previsto); });
+  }
+  // A próxima da rota depois de ``feita``: a atrasada ou a da hora primeiro,
+  // senão a primeira que ainda vai chegar.
+  function proximaTarefa(localId, feita) {
+    var abertas = tarefasDoLocal(localId).filter(function (t) {
+      return emAberto(t) && (!feita || t.id !== feita.id);
+    });
+    return abertas.filter(podeFazer)[0] || abertas[0] || null;
+  }
 
-  // ── Lista do turno ────────────────────────────────────────────────────
+  // ── Tela: um cartão por local ─────────────────────────────────────────
+  function mostrarLocais() {
+    var sec = mostrarSo(secLista);
+    sec.appendChild(el('h1', {classe: 'fc-titulo', texto: 'Meu turno'}));
+    sec.appendChild(el('p', {classe: 'fc-sub', texto: 'Escolha o local, ou leia o QR da entrada ao chegar.'}));
+    sec.appendChild(botaoLerQr('btn btn-primary btn-lg w-100 fc-app-acao mb-3'));
+    if (!(dados.locais || []).length) {
+      sec.appendChild(el('div', {classe: 'fc-cartao fc-vazio',
+        texto: 'Você ainda não tem local liberado. Peça ao seu supervisor ou à gestão.'}));
+      return;
+    }
+    dados.locais.forEach(function (l) { sec.appendChild(cartaoLocal(l)); });
+  }
+  function cartaoLocal(l) {
+    var n = tarefasDoLocal(l.id);
+    var abertas = n.filter(emAberto).length;
+    var ch = chegadaDe(l);
+    var sub = n.length ? abertas + ' de ' + n.length + (n.length > 1 ? ' tarefas' : ' tarefa') + ' por fazer'
+                       : 'Nenhuma tarefa da rota hoje';
+    if (l.entrada && !ch) {
+      return el('a', {classe: 'fc-cartao fc-local-turno mb-2', href: URL_LER_QR, 'data-local': l.id,
+                      'data-situacao': 'sem_chegada'}, [
+        el('span', {classe: 'fc-local-turno-nome', texto: l.nome}),
+        el('span', {classe: 'fc-local-turno-sub', texto: (n.length ? n.length + (n.length > 1 ? ' tarefas' : ' tarefa') + ' hoje · ' : '') +
+                                                          'Ao chegar, leia o QR da entrada (' + l.entrada_nome + ')'}),
+        el('span', {classe: 'fc-local-turno-acao'}, [el('i', {classe: 'bi bi-qr-code-scan'}), ' Ler o QR da entrada'])]);
+    }
+    var cartao = el('a', {classe: 'fc-cartao fc-local-turno mb-2' + (ch ? ' fc-local-turno-aqui' : ''),
+                          href: '/app/turno?local=' + l.id, 'data-local': l.id,
+                          'data-situacao': ch ? 'chegou' : 'sem_entrada'}, [
+      el('span', {classe: 'fc-local-turno-nome', texto: ch ? 'Você está no ' + l.nome : l.nome}),
+      el('span', {classe: 'fc-local-turno-sub', texto: (ch ? 'Chegou às ' + ch.hora + ' · ' : '') + sub}),
+      el('span', {classe: 'fc-local-turno-acao'}, [el('i', {classe: 'bi bi-list-check'}), ' Ver o turno'])]);
+    cartao.addEventListener('click', function (ev) {
+      ev.preventDefault();
+      history.pushState(null, '', '/app/turno?local=' + l.id);
+      mostrarTurno(l.id);
+    });
+    return cartao;
+  }
+
+  // ── Tela: o turno de hoje num local ───────────────────────────────────
   // ``n``: o número da tarefa no roteiro do dia (1, 2, 3…); ``proxima``: a
   // que a pessoa deve fazer agora — fica destacada.
-  function cartaoTarefa(t, comBotoes, n, proxima) {
+  function cartaoTarefa(t, n, proxima) {
     var s = situacao(t);
-    var v = dados.versoes[t.versao];
-    var passos = v && v.itens ? v.itens.length : 0;
-    var linha = el('div', {classe: 'fc-app-item' + (proxima ? ' fc-proxima' : '')}, [
-      el('div', {classe: 'd-flex align-items-center gap-2'}, [
+    var v = dados.versoes[t.versao] || {};
+    return el('div', {classe: 'fc-app-item' + (proxima ? ' fc-proxima' : ''), 'data-tarefa': t.id}, [
+      el('div', {classe: 'd-flex align-items-center gap-2 flex-wrap'}, [
         n ? el('span', {classe: 'fc-roteiro-n', texto: String(n), 'aria-label': 'Passo ' + n + ' do roteiro'}) : null,
         el('span', {classe: 'fs-5 fw-bold', texto: t.hora}),
         proxima ? el('span', {classe: 'badge text-bg-danger', texto: 'Próxima'}) : null,
@@ -112,59 +210,90 @@
       ]),
       el('span', {classe: 'fw-semibold', texto: t.ambiente + ' · ' + t.ponto_nome}),
       el('span', {classe: 'small text-muted',
-                  texto: v.modelo + (passos ? ' · ' + passos + (passos > 1 ? ' passos' : ' passo') : '') +
-                         ' · ' + t.local + (t.escalado && !t.minha ? ' · escala: ' + t.escalado : '')})
+                  texto: (v.modelo || t.rota) + (t.tempo_previsto_min ? ' · ' + t.tempo_previsto_min + ' min' : '') +
+                         (t.escalado && !t.minha ? ' · escala: ' + t.escalado : '')})
     ]);
-    if (comBotoes && (s.cod === 'prevista' || s.cod === 'no_horario' || s.cod === 'atrasada')) {
-      var barra = el('div', {classe: 'd-flex gap-2 mt-2'});
-      if (podeFazer(t)) {
-        barra.appendChild(el('button', {type: 'button', classe: 'btn btn-primary fc-app-acao flex-grow-1',
-          onclick: function () { abrirExecucao(t, dados.versoes[t.versao]); }},
-          [el('i', {classe: 'bi bi-check2-square'}), ' Fazer agora']));
-      } else {
-        var desde = new Date(Date.parse(t.previsto) - t.tolerancia * 60000).toISOString();
-        barra.appendChild(el('span', {classe: 'small text-muted align-self-center flex-grow-1',
-          texto: 'Pode ser feita a partir das ' + hora(desde) + '.'}));
-      }
-      barra.appendChild(el('button', {type: 'button', classe: 'btn btn-outline-secondary',
-        onclick: function () { abrirNaoRealizada(t); }}, ['Não realizada']));
-      linha.appendChild(barra);
-    }
-    return linha;
   }
 
-  function mostrarLista() {
-    secPonto.hidden = true; secExec.hidden = true; secLista.hidden = false;
-    limpar(caixaItens);
-    // O roteiro do dia na ordem dos horários (1, 2, 3…), como a rota foi
-    // pensada; a próxima a fazer fica destacada — a atrasada ou a da hora
-    // primeiro, senão a primeira que ainda vai chegar.
-    var tarefas = dados.tarefas.slice().sort(function (a, b) {
-      return Date.parse(a.previsto) - Date.parse(b.previsto);
-    });
-    var abertas = tarefas.filter(function (t) {
-      var c = situacao(t).cod;
-      return c === 'atrasada' || c === 'no_horario';
-    });
-    var proxima = abertas[0] || tarefas.filter(function (t) { return situacao(t).cod === 'prevista'; })[0];
-    if ((dados.preventivas || []).length) {
-      caixaItens.appendChild(el('div', {classe: 'alert alert-info',
-        texto: dados.preventivas.length + ' preventiva(s) em aberto. Leia o QR do ponto para fazer o checklist.'}));
-    }
-    if ((dados.ocorrencias || []).length) {
-      caixaItens.appendChild(el('div', {classe: 'alert alert-warning',
-        texto: dados.ocorrencias.length + ' aviso(s) do público esperando. Leia o QR do local para atender.'}));
-    }
-    if (!tarefas.length) {
-      caixaItens.appendChild(el('div', {classe: 'fc-cartao fc-vazio',
-        texto: 'Nenhuma tarefa de rota para hoje nos seus locais.'}));
+  function mostrarTurno(localId, mensagem) {
+    var l = localDe(localId);
+    var sec = mostrarSo(secLista);
+    if (!l) {
+      sec.appendChild(el('div', {classe: 'alert alert-warning', texto: 'Este local não está entre os seus.'}));
+      sec.appendChild(el('button', {type: 'button', classe: 'btn btn-outline-secondary w-100 fc-app-acao',
+        onclick: mostrarLocais}, ['Ver meus locais']));
       return;
     }
-    var cartao = el('div', {classe: 'fc-cartao'});
-    tarefas.forEach(function (t, i) { cartao.appendChild(cartaoTarefa(t, false, i + 1, t === proxima)); });
-    caixaItens.appendChild(cartao);
-    caixaItens.appendChild(el('p', {classe: 'small text-muted mt-2',
-      texto: 'Para fazer uma tarefa, leia o QR do local: o checklist abre na hora.'}));
+    if (exigeChegada(l)) { telaConfirmeChegada(l); return; }
+    var ch = chegadaDe(l);
+    if (mensagem) sec.appendChild(el('div', {classe: 'alert alert-success', role: 'status', texto: mensagem}));
+    sec.appendChild(el('h1', {classe: 'fc-titulo', texto: ch ? 'Você está no ' + l.nome : l.nome}));
+    sec.appendChild(el('p', {classe: 'fc-sub', texto: (ch ? 'Chegou às ' + ch.hora + (ch.guardada ? ' (chegada guardada no aparelho)' : '') + ' · ' : '') + 'Tarefas de hoje'}));
+    sec.appendChild(botaoLerQr('btn btn-primary btn-lg w-100 fc-app-acao mb-3'));
+    var tarefas = tarefasDoLocal(l.id);
+    var proxima = proximaTarefa(l.id, null);
+    var avisos = (dados.ocorrencias || []).filter(function (o) { return (dados.pontos[o.ponto] || {}).local_id === l.id; });
+    if (avisos.length) {
+      sec.appendChild(el('div', {classe: 'alert alert-warning',
+        texto: avisos.length + ' aviso(s) do público esperando. Leia o QR do ponto para atender.'}));
+    }
+    var prevs = (dados.preventivas || []).filter(function (x) { return (dados.pontos[x.ponto] || {}).local_id === l.id; });
+    if (prevs.length) {
+      sec.appendChild(el('div', {classe: 'alert alert-info',
+        texto: prevs.length + ' preventiva(s) em aberto. Leia o QR do ponto para fazer o checklist.'}));
+    }
+    if (!tarefas.length) {
+      sec.appendChild(el('div', {classe: 'fc-cartao fc-vazio', texto: 'Nenhuma tarefa de rota para hoje aqui.'}));
+    } else {
+      var cartao = el('div', {classe: 'fc-cartao', id: 'turno-itens'});
+      tarefas.forEach(function (t, i) { cartao.appendChild(cartaoTarefa(t, i + 1, t === proxima)); });
+      sec.appendChild(cartao);
+      sec.appendChild(el('p', {classe: 'small text-muted mt-2',
+        texto: 'Para fazer uma tarefa, leia o QR do ponto: o checklist abre na hora.'}));
+    }
+    sec.appendChild(el('button', {type: 'button', classe: 'btn btn-link w-100 mt-2',
+      onclick: function () { history.replaceState(null, '', '/app/turno'); mostrarLocais(); }},
+      ['Outro local']));
+    atualizarTurno(l.id);
+  }
+
+  // Com sinal, o servidor diz o que já foi feito (por esta pessoa ou outra)
+  // e a chegada de hoje; a lista se atualiza no lugar.
+  function atualizarTurno(localId) {
+    if (navigator.onLine === false || !window.fetch) return;
+    fetch('/app/api/turno?local=' + encodeURIComponent(localId), {credentials: 'same-origin'})
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (x) {
+        if (!x || !x.tarefas) return;
+        var l = localDe(localId);
+        if (l && x.chegada) l.chegada = x.chegada;
+        var porId = {};
+        dados.tarefas.forEach(function (t) { porId[t.id] = t; });
+        var mudou = false;
+        x.tarefas.forEach(function (nt) {
+          var t = porId[nt.id];
+          if (t && t.status !== nt.status) { t.status = nt.status; mudou = true; }
+        });
+        if (!mudou) return;
+        var cartao = document.getElementById('turno-itens');
+        if (!cartao || secLista.hidden) return;
+        limpar(cartao);
+        var tarefas = tarefasDoLocal(localId);
+        var proxima = proximaTarefa(localId, null);
+        tarefas.forEach(function (t, i) { cartao.appendChild(cartaoTarefa(t, i + 1, t === proxima)); });
+      })
+      .catch(function () {});
+  }
+
+  // ── Tela: "Confirme a chegada" ────────────────────────────────────────
+  function telaConfirmeChegada(local) {
+    var sec = mostrarSo(secPonto);
+    sec.appendChild(el('div', {classe: 'fc-cartao fc-chegada text-center'}, [
+      el('i', {classe: 'bi bi-door-open fc-chegada-icone', 'aria-hidden': 'true'}),
+      el('h1', {classe: 'fc-titulo', texto: 'Confirme a chegada'}),
+      el('p', {classe: 'fc-sub', texto: 'Leia o QR da entrada do ' + local.nome +
+                                          (local.entrada_nome ? ' (' + local.entrada_nome + ')' : '') + '.'}),
+      botaoLerQr()]));
   }
 
   // ── O ponto (depois de ler o QR) ──────────────────────────────────────
@@ -173,58 +302,134 @@
   // link de um aviso, o código digitado e a página recarregada abrem o ponto,
   // mas a execução fica com a hora do celular — marcada para a gestão.
   function lerNoServidor(codigo, comCamera) {
-    if (leitura && leitura.ponto === codigo) return;     // voltou ao mesmo ponto
-    leitura = {ponto: codigo, selo: null, lido_em: new Date().toISOString()};
-    if (!comCamera || navigator.onLine === false || !window.fetch) return;
-    fetch('/app/api/leitura', {method: 'POST', headers: {'Content-Type': 'application/json'},
-                               body: JSON.stringify({ponto: codigo})})
+    if (leitura && leitura.ponto === codigo) return leitura.pronta;     // voltou ao mesmo ponto
+    leitura = {ponto: codigo, selo: null, lido_em: new Date().toISOString(), comCamera: !!comCamera};
+    if (!comCamera || navigator.onLine === false || !window.fetch) {
+      leitura.pronta = Promise.resolve(null);
+      return leitura.pronta;
+    }
+    var esta = leitura;
+    esta.pronta = fetch('/app/api/leitura', {method: 'POST', headers: {'Content-Type': 'application/json'},
+                                             body: JSON.stringify({ponto: codigo})})
       .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (x) { if (x && leitura && leitura.ponto === codigo) leitura.selo = x.selo; })
-      .catch(function () { /* sem sinal: fica a hora do aparelho */ });
+      .then(function (x) { if (x && leitura === esta) esta.selo = x.selo; return esta.selo; })
+      .catch(function () { return null; /* sem sinal: fica a hora do aparelho */ });
+    return esta.pronta;
   }
 
   function abrirPonto(codigo, comCamera) {
     var p = dados.pontos[codigo];
-    secLista.hidden = true; secExec.hidden = true; secPonto.hidden = false;
-    limpar(secPonto);
     if (!p) {
-      secPonto.appendChild(el('div', {classe: 'alert alert-warning',
+      var sec = mostrarSo(secPonto);
+      sec.appendChild(el('div', {classe: 'alert alert-warning',
         texto: 'Este QR não é de um ponto dos seus locais (ou foi desativado). ' +
                'Confira a etiqueta ou avise a gestão.'}));
-      secPonto.appendChild(el('button', {type: 'button', classe: 'btn btn-outline-secondary',
-        onclick: mostrarLista}, ['Voltar ao meu turno']));
+      sec.appendChild(el('button', {type: 'button', classe: 'btn btn-outline-secondary w-100 fc-app-acao',
+        onclick: mostrarLocais}, ['Voltar ao meu turno']));
       return;
     }
     lerNoServidor(codigo, comCamera);
-    secPonto.appendChild(el('h1', {classe: 'fc-titulo', texto: p.nome}));
-    if (!leitura.selo && !comCamera) {
-      secPonto.appendChild(el('p', {classe: 'small text-muted',
-        texto: 'Aberto sem ler o QR com a câmera: o que você fizer aqui fica com a hora do ' +
-               'celular. Para valer como feito no ponto, leia o QR do local.'}));
+    var local = localDe(p.local_id);
+    if (p.entrada) { registrarChegada(p, codigo, local); return; }
+    if (exigeChegada(local)) { telaConfirmeChegada(local); return; }
+    // A tarefa da hora neste ponto, se é desta pessoa (ou sem dono): abre
+    // direto no checklist. A de outra pessoa fica na tela do ponto.
+    var agora = dados.tarefas.filter(function (t) { return t.ponto === codigo && podeFazer(t) && (t.minha || !t.escalado); })
+      .sort(function (a, b) { return Date.parse(a.previsto) - Date.parse(b.previsto); })[0];
+    if (agora) { abrirExecucao(agora, dados.versoes[agora.versao]); return; }
+    telaPonto(codigo);
+  }
+
+  // A pessoa leu o QR da ENTRADA: a chegada do dia fica registrada (com
+  // sinal, na hora; sem sinal, guardada no aparelho e enviada depois).
+  function registrarChegada(p, codigo, local) {
+    var sec = mostrarSo(secPonto);
+    sec.appendChild(el('p', {classe: 'fc-sub', role: 'status', texto: 'Registrando a chegada…'}));
+    var esta = leitura;
+    function chegou(h, guardada) {
+      if (local) local.chegada = guardada ? null : {hora: h};
+      if (guardada) marcarChegadaLocal(p.local_id, h);
+      history.replaceState(null, '', '/app/turno?local=' + p.local_id);
+      mostrarTurno(p.local_id, 'Você chegou ao ' + (local ? local.nome : p.local) + ' às ' + h +
+                                (guardada ? '. Sem sinal: a chegada ficou guardada no aparelho.' : '.'));
     }
-    secPonto.appendChild(el('p', {classe: 'fc-sub', texto: p.ambiente + ' · ' + p.local}));
+    function guardar() {
+      if (!window.TrinoFila) {
+        dizer('Sem sinal, e este aparelho não guarda envios. Tente de novo com sinal.', 'danger');
+        telaConfirmeChegada(local || {nome: p.local});
+        return;
+      }
+      var h = hora(esta.lido_em);
+      window.TrinoFila.guardar({tipo: 'chegada', rotulo: 'Chegada · ' + (local ? local.nome : p.local),
+                                corpo: {ponto: codigo, lido_em: esta.lido_em, com_camera: esta.comCamera}})
+        .then(function () { chegou(h, true); },
+              function () { dizer('Sem sinal, e não foi possível guardar. Tente de novo.', 'danger'); });
+    }
+    esta.pronta.then(function (selo) {
+      if (navigator.onLine === false) { guardar(); return; }
+      return fetch('/app/api/chegada', {method: 'POST', headers: {'Content-Type': 'application/json'},
+                                        body: JSON.stringify({ponto: codigo, selo_leitura: selo,
+                                                              com_camera: esta.comCamera})})
+        .then(function (r) {
+          if (window.TrinoFila && window.TrinoFila.ehFalhaDeConexao(r)) { guardar(); return; }
+          return r.json().then(function (x) {
+            if (!r.ok) {
+              dizer(x.error || 'Não foi possível registrar a chegada.', 'danger');
+              telaConfirmeChegada(local || {nome: p.local});
+              return;
+            }
+            chegou(x.chegada.hora, false);
+          }, guardar);
+        }, guardar);
+    });
+  }
+
+  // O ponto sem tarefa para fazer agora: o que há ali hoje (horários,
+  // preventivas, avisos do público, atividade extra).
+  function telaPonto(codigo) {
+    var p = dados.pontos[codigo];
+    var sec = mostrarSo(secPonto);
+    sec.appendChild(el('h1', {classe: 'fc-titulo', texto: p.nome}));
+    sec.appendChild(el('p', {classe: 'fc-sub', texto: p.ambiente + ' · ' + p.local}));
     if (p.descricao) {
-      secPonto.appendChild(el('div', {classe: 'fc-cartao mb-3'}, [
+      sec.appendChild(el('div', {classe: 'fc-cartao mb-3'}, [
         el('div', {classe: 'small fw-semibold text-muted', texto: 'Sobre este ponto'}),
         el('div', {texto: p.descricao})]));
     }
     var avisos = (dados.ocorrencias || []).filter(function (o) { return o.ponto === codigo; });
-    if (avisos.length) secPonto.appendChild(cartaoOcorrencias(avisos));
+    if (avisos.length) sec.appendChild(cartaoOcorrencias(avisos));
     var prevs = (dados.preventivas || []).filter(function (x) { return x.ponto === codigo; });
-    if (prevs.length) secPonto.appendChild(cartaoPreventivas(prevs));
+    if (prevs.length) sec.appendChild(cartaoPreventivas(prevs));
     var doPonto = dados.tarefas.filter(function (t) { return t.ponto === codigo; });
     var cartao = el('div', {classe: 'fc-cartao mb-3'},
       [el('h2', {classe: 'h6 fw-bold', texto: 'Tarefas deste ponto hoje'})]);
     if (!doPonto.length) cartao.appendChild(el('p', {classe: 'small text-muted mb-0',
       texto: 'Nenhuma tarefa de rota aqui hoje.'}));
-    doPonto.forEach(function (t) { cartao.appendChild(cartaoTarefa(t, true)); });
-    secPonto.appendChild(cartao);
-    var extras = (p.extras || []).map(function (vid) { return dados.versoes[vid]; })
-      .filter(Boolean);
+    doPonto.forEach(function (t) {
+      var linha = cartaoTarefa(t);
+      var s = situacao(t).cod;
+      if (s === 'prevista' || s === 'no_horario' || s === 'atrasada') {
+        var barra = el('div', {classe: 'd-flex gap-2 mt-2'});
+        if (podeFazer(t)) {
+          barra.appendChild(el('button', {type: 'button', classe: 'btn btn-primary fc-app-acao flex-grow-1',
+            onclick: function () { abrirExecucao(t, dados.versoes[t.versao]); }}, ['Fazer agora']));
+        } else {
+          var desde = new Date(Date.parse(t.previsto) - t.tolerancia * 60000).toISOString();
+          barra.appendChild(el('span', {classe: 'small text-muted align-self-center flex-grow-1',
+            texto: 'Pode ser feita a partir das ' + hora(desde) + '.'}));
+        }
+        barra.appendChild(el('button', {type: 'button', classe: 'btn btn-outline-secondary fc-app-acao',
+          onclick: function () { abrirNaoRealizada(t); }}, ['Não realizada']));
+        linha.appendChild(barra);
+      }
+      cartao.appendChild(linha);
+    });
+    sec.appendChild(cartao);
+    var extras = (p.extras || []).map(function (vid) { return dados.versoes[vid]; }).filter(Boolean);
     if (extras.length) {
-      var sel = el('select', {classe: 'form-select', id: 'extra-modelo', 'aria-label': 'Checklist'},
+      var sel = el('select', {classe: 'form-select form-select-lg', id: 'extra-modelo', 'aria-label': 'Checklist'},
         extras.map(function (v) { return el('option', {value: v.id, texto: v.modelo}); }));
-      secPonto.appendChild(el('details', {classe: 'fc-cartao mb-3'}, [
+      sec.appendChild(el('details', {classe: 'fc-cartao mb-3'}, [
         el('summary', {classe: 'fw-semibold', texto: 'Atividade extra (fora da rota)'}),
         el('p', {classe: 'small text-muted mt-2',
           texto: 'Para registrar uma limpeza ou vistoria fora do horário da rota.'}),
@@ -233,9 +438,9 @@
           onclick: function () { abrirExecucao(null, dados.versoes[sel.value]); }},
           ['Fazer atividade extra'])]));
     }
-    secPonto.appendChild(el('button', {type: 'button', classe: 'btn btn-outline-secondary w-100',
-      onclick: function () { history.replaceState(null, '', '/app/turno'); mostrarLista(); }},
-      ['Ver o turno inteiro']));
+    sec.appendChild(el('button', {type: 'button', classe: 'btn btn-outline-secondary w-100 fc-app-acao',
+      onclick: function () { history.replaceState(null, '', '/app/turno?local=' + p.local_id); mostrarTurno(p.local_id); }},
+      ['Ver o turno']));
   }
 
   // ── Preventivas deste ponto (Fase 5) ──────────────────────────────────
@@ -285,11 +490,11 @@
           }, function () { botao.disabled = false; dizer('Sem sinal: tente de novo.', 'warning'); });
       }
       if (o.status === 'aberta') {
-        var b1 = el('button', {type: 'button', classe: 'btn btn-outline-primary flex-fill', texto: 'Vou atender'});
+        var b1 = el('button', {type: 'button', classe: 'btn btn-outline-primary flex-fill fc-app-acao', texto: 'Vou atender'});
         b1.addEventListener('click', function () { agir('atender', b1); });
         barra.appendChild(b1);
       }
-      var b2 = el('button', {type: 'button', classe: 'btn btn-success flex-fill', texto: 'Resolvido'});
+      var b2 = el('button', {type: 'button', classe: 'btn btn-success flex-fill fc-app-acao', texto: 'Resolvido'});
       b2.addEventListener('click', function () { agir('resolver', b2); });
       barra.appendChild(b2);
       linha.appendChild(barra);
@@ -298,166 +503,384 @@
     return cartao;
   }
 
-  // ── O checklist ───────────────────────────────────────────────────────
-  function campoDoItem(it) {
-    var nome = 'r_' + it.codigo;
-    var titulo = el('div', {classe: 'fw-semibold mb-1', texto: it.texto + (it.obrigatorio ? ' *' : '')});
-    var corpo;
-    function botoes(opcoes) {
-      return el('div', {classe: 'd-flex gap-2', role: 'radiogroup', 'aria-label': it.texto},
-        opcoes.map(function (o) {
-          var id = nome + '_' + o[0];
-          return el('label', {classe: 'fc-opcao flex-fill', for: id}, [
-            el('input', {type: 'radio', name: nome, id: id, value: o[0], classe: 'fc-opcao-radio'}),
-            el('span', {texto: o[1]})]);
-        }));
-    }
-    if (it.tipo === 'sim_nao') corpo = botoes([['sim', 'Sim'], ['nao', 'Não']]);
-    else if (it.tipo === 'conforme') corpo = botoes([['conforme', 'Conforme'], ['nao_conforme', 'Não conforme']]);
-    else if (it.tipo === 'numero') {
-      var faixa = (it.minimo !== null && it.minimo !== undefined ? 'de ' + it.minimo : '') +
-                  (it.maximo !== null && it.maximo !== undefined ? ' até ' + it.maximo : '');
-      corpo = el('div', {}, [el('input', {classe: 'form-control form-control-lg', name: nome,
-        inputmode: 'decimal', 'aria-label': it.texto}),
-        faixa ? el('div', {classe: 'form-text', texto: 'Aceitável: ' + faixa.trim()}) : null]);
-    } else if (it.tipo === 'escolha') {
-      corpo = el('select', {classe: 'form-select form-select-lg', name: nome, 'aria-label': it.texto},
-        [el('option', {value: '', texto: 'Escolha'})].concat(
-          (it.opcoes || []).map(function (o) { return el('option', {value: o, texto: o}); })));
-    } else if (it.tipo === 'data_hora') {
-      corpo = el('input', {type: 'datetime-local', classe: 'form-control form-control-lg',
-                           name: nome, 'aria-label': it.texto});
-    } else {
-      corpo = el('input', {classe: 'form-control form-control-lg', name: nome, maxlength: '300',
-                           'aria-label': it.texto});
-    }
-    // "Como fazer" e a foto de como deve ficar, cadastrados no checklist.
-    var ajuda = [];
-    if (it.como_fazer) ajuda.push(el('div', {classe: 'small fc-como-fazer', texto: it.como_fazer}));
-    if (it.foto_ref_url) {
-      ajuda.push(el('img', {classe: 'fc-ref', src: it.foto_ref_url, loading: 'lazy',
-                            alt: 'Como deve ficar: ' + it.texto}));
-    }
-    var bloco = el('div', {classe: 'fc-cartao mb-2 fc-item', 'data-codigo': it.codigo},
-                   [titulo].concat(ajuda, [corpo]));
-    if (it.exige_foto) bloco.appendChild(campoFoto('item:' + it.codigo, 'Foto deste item *'));
-    return bloco;
+  // ── A execução: antes → um check por item → depois → Pronto ───────────
+  // A resposta "boa" de um item de marcar (o check verde).
+  function respostaFeito(it) {
+    if (it.tipo === 'conforme') return 'conforme';
+    return it.problema_se === 'sim' ? 'nao' : 'sim';
   }
-
-  function campoFoto(chave, rotulo) {
-    var id = 'f_' + chave.replace(/[^a-z0-9]/gi, '_');
-    var estado = el('span', {classe: 'small text-muted', texto: 'Nenhuma foto ainda.'});
-    var entrada = el('input', {type: 'file', accept: 'image/*', capture: 'environment', id: id,
-                               classe: 'fc-foto-input', 'data-foto': chave});
-    entrada.addEventListener('change', function () {
-      estado.textContent = entrada.files.length ? 'Foto pronta.' : 'Nenhuma foto ainda.';
-      estado.className = 'small ' + (entrada.files.length ? 'text-success fw-semibold' : 'text-muted');
-    });
-    return el('div', {classe: 'mt-2 fc-foto'}, [
-      el('div', {classe: 'form-label small fw-semibold', texto: rotulo}),
-      entrada,
-      el('label', {classe: 'btn btn-outline-primary fc-app-acao w-100', for: id},
-         [el('i', {classe: 'bi bi-camera'}), ' Tirar foto']),
-      estado]);
-  }
-
-  function valores(form) {
-    var r = {};
-    [].slice.call(form.elements).forEach(function (c) {
-      if (!c.name || c.name.indexOf('r_') !== 0) return;
-      if ((c.type === 'radio' || c.type === 'checkbox') && !c.checked) return;
-      r[c.name.slice(2)] = c.value;
-    });
-    return r;
-  }
-
-  function aplicarCondicoes(form, itens) {
-    var r = valores(form);
-    itens.forEach(function (it) {
-      if (!it.mostrar_se) return;
-      var bloco = form.querySelector('[data-codigo="' + it.codigo + '"]');
-      var ver = String(r[it.mostrar_se.codigo] || '').toLowerCase() ===
-                String(it.mostrar_se.valor || '').toLowerCase();
-      if (bloco) bloco.hidden = !ver;
-    });
-  }
+  function ehDeMarcar(it) { return it.tipo === 'sim_nao' || it.tipo === 'conforme'; }
 
   function abrirExecucao(tarefa, versao, prev) {
     if (!versao) { dizer('Checklist não encontrado. Recarregue com sinal.', 'warning'); return; }
     var codigo = tarefa ? tarefa.ponto : (leitura && leitura.ponto);
     if (!leitura || leitura.ponto !== codigo) lerNoServidor(codigo);
     var inicio = new Date().toISOString();
-    secLista.hidden = true; secPonto.hidden = true; secExec.hidden = false;
-    limpar(secExec);
+    var p = dados.pontos[codigo] || {nome: tarefa ? tarefa.ponto_nome : '', local_id: tarefa ? tarefa.local_id : null};
+    var sec = mostrarSo(secExec);
     dizer('');
-    var p = dados.pontos[codigo] || {nome: tarefa ? tarefa.ponto_nome : ''};
-    secExec.appendChild(el('h1', {classe: 'fc-titulo', texto: versao.modelo}));
-    secExec.appendChild(el('p', {classe: 'fc-sub', texto: p.nome + (tarefa ? ' · ' + tarefa.hora : prev ? ' · preventiva ' + prev.numero : ' · atividade extra')}));
+    var estado = {respostas: {}, motivos: {}, fotos: {}, motivo_atraso: null, motivo_atraso_texto: null};
+    var linhas = {};
+
+    sec.appendChild(el('h1', {classe: 'fc-titulo', texto: p.nome}));
+    sec.appendChild(el('p', {classe: 'fc-sub fc-exec-sub', texto:
+      versao.modelo + (tarefa ? ' das ' + tarefa.hora : prev ? ' · preventiva ' + prev.numero : ' · atividade extra') +
+      (tarefa && tarefa.tempo_previsto_min ? ' · Previsto: ' + tarefa.tempo_previsto_min + ' min' : '')}));
+    if (leitura && !leitura.comCamera && !leitura.selo) {
+      sec.appendChild(el('p', {classe: 'small text-muted fc-exec-sem-selo',
+        texto: 'Aberto sem ler o QR com a câmera: fica com a hora do celular.'}));
+    }
+
+    var form = el('form', {novalidate: true, classe: 'fc-exec'});
+    var passo = 0;
+    function titulo(texto) { passo += 1; return el('h2', {classe: 'fc-exec-passo', texto: passo + '. ' + texto}); }
+
+    if (versao.foto_antes) {
+      form.appendChild(titulo('Foto do antes'));
+      form.appendChild(blocoFoto('antes', 'Tirar a foto do antes', estado, atualizar));
+    }
+    form.appendChild(titulo(versao.foto_antes || versao.foto_depois ? 'O que fazer' : 'Checklist'));
+    var lista = el('div', {classe: 'fc-itens'});
+    versao.itens.forEach(function (it) {
+      var linha = linhaDoItem(it, estado, atualizar, p);
+      linhas[it.codigo] = linha;
+      lista.appendChild(linha);
+    });
+    form.appendChild(lista);
+    if (versao.foto_depois) {
+      form.appendChild(titulo('Foto do depois'));
+      form.appendChild(blocoFoto('depois', 'Tirar a foto do depois', estado, atualizar));
+    }
+    var obs = el('textarea', {classe: 'form-control', id: 'obs', name: 'observacao', rows: '2',
+                              'aria-label': 'Observação'});
+    form.appendChild(el('details', {classe: 'fc-exec-obs mb-3'}, [
+      el('summary', {classe: 'small fw-semibold', texto: 'Quer anotar algo? (opcional)'}), obs]));
     var docs = versao.documentos || [];
     if (versao.procedimento || docs.length) {
-      // O resumo do POP/FIT, escrito pela gestão; o documento completo abre à parte.
-      secExec.appendChild(el('details', {classe: 'fc-cartao mb-2 fc-procedimento'}, [
-        el('summary', {classe: 'fw-semibold', texto: 'Como fazer (resumo do POP)'}),
-        versao.procedimento ? el('div', {classe: 'mt-2 fc-texto-livre', texto: versao.procedimento}) : null,
+      form.appendChild(el('details', {classe: 'fc-exec-obs mb-3 fc-procedimento'}, [
+        el('summary', {classe: 'small fw-semibold', texto: 'Ver o procedimento (POP)'}),
+        versao.procedimento ? el('div', {classe: 'mt-2 fc-texto-livre small', texto: versao.procedimento}) : null,
         docs.length ? el('div', {classe: 'mt-2 d-flex flex-wrap gap-2'}, docs.map(function (d) {
           return el('a', {classe: 'btn btn-sm btn-outline-primary', href: d.url, target: '_blank',
                           rel: 'noopener', texto: 'Ver o POP completo: ' + d.nome});
         })) : null]));
     }
-    var form = el('form', {novalidate: true});
-    if (versao.foto_antes) form.appendChild(el('div', {classe: 'fc-cartao mb-2'}, [campoFoto('antes', 'Foto de ANTES *')]));
-    versao.itens.forEach(function (it) { form.appendChild(campoDoItem(it)); });
-    form.appendChild(el('div', {classe: 'fc-cartao mb-2'}, [
-      el('label', {classe: 'form-label small fw-semibold', for: 'obs', texto: 'Observação (opcional)'}),
-      el('textarea', {classe: 'form-control', id: 'obs', name: 'observacao', rows: '2'})]));
-    if (versao.foto_depois) form.appendChild(el('div', {classe: 'fc-cartao mb-2'}, [campoFoto('depois', 'Foto de DEPOIS *')]));
-    var confirmar = el('button', {type: 'submit', classe: 'btn btn-primary btn-lg w-100 fc-app-acao'},
-      [el('i', {classe: 'bi bi-check-circle'}), ' Confirmar']);
-    form.appendChild(confirmar);
+    var pronto = el('button', {type: 'submit', classe: 'btn btn-success btn-lg w-100 fc-app-acao fc-pronto', disabled: true},
+      [el('i', {classe: 'bi bi-check-circle'}), ' Pronto']);
+    var faltam = el('p', {classe: 'small text-muted text-center mt-2 fc-faltam', role: 'status'});
+    form.appendChild(pronto);
+    form.appendChild(faltam);
+    var outras = (dados.preventivas || []).filter(function (x) { return x.ponto === codigo; }).length +
+                 (dados.ocorrencias || []).filter(function (o) { return o.ponto === codigo; }).length;
     form.appendChild(el('button', {type: 'button', classe: 'btn btn-link w-100 mt-1',
-      onclick: function () { codigo ? abrirPonto(codigo) : mostrarLista(); }}, ['Cancelar']));
-    form.addEventListener('change', function () { aplicarCondicoes(form, versao.itens); });
-    aplicarCondicoes(form, versao.itens);
+      onclick: function () { codigo ? telaPonto(codigo) : mostrarLocais(); }},
+      [outras ? 'Outras coisas neste ponto (' + outras + ')' : 'Voltar']));
+
+    function visivel(it) {
+      var se = it.mostrar_se;
+      if (!se) return true;
+      return String(estado.respostas[se.codigo] || '').toLowerCase() === String(se.valor || '').toLowerCase();
+    }
+    function faltantes() {
+      var lista = [];
+      if (versao.foto_antes && !estado.fotos.antes) lista.push('a foto do antes');
+      var n = 0;
+      versao.itens.forEach(function (it) {
+        var linha = linhas[it.codigo];
+        var ver = visivel(it);
+        linha.hidden = !ver;
+        if (!ver) return;
+        var r = String(estado.respostas[it.codigo] || '').trim();
+        if (!r) { n += 1; return; }
+        if (it.exige_foto && r !== 'nao_feito' && !estado.fotos['item:' + it.codigo]) n += 1;
+      });
+      if (n) lista.push(n + (n > 1 ? ' itens' : ' item'));
+      if (versao.foto_depois && !estado.fotos.depois) lista.push('a foto do depois');
+      return lista;
+    }
+    function atualizar() {
+      var f = faltantes();
+      pronto.disabled = f.length > 0;
+      var frase = f.length > 1 ? f.slice(0, -1).join(', ') + ' e ' + f[f.length - 1] : f[0];
+      faltam.textContent = f.length ? ('Falta' + (f.length > 1 || /itens/.test(f[0]) ? 'm ' : ' ') + frase) : 'Tudo respondido.';
+    }
     form.addEventListener('submit', function (ev) {
       ev.preventDefault();
-      enviar(form, tarefa, versao, codigo, inicio, confirmar, prev);
+      if (faltantes().length) { atualizar(); return; }
+      enviar(form, tarefa, versao, codigo, inicio, pronto, prev, estado, visivel, obs);
     });
-    secExec.appendChild(form);
-    window.scrollTo(0, 0);
+    sec.appendChild(form);
+    atualizar();
   }
 
-  function faltando(form, versao) {
-    var r = valores(form);
-    for (var i = 0; i < versao.itens.length; i++) {
-      var it = versao.itens[i];
-      var bloco = form.querySelector('[data-codigo="' + it.codigo + '"]');
-      if (bloco && bloco.hidden) continue;
-      if (it.obrigatorio && !String(r[it.codigo] || '').trim()) return 'Responda: "' + it.texto + '".';
-      if (it.exige_foto) {
-        var f = form.querySelector('[data-foto="item:' + it.codigo + '"]');
-        if (f && !f.files.length) return 'Tire a foto de "' + it.texto + '".';
+  // O botão grande de foto: um toque abre a câmera.
+  function blocoFoto(chave, rotulo, estado, atualizar) {
+    var id = 'f_' + chave.replace(/[^a-z0-9]/gi, '_');
+    var entrada = el('input', {type: 'file', accept: 'image/*', capture: 'environment', id: id,
+                               classe: 'fc-foto-input', 'data-foto': chave});
+    var botao = el('label', {classe: 'btn btn-outline-primary btn-lg w-100 fc-app-acao fc-foto-botao', for: id},
+      [el('i', {classe: 'bi bi-camera'}), ' ' + rotulo]);
+    entrada.addEventListener('change', function () {
+      estado.fotos[chave] = entrada.files.length ? entrada.files[0] : null;
+      botao.className = 'btn btn-lg w-100 fc-app-acao fc-foto-botao ' + (entrada.files.length ? 'btn-success' : 'btn-outline-primary');
+      limpar(botao);
+      botao.appendChild(el('i', {classe: entrada.files.length ? 'bi bi-check-circle-fill' : 'bi bi-camera'}));
+      botao.appendChild(document.createTextNode(' ' + (entrada.files.length ? 'Foto pronta · trocar' : rotulo)));
+      atualizar();
+    });
+    return el('div', {classe: 'fc-foto mb-3'}, [entrada, botao]);
+  }
+
+  // Uma linha do checklist: [check] texto [i] [Não deu]. Item de marcar:
+  // toca → verde ("Feito"); com foto exigida, o check só fica verde com a
+  // foto. Número, texto, escolha e data continuam como campo (exceção).
+  function linhaDoItem(it, estado, atualizar, p) {
+    var linha = el('div', {classe: 'fc-item', 'data-codigo': it.codigo});
+    var marcado = el('span', {classe: 'fc-item-estado', 'aria-live': 'polite'});
+    var check = null, campo = null, fotoEntrada = null;
+    var topo = el('div', {classe: 'fc-item-topo'});
+    function pintar() {
+      var r = estado.respostas[it.codigo];
+      linha.classList.remove('fc-item-feito', 'fc-item-naodeu');
+      marcado.textContent = '';
+      if (r === 'nao_feito') {
+        linha.classList.add('fc-item-naodeu');
+        var m = estado.motivos[it.codigo] || {};
+        marcado.textContent = 'Não deu: ' + (m.rotulo || dados.motivos_nao_feito[m.motivo] || '') +
+                              (m.texto && m.motivo === 'outro' ? ' — ' + m.texto : '') +
+                              (m.material_nome ? ' — ' + m.material_nome : '');
+      } else if (r) {
+        if (!it.exige_foto || estado.fotos['item:' + it.codigo]) {
+          linha.classList.add('fc-item-feito');
+          marcado.textContent = ehDeMarcar(it) ? 'Feito' : '';
+        } else {
+          marcado.textContent = 'Falta a foto';
+        }
       }
+      if (check) {
+        var feito = linha.classList.contains('fc-item-feito');
+        check.setAttribute('aria-pressed', feito ? 'true' : 'false');
+        check.className = 'fc-check' + (feito ? ' fc-check-feito' : '');
+        limpar(check);
+        check.appendChild(el('i', {classe: feito ? 'bi bi-check-lg' : 'bi bi-circle', 'aria-hidden': 'true'}));
+      }
+      atualizar();
     }
-    var antes = form.querySelector('[data-foto="antes"]');
-    if (antes && !antes.files.length) return 'Tire a foto de ANTES.';
-    var depois = form.querySelector('[data-foto="depois"]');
-    if (depois && !depois.files.length) return 'Tire a foto de DEPOIS.';
-    return null;
+    if (ehDeMarcar(it)) {
+      check = el('button', {type: 'button', classe: 'fc-check', 'aria-pressed': 'false',
+                            'aria-label': 'Feito: ' + it.texto});
+      if (it.exige_foto) {
+        fotoEntrada = el('input', {type: 'file', accept: 'image/*', capture: 'environment',
+                                   classe: 'fc-foto-input', 'data-foto': 'item:' + it.codigo,
+                                   id: 'f_item_' + it.codigo, 'aria-label': 'Foto: ' + it.texto});
+        fotoEntrada.addEventListener('change', function () {
+          estado.fotos['item:' + it.codigo] = fotoEntrada.files.length ? fotoEntrada.files[0] : null;
+          if (fotoEntrada.files.length) estado.respostas[it.codigo] = respostaFeito(it);
+          pintar();
+        });
+        linha.appendChild(fotoEntrada);
+      }
+      check.addEventListener('click', function () {
+        if (linha.classList.contains('fc-item-feito')) {
+          delete estado.respostas[it.codigo];
+          delete estado.fotos['item:' + it.codigo];
+          if (fotoEntrada) fotoEntrada.value = '';
+          pintar();
+          return;
+        }
+        delete estado.motivos[it.codigo];
+        if (it.exige_foto) {
+          // O check só fica verde com a foto: um toque abre a câmera.
+          fotoEntrada.click();
+          return;
+        }
+        estado.respostas[it.codigo] = respostaFeito(it);
+        pintar();
+      });
+      topo.appendChild(check);
+    }
+    topo.appendChild(el('div', {classe: 'fc-item-texto'}, [
+      el('span', {texto: it.texto}), marcado]));
+    if (it.como_fazer || it.foto_ref_url) {
+      var ajuda = el('div', {classe: 'fc-item-ajuda', hidden: true}, [
+        it.como_fazer ? el('div', {classe: 'small fc-como-fazer', texto: it.como_fazer}) : null,
+        it.foto_ref_url ? el('img', {classe: 'fc-ref', src: it.foto_ref_url, loading: 'lazy',
+                                     alt: 'Como deve ficar: ' + it.texto}) : null]);
+      var info = el('button', {type: 'button', classe: 'fc-item-info', 'aria-label': 'Como fazer: ' + it.texto,
+                               'aria-expanded': 'false'}, [el('i', {classe: 'bi bi-info-circle', 'aria-hidden': 'true'})]);
+      info.addEventListener('click', function () {
+        ajuda.hidden = !ajuda.hidden;
+        info.setAttribute('aria-expanded', ajuda.hidden ? 'false' : 'true');
+      });
+      topo.appendChild(info);
+      linha.appendChild(topo);
+      linha.appendChild(ajuda);
+    } else {
+      linha.appendChild(topo);
+    }
+    var naoDeu = el('button', {type: 'button', classe: 'btn btn-sm btn-outline-secondary fc-naodeu', texto: 'Não deu'});
+    naoDeu.addEventListener('click', function () {
+      folhaNaoDeu(it, p, function (motivo) {
+        if (!motivo) return;
+        estado.motivos[it.codigo] = motivo;
+        estado.respostas[it.codigo] = 'nao_feito';
+        delete estado.fotos['item:' + it.codigo];
+        if (fotoEntrada) fotoEntrada.value = '';
+        if (campo) campo.value = '';
+        pintar();
+      });
+    });
+    topo.appendChild(naoDeu);
+    if (!ehDeMarcar(it)) {
+      var nome = 'r_' + it.codigo;
+      if (it.tipo === 'numero') {
+        var faixa = (it.minimo !== null && it.minimo !== undefined ? 'de ' + it.minimo : '') +
+                    (it.maximo !== null && it.maximo !== undefined ? ' até ' + it.maximo : '');
+        campo = el('input', {classe: 'form-control form-control-lg', name: nome, inputmode: 'decimal', 'aria-label': it.texto,
+                             placeholder: faixa ? 'Aceitável: ' + faixa.trim() : ''});
+      } else if (it.tipo === 'escolha') {
+        campo = el('select', {classe: 'form-select form-select-lg', name: nome, 'aria-label': it.texto},
+          [el('option', {value: '', texto: 'Escolha'})].concat(
+            (it.opcoes || []).map(function (o) { return el('option', {value: o, texto: o}); })));
+      } else if (it.tipo === 'data_hora') {
+        campo = el('input', {type: 'datetime-local', classe: 'form-control form-control-lg', name: nome, 'aria-label': it.texto});
+      } else {
+        campo = el('input', {classe: 'form-control form-control-lg', name: nome, maxlength: '300', 'aria-label': it.texto});
+      }
+      campo.addEventListener('input', function () {
+        if (campo.value.trim()) { estado.respostas[it.codigo] = campo.value.trim(); delete estado.motivos[it.codigo]; }
+        else delete estado.respostas[it.codigo];
+        pintar();
+      });
+      campo.addEventListener('change', function () { campo.dispatchEvent(new Event('input')); });
+      var corpo = el('div', {classe: 'fc-item-campo'}, [campo]);
+      if (it.exige_foto) {
+        fotoEntrada = el('input', {type: 'file', accept: 'image/*', capture: 'environment',
+                                   classe: 'fc-foto-input', 'data-foto': 'item:' + it.codigo,
+                                   id: 'f_item_' + it.codigo});
+        var botaoFoto = el('label', {classe: 'btn btn-outline-primary fc-app-acao w-100 mt-2', for: 'f_item_' + it.codigo},
+          [el('i', {classe: 'bi bi-camera'}), ' Foto deste item']);
+        fotoEntrada.addEventListener('change', function () {
+          estado.fotos['item:' + it.codigo] = fotoEntrada.files.length ? fotoEntrada.files[0] : null;
+          botaoFoto.className = 'btn fc-app-acao w-100 mt-2 ' + (fotoEntrada.files.length ? 'btn-success' : 'btn-outline-primary');
+          pintar();
+        });
+        corpo.appendChild(fotoEntrada);
+        corpo.appendChild(botaoFoto);
+      }
+      linha.appendChild(corpo);
+    }
+    return linha;
   }
 
-  function enviar(form, tarefa, versao, codigo, inicio, botao, prev) {
-    var erro = faltando(form, versao);
-    if (erro) { dizer(erro, 'warning'); return; }
+  // "Não deu" de um item: a folha com os motivos. "Faltou material" abre o
+  // catálogo do local; "Outro" pede o texto.
+  function folhaNaoDeu(it, p, devolver) {
+    var folha = el('div', {classe: 'fc-folha', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Não deu: ' + it.texto});
+    var caixa = el('div', {classe: 'fc-folha-caixa'});
+    folha.appendChild(caixa);
+    function fechar(motivo) { folha.remove(); document.body.classList.remove('fc-folha-aberta'); devolver(motivo || null); }
+    function inicio() {
+      limpar(caixa);
+      caixa.appendChild(el('h2', {classe: 'h5 fw-bold', texto: 'Não deu: ' + it.texto}));
+      caixa.appendChild(el('p', {classe: 'small text-muted', texto: 'O que aconteceu?'}));
+      (dados.motivos_nao_feito_ordem || Object.keys(dados.motivos_nao_feito)).forEach(function (k) {
+        var b = el('button', {type: 'button', classe: 'btn btn-outline-dark btn-lg w-100 fc-app-acao mb-2 fc-motivo',
+                              'data-motivo': k, texto: dados.motivos_nao_feito[k]});
+        b.addEventListener('click', function () {
+          if (k === 'faltou_material') { material(); return; }
+          if (k === 'outro') { outro(); return; }
+          fechar({motivo: k, rotulo: dados.motivos_nao_feito[k]});
+        });
+        caixa.appendChild(b);
+      });
+      caixa.appendChild(el('button', {type: 'button', classe: 'btn btn-link w-100', onclick: function () { fechar(null); }}, ['Cancelar']));
+    }
+    function outro() {
+      limpar(caixa);
+      caixa.appendChild(el('h2', {classe: 'h5 fw-bold', texto: 'Não deu: ' + it.texto}));
+      var campo = el('input', {classe: 'form-control form-control-lg mb-2', maxlength: '300', 'aria-label': 'O que aconteceu',
+                               placeholder: 'Conte em poucas palavras'});
+      var erro = el('p', {classe: 'small text-danger', hidden: true, texto: 'Escreva o que aconteceu.'});
+      caixa.appendChild(campo);
+      caixa.appendChild(erro);
+      caixa.appendChild(el('button', {type: 'button', classe: 'btn btn-primary btn-lg w-100 fc-app-acao mb-2', onclick: function () {
+        if (!campo.value.trim()) { erro.hidden = false; return; }
+        fechar({motivo: 'outro', texto: campo.value.trim(), rotulo: dados.motivos_nao_feito.outro});
+      }}, ['Confirmar']));
+      caixa.appendChild(el('button', {type: 'button', classe: 'btn btn-link w-100', onclick: inicio}, ['Voltar']));
+      campo.focus();
+    }
+    function material() {
+      limpar(caixa);
+      caixa.appendChild(el('h2', {classe: 'h5 fw-bold', texto: 'Faltou qual material?'}));
+      var sel = el('select', {classe: 'form-select form-select-lg mb-2', 'aria-label': 'Material'},
+        [el('option', {value: '', texto: 'Carregando o catálogo…'})]);
+      var livre = el('input', {classe: 'form-control form-control-lg mb-2', maxlength: '300', 'aria-label': 'Qual material',
+                               placeholder: 'Ou escreva o que faltou', hidden: true});
+      caixa.appendChild(sel);
+      caixa.appendChild(livre);
+      function preencher(lista) {
+        limpar(sel);
+        sel.appendChild(el('option', {value: '', texto: 'Escolha o material'}));
+        lista.forEach(function (m) { sel.appendChild(el('option', {value: m.id, texto: m.nome + (m.unidade ? ' (' + m.unidade + ')' : '')})); });
+        sel.appendChild(el('option', {value: 'livre', texto: 'Não está na lista / não sei'}));
+      }
+      catalogo(p.local_id).then(function (lista) {
+        if (lista && lista.length) { preencher(lista); return; }
+        limpar(sel);
+        sel.appendChild(el('option', {value: 'livre', texto: 'Escrever o que faltou'}));
+        livre.hidden = false;
+      });
+      sel.addEventListener('change', function () { livre.hidden = sel.value !== 'livre'; });
+      var erro = el('p', {classe: 'small text-danger', hidden: true, texto: 'Escolha o material ou escreva o que faltou.'});
+      caixa.appendChild(erro);
+      caixa.appendChild(el('button', {type: 'button', classe: 'btn btn-primary btn-lg w-100 fc-app-acao mb-2', onclick: function () {
+        var m = {motivo: 'faltou_material', rotulo: dados.motivos_nao_feito.faltou_material};
+        if (sel.value && sel.value !== 'livre') {
+          m.material_id = parseInt(sel.value, 10);
+          m.material_nome = sel.options[sel.selectedIndex].textContent;
+        } else if (livre.value.trim()) {
+          m.texto = livre.value.trim();
+          m.material_nome = m.texto;
+        } else { erro.hidden = false; return; }
+        fechar(m);
+      }}, ['Confirmar']));
+      caixa.appendChild(el('button', {type: 'button', classe: 'btn btn-link w-100', onclick: inicio}, ['Voltar']));
+    }
+    inicio();
+    document.body.appendChild(folha);
+    document.body.classList.add('fc-folha-aberta');
+    var primeiro = caixa.querySelector('button');
+    if (primeiro) primeiro.focus();
+  }
+
+  function catalogo(localId) {
+    if (materiaisPorLocal[localId]) return Promise.resolve(materiaisPorLocal[localId]);
+    if (navigator.onLine === false || !localId) return Promise.resolve([]);
+    return fetch('/app/api/materiais?local=' + encodeURIComponent(localId), {credentials: 'same-origin'})
+      .then(function (r) { return r.ok ? r.json() : []; })
+      .then(function (lista) { materiaisPorLocal[localId] = lista; return lista; })
+      .catch(function () { return []; });
+  }
+
+  // ── Envio ─────────────────────────────────────────────────────────────
+  function enviar(form, tarefa, versao, codigo, inicio, botao, prev, estado, visivel, obs) {
     botao.disabled = true;
-    var respostas = valores(form);
-    // Respostas de perguntas escondidas não vão (a condição não se cumpriu).
+    var respostas = {}, motivos = {};
     versao.itens.forEach(function (it) {
-      var b = form.querySelector('[data-codigo="' + it.codigo + '"]');
-      if (b && b.hidden) delete respostas[it.codigo];
+      if (!visivel(it)) return;      // a condição não se cumpriu: não vai
+      var r = estado.respostas[it.codigo];
+      if (r === undefined || r === null || r === '') return;
+      respostas[it.codigo] = r;
+      if (r === 'nao_feito') {
+        var m = estado.motivos[it.codigo] || {};
+        motivos[it.codigo] = {motivo: m.motivo, texto: m.texto || null, material_id: m.material_id || null};
+      }
     });
     var corpo = {
-      envio_id: novoId(), ponto: codigo, respostas: respostas,
-      observacao: form.querySelector('[name=observacao]').value,
+      envio_id: novoId(), ponto: codigo, respostas: respostas, motivos: motivos,
+      observacao: obs.value,
       selo_leitura: leitura && leitura.ponto === codigo ? leitura.selo : null,
       lido_em: leitura && leitura.ponto === codigo ? leitura.lido_em : inicio,
       concluida_em: new Date().toISOString(),
@@ -465,15 +888,12 @@
     };
     if (tarefa) corpo.tarefa_id = tarefa.id; else corpo.versao_id = versao.id;
     if (prev) corpo.chamado_id = prev.id;
-    var entradas = [].slice.call(form.querySelectorAll('[data-foto]'));
+    var fotos = Object.keys(estado.fotos).filter(function (k) { return estado.fotos[k]; })
+      .map(function (k) { return {campo: k, arquivo: estado.fotos[k]}; });
     var reduzir = window.TrinoFoto ? window.TrinoFoto.reduzirTodos : function (fs) { return Promise.resolve(fs); };
-    Promise.all(entradas.map(function (e) {
-      return reduzir([].slice.call(e.files || [])).then(function (fs) {
-        return fs.map(function (f) { return {campo: e.getAttribute('data-foto'), arquivo: f}; });
-      });
-    })).then(function (listas) {
-      var fotos = [].concat.apply([], listas);
-      return mandar(corpo, fotos).then(function (res) { concluir(res, tarefa, codigo, corpo, fotos, botao, prev); });
+    reduzir(fotos.map(function (f) { return f.arquivo; })).then(function (leves) {
+      var prontas = fotos.map(function (f, i) { return {campo: f.campo, arquivo: leves[i] || f.arquivo}; });
+      return mandar(corpo, prontas).then(function (res) { concluir(res, tarefa, codigo, corpo, prontas, botao, prev); });
     });
   }
 
@@ -495,6 +915,7 @@
   }
 
   function concluir(res, tarefa, codigo, corpo, fotos, botao, prev) {
+    var p = dados.pontos[codigo] || {nome: tarefa ? tarefa.ponto_nome : '', local_id: tarefa ? tarefa.local_id : null};
     function tirarPreventiva() {
       if (!prev) return;
       dados.preventivas = (dados.preventivas || []).filter(function (x) { return x.id !== prev.id; });
@@ -508,14 +929,12 @@
       // Sem sinal: a hora da conclusão é a do aparelho, e a execução vai
       // marcada assim.
       corpo.sem_sinal = true;
-      window.TrinoFila.guardar({tipo: 'execucao', rotulo: (tarefa ? tarefa.hora + ' · ' : '') +
-                                 (dados.pontos[codigo] || {}).nome,
+      window.TrinoFila.guardar({tipo: 'execucao', rotulo: (tarefa ? tarefa.hora + ' · ' : '') + p.nome,
                                 tarefa_id: tarefa ? tarefa.id : null,
                                 corpo: corpo, fotos: fotos}).then(function () {
         if (tarefa) marcarFeita(tarefa.id, 'Guardada no aparelho');
         tirarPreventiva();
-        dizer('Sem sinal: a execução ficou guardada no aparelho e sobe sozinha quando o sinal voltar.', 'warning');
-        mostrarLista();
+        telaDepois(tarefa, p, null, true);
       }, function () {
         botao.disabled = false;
         dizer('Sem sinal, e não foi possível guardar. Não feche a tela; tente de novo.', 'danger');
@@ -523,41 +942,120 @@
       return;
     }
     if (!res.ok) {
+      var x = res.x || {};
+      if (x.motivo === 'motivo_atraso') {
+        telaAtraso(x.extra || {}, function (motivo, texto) {
+          corpo.motivo_atraso = motivo;
+          corpo.motivo_atraso_texto = texto || null;
+          mandar(corpo, fotos).then(function (r2) { concluir(r2, tarefa, codigo, corpo, fotos, botao, prev); });
+        }, function () { botao.disabled = false; secExec.hidden = false; secPonto.hidden = true; });
+        return;
+      }
+      if (x.motivo === 'sem_chegada') {
+        telaConfirmeChegada(localDe(p.local_id) || {nome: p.local || ''});
+        return;
+      }
       botao.disabled = false;
-      dizer(res.x.error || 'Não foi possível registrar.', 'danger');
+      dizer(x.error || 'Não foi possível registrar.', 'danger');
       return;
     }
     if (tarefa) { tarefa.status = res.x.status; }
     tirarPreventiva();
-    dizer('Registrado: ' + res.x.situacao + '.' +
-          (res.x.nao_conformes ? ' ' + res.x.nao_conformes + ' item(ns) não conforme(s): chamado aberto para a gestão.' : ''),
-          res.x.nao_conformes ? 'warning' : 'success');
-    if (codigo) abrirPonto(codigo); else mostrarLista();
+    telaDepois(tarefa, p, res.x, false);
+  }
+
+  // ── Tela: levou mais que o previsto ───────────────────────────────────
+  function telaAtraso(extra, devolver, cancelar) {
+    var sec = mostrarSo(secPonto);
+    secExec.hidden = true;
+    sec.appendChild(el('h1', {classe: 'fc-titulo', texto: 'Esta limpeza levou ' + extra.duracao_min + ' min; o previsto era ' +
+                                                          extra.previsto_min + '.'}));
+    sec.appendChild(el('p', {classe: 'fc-sub', texto: 'O que aconteceu?'}));
+    var caixa = el('div', {classe: 'fc-cartao'});
+    var texto = el('input', {classe: 'form-control form-control-lg mb-2', maxlength: '300', hidden: true,
+                             'aria-label': 'O que aconteceu', placeholder: 'Conte em poucas palavras'});
+    var erro = el('p', {classe: 'small text-danger', hidden: true, texto: 'Escreva o que aconteceu.'});
+    (dados.motivos_atraso_ordem || Object.keys(dados.motivos_atraso)).forEach(function (k) {
+      var b = el('button', {type: 'button', classe: 'btn btn-outline-dark btn-lg w-100 fc-app-acao mb-2 fc-motivo',
+                            'data-motivo': k, texto: dados.motivos_atraso[k]});
+      b.addEventListener('click', function () {
+        if (k !== 'outro') { devolver(k, null); return; }
+        texto.hidden = false;
+        texto.focus();
+        confirmar.hidden = false;
+      });
+      caixa.appendChild(b);
+    });
+    var confirmar = el('button', {type: 'button', classe: 'btn btn-primary btn-lg w-100 fc-app-acao mb-2', hidden: true,
+      onclick: function () {
+        if (!texto.value.trim()) { erro.hidden = false; return; }
+        devolver('outro', texto.value.trim());
+      }}, ['Confirmar']);
+    caixa.appendChild(texto);
+    caixa.appendChild(erro);
+    caixa.appendChild(confirmar);
+    caixa.appendChild(el('button', {type: 'button', classe: 'btn btn-link w-100', onclick: function () { secPonto.hidden = true; cancelar(); }}, ['Voltar']));
+    sec.appendChild(caixa);
+  }
+
+  // ── Tela: depois do "Pronto" — a próxima tarefa ───────────────────────
+  function telaDepois(tarefa, p, resposta, guardada) {
+    var sec = mostrarSo(secPonto);
+    var h = hora();
+    var cartao = el('div', {classe: 'fc-cartao fc-pronto-feito text-center mb-3'}, [
+      el('i', {classe: 'bi bi-check-circle-fill fc-pronto-icone', 'aria-hidden': 'true'}),
+      el('h1', {classe: 'fc-titulo', texto: 'Pronto. ' + p.nome + ' feito às ' + h + '.'})]);
+    if (guardada) {
+      cartao.appendChild(el('p', {classe: 'small text-muted mb-0', texto: 'Guardada no aparelho: sobe sozinha quando o sinal voltar.'}));
+    } else if (resposta) {
+      if (resposta.situacao && !tarefa) cartao.appendChild(el('p', {classe: 'small text-muted mb-0', texto: resposta.situacao + '.'}));
+      if (resposta.nao_conformes) {
+        cartao.appendChild(el('p', {classe: 'small text-muted mb-0',
+          texto: resposta.nao_conformes + (resposta.nao_conformes > 1 ? ' itens com problema' : ' item com problema') +
+                 ': a gestão foi avisada' + (resposta.pedidos_insumo && resposta.pedidos_insumo.length ? ' e o material foi pedido' : '') + '.'}));
+      }
+      if (resposta.motivo_atraso) cartao.appendChild(el('p', {classe: 'small text-muted mb-0', texto: 'Levou ' + resposta.duracao_min + ' min; o motivo ficou registrado.'}));
+    }
+    sec.appendChild(cartao);
+    var localId = p.local_id || (tarefa ? tarefa.local_id : null);
+    var prox = localId ? proximaTarefa(localId, tarefa) : null;
+    if (prox) {
+      sec.appendChild(el('div', {classe: 'fc-cartao fc-proxima-tarefa'}, [
+        el('div', {classe: 'small fw-semibold text-muted', texto: 'Próxima tarefa'}),
+        el('div', {classe: 'fs-4 fw-bold', texto: prox.ambiente + ' · ' + prox.ponto_nome}),
+        el('div', {classe: 'fc-sub', texto: (dados.versoes[prox.versao] || {}).modelo + ' às ' + prox.hora +
+                                              (podeFazer(prox) ? '' : ' (a partir das ' + hora(new Date(Date.parse(prox.previsto) - prox.tolerancia * 60000).toISOString()) + ')')}),
+        botaoLerQr()]));
+    } else {
+      sec.appendChild(el('div', {classe: 'fc-cartao'}, [
+        el('div', {classe: 'fs-5 fw-bold', texto: 'Nenhuma outra tarefa da rota por agora.'}),
+        el('button', {type: 'button', classe: 'btn btn-outline-primary btn-lg w-100 fc-app-acao mt-2',
+          onclick: function () { history.replaceState(null, '', '/app/turno' + (localId ? '?local=' + localId : '')); localId ? mostrarTurno(localId) : mostrarLocais(); }},
+          ['Ver o turno'])]));
+    }
   }
 
   // ── Não realizada ─────────────────────────────────────────────────────
   function abrirNaoRealizada(t) {
-    secLista.hidden = true; secPonto.hidden = true; secExec.hidden = false;
-    limpar(secExec);
-    secExec.appendChild(el('h1', {classe: 'fc-titulo', texto: 'Não deu para fazer'}));
-    secExec.appendChild(el('p', {classe: 'fc-sub', texto: t.hora + ' · ' + t.ponto_nome}));
+    var sec = mostrarSo(secExec);
+    sec.appendChild(el('h1', {classe: 'fc-titulo', texto: 'Não deu para fazer'}));
+    sec.appendChild(el('p', {classe: 'fc-sub', texto: t.hora + ' · ' + t.ponto_nome}));
     var form = el('form', {});
     var motivos = el('div', {classe: 'fc-cartao mb-2', role: 'radiogroup', 'aria-label': 'Motivo'});
     Object.keys(dados.motivos).forEach(function (k) {
-      motivos.appendChild(el('label', {classe: 'd-flex gap-2 py-2'}, [
+      motivos.appendChild(el('label', {classe: 'd-flex gap-2 py-2 fc-radio-linha'}, [
         el('input', {type: 'radio', name: 'motivo', value: k}), el('span', {texto: dados.motivos[k]})]));
     });
     form.appendChild(motivos);
     form.appendChild(el('div', {classe: 'fc-cartao mb-2'}, [
       el('label', {classe: 'form-label small fw-semibold', for: 'nrtexto', texto: 'O que aconteceu'}),
-      el('input', {classe: 'form-control', id: 'nrtexto', name: 'texto', maxlength: '300'}),
-      el('label', {classe: 'd-flex gap-2 mt-2'}, [el('input', {type: 'checkbox', name: 'chamado'}),
+      el('input', {classe: 'form-control form-control-lg', id: 'nrtexto', name: 'texto', maxlength: '300'}),
+      el('label', {classe: 'd-flex gap-2 mt-2 fc-radio-linha'}, [el('input', {type: 'checkbox', name: 'chamado'}),
         el('span', {texto: 'Abrir chamado para resolver'})])]));
-    var botao = el('button', {type: 'submit', classe: 'btn btn-primary btn-lg w-100 fc-app-acao',
-                              texto: 'Registrar'});
+    var botao = el('button', {type: 'submit', classe: 'btn btn-primary btn-lg w-100 fc-app-acao', texto: 'Registrar'});
     form.appendChild(botao);
     form.appendChild(el('button', {type: 'button', classe: 'btn btn-link w-100',
-      onclick: function () { leitura ? abrirPonto(leitura.ponto) : mostrarLista(); }}, ['Cancelar']));
+      onclick: function () { leitura ? telaPonto(leitura.ponto) : mostrarLocais(); }}, ['Cancelar']));
     form.addEventListener('submit', function (ev) {
       ev.preventDefault();
       var m = form.querySelector('[name=motivo]:checked');
@@ -572,13 +1070,13 @@
           if (!res.ok) { botao.disabled = false; dizer(res.x.error || 'Não foi possível registrar.', 'danger'); return; }
           t.status = 'nao_realizada';
           dizer('Registrado como não realizada.' + (res.x.chamado_id ? ' Chamado aberto.' : ''), 'success');
-          leitura ? abrirPonto(leitura.ponto) : mostrarLista();
+          leitura ? telaPonto(leitura.ponto) : mostrarLocais();
         }, function () {
           botao.disabled = false;
           dizer('Sem sinal: "não realizada" precisa de sinal para avisar a gestão. Tente de novo quando voltar.', 'warning');
         });
     });
-    secExec.appendChild(form);
+    sec.appendChild(form);
   }
 
   // A fila subiu uma execução guardada: só AQUELA tarefa deixa de ser
@@ -594,16 +1092,25 @@
       // para saber qual foi, então as guardadas viram "Enviada" como antes.
       Object.keys(f).forEach(function (k) { if (f[k] === 'Guardada no aparelho') f[k] = 'Enviada'; });
     }
-    try { localStorage.setItem(CHAVE_LOCAL, JSON.stringify(f)); } catch (e) {}
+    gravarJson(CHAVE_LOCAL, f);
   });
 
   var params = new URLSearchParams(location.search);
   var ponto = params.get('ponto');
+  var localParam = params.get('local');
   var comCamera = params.get('lido') === 'camera';
   if (comCamera && window.history && history.replaceState) {
     // Recarregar a tela não vale como uma nova leitura do QR.
     params.delete('lido');
     history.replaceState(null, '', location.pathname + '?' + params.toString());
   }
-  if (ponto) abrirPonto(ponto, comCamera); else mostrarLista();
+  window.addEventListener('popstate', function () {
+    var q = new URLSearchParams(location.search);
+    if (q.get('ponto')) abrirPonto(q.get('ponto'), false);
+    else if (q.get('local')) mostrarTurno(q.get('local'));
+    else mostrarLocais();
+  });
+  if (ponto) abrirPonto(ponto, comCamera);
+  else if (localParam) mostrarTurno(localParam);
+  else mostrarLocais();
 })();

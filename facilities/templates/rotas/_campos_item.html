@@ -19,4 +19,10 @@
     <input class="form-control" id="ih{{ sfx }}" name="horarios" value="{{ (item.horarios or '') if item else '' }}" placeholder="Ex.: 07:00, 09:00, 11:00, 13:00"></div>
   <div class="col-md-5"><label class="form-label small fw-semibold" for="if{{ sfx }}">e/ou a cada (minutos)</label>
     <input class="form-control" id="if{{ sfx }}" name="frequencia_min" type="number" min="15" max="720" value="{{ (item.frequencia_min or '') if item else '' }}" placeholder="Ex.: 60 (de hora em hora)"></div>
+  <div class="col-md-3"><label class="form-label small fw-semibold" for="it{{ sfx }}">Tempo previsto (minutos)</label>
+    <input class="form-control" id="it{{ sfx }}" name="tempo_previsto_min" type="number" min="1" max="480" value="{{ (item.tempo_previsto_min or '') if item else '' }}" placeholder="Ex.: 30"></div>
+  <fieldset class="col-md-5"><legend class="form-label small fw-semibold mb-1">Só nestes dias (vazio = todos os dias da rota)</legend>
+    <div class="d-flex flex-wrap gap-1">{% for k, v in dias.items() if k in rota.dias_semana %}<label class="border rounded px-2 py-1 small"><input type="checkbox" name="dias_semana" value="{{ k }}" {% if item and item.dias_semana and k in item.dias_semana %}checked{% endif %}> {{ v }}</label>{% endfor %}</div></fieldset>
+  <div class="col-md-4"><label class="form-label small fw-semibold" for="ipd{{ sfx }}">Horários diferentes num dia</label>
+    <input class="form-control" id="ipd{{ sfx }}" name="horarios_por_dia" value="{% if item %}{% for d, hs in item.horarios_por_dia_dict.items() %}{{ dias.get(d, d) }}: {{ hs }}{% if not loop.last %}; {% endif %}{% endfor %}{% endif %}" placeholder="Ex.: sáb: 07:00, 09:30"></div>
 </div>

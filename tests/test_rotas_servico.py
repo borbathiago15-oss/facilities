@@ -39,9 +39,18 @@ def utc(dia, hhmm):
 
 @pytest.fixture()
 def cena(app_module):
+    """O cenário, com o contexto da aplicação ABERTO durante o teste (testes
+    de serviço). Para testes por HTTP com mais de um login, use
+    ``montar_cena`` num contexto próprio (o ``g`` de um contexto aberto
+    guarda o login do primeiro cliente)."""
+    with app_module.app.app_context():
+        yield montar_cena(app_module)
+
+
+def montar_cena(app_module):
     from app import db
     from facilities.rotas import servico as s
-    with app_module.app.app_context():
+    if True:
         ids = fabrica.estrutura(app_module)
         loc = fabrica.local()
         ana = fabrica.pessoa(app_module, 'ana.rota@trino.com', 'encarregado',
@@ -70,7 +79,7 @@ def cena(app_module):
         db.session.commit()
         ids.update(modelo=m.id, versao=v.id, rota=rota.id, item=item.id, ana=ana,
                    mariana=mariana)
-        yield ids
+        return ids
 
 
 def _s():
@@ -330,7 +339,9 @@ def test_nao_conformidade_e_registrada_e_vira_chamado(app_module, cena):
         cid = s.abrir_chamado_da_nc(nc, db.session.get(User, cena['ana']))
         db.session.commit()
         ch = db.session.get(Chamado, cid)
-        assert ch.origem == 'nao_conformidade' and 'Porta do banheiro' in ch.titulo
+        # O chamado já nasceu na execução (um por execução, com os 2 itens).
+        assert ch.origem == 'execucao' and ch.origem_id == ex.id
+        assert 'Porta do banheiro' in ch.titulo and '2 item(ns)' in ch.titulo
         assert s.abrir_chamado_da_nc(nc, db.session.get(User, cena['ana'])) == cid
 
 

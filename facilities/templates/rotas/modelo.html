@@ -46,6 +46,12 @@
     <label class="form-label small fw-semibold" for="mdesc">Resumo do procedimento (POP/FIT)</label>
     <p class="small text-muted mb-1" id="mdesc-ajuda">Escreva em poucas linhas, com palavras simples, o que o POP ou a FIT pede. É o que aparece no celular de quem faz o checklist. O documento completo você guarda logo abaixo.</p>
     <textarea class="form-control mb-2" id="mdesc" name="descricao" rows="4" aria-describedby="mdesc-ajuda" placeholder="Ex.: Use luva e placa de piso molhado. Limpe de dentro para fora: pia, vaso, piso. Produto azul para vidro, verde para piso.">{{ modelo.descricao or '' }}</textarea>
+    <div class="row g-2 mb-2">
+      <div class="col-md-6"><label class="form-label small fw-semibold" for="mmat">Materiais usados</label>
+        <textarea class="form-control" id="mmat" name="materiais" rows="2" maxlength="2000" placeholder="Ex.: vassoura, pá, mop úmido, sanitizante, detergente">{{ modelo.versao_atual.materiais or '' if modelo.versao_atual else '' }}</textarea></div>
+      <div class="col-md-6"><label class="form-label small fw-semibold" for="mepi">EPI</label>
+        <textarea class="form-control" id="mepi" name="epi" rows="2" maxlength="2000" placeholder="Ex.: luva nitrílica, bota, óculos">{{ modelo.versao_atual.epi or '' if modelo.versao_atual else '' }}</textarea></div>
+    </div>
     <div class="form-check"><input class="form-check-input" type="checkbox" id="fantes" name="exige_foto_antes" value="1" {% if modelo.exige_foto_antes %}checked{% endif %}><label class="form-check-label" for="fantes">Exigir foto de ANTES</label></div>
     <div class="form-check"><input class="form-check-input" type="checkbox" id="fdepois" name="exige_foto_depois" value="1" {% if modelo.exige_foto_depois %}checked{% endif %}><label class="form-check-label" for="fdepois">Exigir foto de DEPOIS</label></div>
   </div>
@@ -90,6 +96,8 @@
 {% else %}
 <div class="fc-cartao">
   {% if modelo.descricao %}<p>{{ modelo.descricao }}</p>{% endif %}
+  {% if modelo.versao_atual and modelo.versao_atual.materiais %}<p class="small"><strong>Materiais usados:</strong> {{ modelo.versao_atual.materiais }}</p>{% endif %}
+  {% if modelo.versao_atual and modelo.versao_atual.epi %}<p class="small"><strong>EPI:</strong> {{ modelo.versao_atual.epi }}</p>{% endif %}
   <ol class="mb-0">{% for it in itens %}<li class="mb-2">{{ it.texto }} <span class="small text-muted">({{ tipos.get(it.tipo) }}{% if it.obrigatorio %}, obrigatória{% endif %}{% if it.exige_foto %}, com foto{% endif %})</span>
     {% if it.como_fazer %}<div class="small fc-como-fazer">{{ it.como_fazer }}</div>{% endif %}
     {% if it.foto_ref and modelo.versao_atual %}<img class="fc-miniatura fc-miniatura-p mt-1" src="{{ url_for('rotas.referencia', vid=modelo.versao_atual.id, codigo=it.codigo) }}" alt="Como deve ficar: {{ it.texto }}" loading="lazy">{% endif %}</li>{% endfor %}</ol>

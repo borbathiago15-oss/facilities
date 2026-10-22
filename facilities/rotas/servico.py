@@ -32,10 +32,10 @@ from facilities.extensions import db
 from facilities.core.models import User
 from facilities.cadastros.models import PontoInspecao
 from facilities.rotas.models import (
-    CONCLUIDA_COM_ATRASO, CONCLUIDA_NO_PRAZO, ENCERRADAS, MOTIVOS_NAO_REALIZADA, NAO_REALIZADA,
-    PERDIDA, PREVISTA, TIPOS_DE_ITEM, AgendadorExecucao, ChecklistModelo, ChecklistVersao,
-    Execucao, ExecucaoCorrecao, ExecucaoFoto, NaoConformidade, Rota, RotaEscala, RotaItem,
-    TarefaDia)
+    CONCLUIDA_COM_ATRASO, CONCLUIDA_NO_PRAZO, ENCERRADAS, MOTIVOS_ATRASO, MOTIVOS_NAO_FEITO,
+    MOTIVOS_NAO_REALIZADA, NAO_REALIZADA, PERDIDA, PREVISTA, RESPOSTA_NAO_FEITO, TIPOS_DE_ITEM,
+    TOLERANCIA_ATRASO_MIN, AgendadorExecucao, ChecklistModelo, ChecklistVersao, Execucao,
+    ExecucaoCorrecao, ExecucaoFoto, NaoConformidade, Rota, RotaEscala, RotaItem, TarefaDia)
 
 DIAS_DA_SEMANA = {'1': 'seg', '2': 'ter', '3': 'qua', '4': 'qui', '5': 'sex', '6': 'sáb',
                   '7': 'dom'}
@@ -50,12 +50,27 @@ JANELA_SEM_SINAL = timedelta(days=7)
 
 
 class RegraDaRota(ValueError):
-    """Recusa com mensagem pronta para a tela; ``codigo`` é o HTTP."""
+    """Recusa com mensagem pronta para a tela; ``codigo`` é o HTTP.
 
-    def __init__(self, mensagem, codigo=400):
+    ``codigo_app`` é a marca que o aplicativo lê para agir (ex.: 'sem_chegada'
+    manda ler o QR da entrada; 'motivo_atraso' abre a pergunta do motivo) e
+    ``extra`` leva os números da mensagem (duração, previsto). A API devolve
+    ``{'error', 'motivo', 'extra'}``."""
+
+    def __init__(self, mensagem, codigo=400, codigo_app=None, extra=None):
         super().__init__(mensagem)
         self.mensagem = mensagem
         self.codigo = codigo
+        self.codigo_app = codigo_app
+        self.extra = extra or {}
+
+    def como_json(self):
+        corpo = {'error': self.mensagem}
+        if self.codigo_app:
+            corpo['motivo'] = self.codigo_app
+        if self.extra:
+            corpo['extra'] = self.extra
+        return corpo
 
 
 # ── Checklist ─────────────────────────────────────────────────────────────
@@ -76,6 +91,10 @@ def _numero(bruto):
 
 
 COMO_FAZER_MAX = 400
+PROBLEMA_MAX = 120
+MATERIAIS_MAX = 2000
+OBSERVACOES_MAX = 4000
+TEMPO_PREVISTO_MIN, TEMPO_PREVISTO_MAX = 1, 480
 CHAVE_DA_REFERENCIA = re.compile(r'^checklists/\d+/ref/[0-9a-f]{32}\.(jpg|png|webp)$')
 
 
@@ -121,6 +140,11 @@ def normalizar_itens(brutos, modelo=None):
         como = (b.get('como_fazer') or '').strip()[:COMO_FAZER_MAX]
         if como:
             item['como_fazer'] = como
+        # O problema que o público marca no QR quando este item falha
+        # ("Papel reposto?" → "Falta papel"). Sem ele, a pergunta prefixada.
+        problema = (b.get('problema') or '').strip()[:PROBLEMA_MAX]
+        if problema:
+            item['problema'] = problema
         ref = (b.get('foto_ref') or '').strip()
         if ref and CHAVE_DA_REFERENCIA.match(ref) and (
                 donos is None or ref.split('/')[1] in donos):
@@ -187,12 +211,20 @@ def publicar(modelo, itens, dados, autor):
         modelo.descricao = (dados.get('descricao') or '').strip() or None
     atual = modelo.versao_atual
     novo_json = json.dumps(itens, ensure_ascii=False, sort_keys=True)
+    # Material usado e EPI (plano de limpeza): ficam na versão. Fora do
+    # formulário (chave ausente), continuam os da versão atual.
+    materiais = ((dados.get('materiais') or '').strip()[:MATERIAIS_MAX] or None) \
+        if 'materiais' in dados else (atual.materiais if atual else None)
+    epi = ((dados.get('epi') or '').strip()[:MATERIAIS_MAX] or None) \
+        if 'epi' in dados else (atual.epi if atual else None)
     if atual is not None and atual.itens_json == novo_json \
-            and atual.exige_foto_antes == antes and atual.exige_foto_depois == depois:
+            and atual.exige_foto_antes == antes and atual.exige_foto_depois == depois \
+            and atual.materiais == materiais and atual.epi == epi:
         return atual, False
     v = ChecklistVersao(modelo_id=modelo.id, numero=(atual.numero + 1) if atual else 1,
                         itens_json=novo_json, exige_foto_antes=antes,
-                        exige_foto_depois=depois, publicada_por=getattr(autor, 'id', None))
+                        exige_foto_depois=depois, materiais=materiais, epi=epi,
+                        publicada_por=getattr(autor, 'id', None))
     db.session.add(v)
     db.session.flush()
     db.session.refresh(modelo)
@@ -261,12 +293,19 @@ def copiar_da_biblioteca(origem, client_id, autor):
                                           enviado_por=autor.id if autor else None))
     v = origem.versao_atual
     publicar(m, json.loads(v.itens_json), {'exige_foto_antes': v.exige_foto_antes,
-                                           'exige_foto_depois': v.exige_foto_depois}, autor)
+                                           'exige_foto_depois': v.exige_foto_depois,
+                                           'materiais': v.materiais, 'epi': v.epi}, autor)
     return m
 
 
 def itens_da_versao(versao):
     return json.loads(versao.itens_json or '[]')
+
+
+def dados_da_versao(versao):
+    """O que a tela do técnico mostra além das perguntas: o material usado e
+    o EPI da versão (vazios quando o checklist não os tem)."""
+    return {'materiais': versao.materiais or '', 'epi': versao.epi or ''}
 
 
 # ── Rotas ─────────────────────────────────────────────────────────────────
@@ -315,16 +354,59 @@ def salvar_rota(local, rota, dados):
     if not 0 <= presencas <= 6 or not 5 <= prazo_presenca <= 60:
         raise RegraDaRota('Confirmação de presença: de 0 a 6 por turno, com 5 a 60 minutos '
                           'para responder.')
+    intervalo = _intervalo(dados, inicio, fim, rota)
     rota = rota or Rota(client_id=local.id)
     rota.nome, rota.turno = nome, turno
     rota.hora_inicio, rota.hora_fim = inicio, fim
     rota.tolerancia_min = tolerancia
     rota.presencas_por_turno, rota.presenca_prazo_min = presencas, prazo_presenca
     rota.dias_semana = _dias(dados.get('dias_semana'))
+    rota.intervalo_inicio, rota.intervalo_fim = intervalo
+    if 'observacoes' in dados:
+        rota.observacoes = (dados.get('observacoes') or '').strip()[:OBSERVACOES_MAX] or None
     if rota.id is None:
         db.session.add(rota)
     db.session.flush()
     return rota
+
+
+def _intervalo(dados, inicio, fim, rota):
+    """O intervalo do turno (ex.: almoço) → (início, fim) ou (None, None).
+
+    Os dois juntos, dentro do turno, com duração. Fora do formulário (chaves
+    ausentes), continua o da rota."""
+    if 'intervalo_inicio' not in dados and 'intervalo_fim' not in dados:
+        return (rota.intervalo_inicio, rota.intervalo_fim) if rota else (None, None)
+    bi, bf = str(dados.get('intervalo_inicio') or '').strip(), \
+        str(dados.get('intervalo_fim') or '').strip()
+    if not bi and not bf:
+        return None, None
+    if not bi or not bf:
+        raise RegraDaRota('Intervalo: informe o início e o fim (ex.: 11:00 e 12:00), ou '
+                          'deixe os dois vazios.')
+    ii, ff = _hora(bi, 'Início do intervalo'), _hora(bf, 'Fim do intervalo')
+    if ii == ff:
+        raise RegraDaRota('O intervalo precisa ter duração (início e fim iguais).')
+    janela_ini = datetime.combine(tempo.hoje(), inicio)
+    janela_fim = datetime.combine(tempo.hoje(), fim)
+    if janela_fim <= janela_ini:
+        janela_fim += timedelta(days=1)
+    mi, mf = _dentro_da_janela(ii, janela_ini), _dentro_da_janela(ff, janela_ini)
+    if mf <= mi:
+        mf += timedelta(days=1)
+    if not (janela_ini <= mi and mf <= janela_fim):
+        raise RegraDaRota(f'O intervalo ({bi} às {bf}) precisa caber no turno '
+                          f'({inicio.strftime("%H:%M")} às {fim.strftime("%H:%M")}).')
+    return ii, ff
+
+
+def _dentro_da_janela(hora, ini):
+    """A hora (sem data) → o instante no turno que começa em ``ini``: se cai
+    antes do início, é do dia seguinte (turno que vira a noite)."""
+    m = datetime.combine(ini.date(), hora)
+    if m < ini:
+        m += timedelta(days=1)
+    return m
 
 
 def _janela(rota, dia):
@@ -336,12 +418,90 @@ def _janela(rota, dia):
     return ini, fim
 
 
+def _janela_do_intervalo(rota, ini):
+    """O intervalo do turno que começa em ``ini`` → (início, fim) ou None."""
+    if rota.intervalo_inicio is None or rota.intervalo_fim is None:
+        return None
+    mi = _dentro_da_janela(rota.intervalo_inicio, ini)
+    mf = _dentro_da_janela(rota.intervalo_fim, ini)
+    if mf <= mi:
+        mf += timedelta(days=1)
+    return mi, mf
+
+
 def _horarios_fixos(bruto):
     out = set()
     for pedaco in re.split(r'[,;\s]+', bruto or ''):
         if pedaco:
             out.add(_hora(pedaco, f'Horário "{pedaco}"'))
     return sorted(out)
+
+
+def _dias_do_item(bruto, rota):
+    """Os dias do item: vazio = todos os da rota (None); informado, só dias
+    em que a rota roda."""
+    dias = ''.join(sorted({d for d in str(bruto or '') if d in DIAS_DA_SEMANA}))
+    if not dias or dias == rota.dias_semana:
+        return None
+    fora = [DIAS_DA_SEMANA[d] for d in dias if d not in rota.dias_semana]
+    if fora:
+        raise RegraDaRota(f'A rota não roda em {", ".join(fora)}: tire esse(s) dia(s) da '
+                          'atividade ou inclua na rota.')
+    return dias
+
+
+_NOME_DO_DIA = {v: k for k, v in DIAS_DA_SEMANA.items()}
+_NOME_DO_DIA.update({'sab': '6', 'sabado': '6', 'sábado': '6', 'domingo': '7', 'segunda': '1',
+                     'terca': '2', 'terça': '2', 'quarta': '3', 'quinta': '4', 'sexta': '5'})
+
+
+def _horarios_por_dia(bruto):
+    """Horários diferentes num dia → {dia: [time]}. Aceita o JSON guardado
+    ({"6": "07:00, 09:30"}) ou o texto do formulário, uma linha por dia
+    ("sáb: 07:00, 09:30" ou "6: 07:00")."""
+    if not bruto:
+        return {}
+    if isinstance(bruto, dict):
+        pares = bruto.items()
+    else:
+        texto = str(bruto).strip()
+        if texto.startswith('{'):
+            try:
+                pares = json.loads(texto).items()
+            except (ValueError, AttributeError):
+                raise RegraDaRota('Horários por dia ilegíveis.')
+        else:
+            pares = []
+            for linha in re.split(r'[;\n]+', texto):
+                if not linha.strip():
+                    continue
+                dia, sep, horas = linha.partition(':')
+                if not sep or ':' not in horas:
+                    raise RegraDaRota('Horários por dia: uma linha por dia, no formato '
+                                      '"sáb: 07:00, 09:30".')
+                pares.append((dia, horas))
+    saida = {}
+    for dia, horas in pares:
+        d = _NOME_DO_DIA.get(str(dia).strip().lower(), str(dia).strip())
+        if d not in DIAS_DA_SEMANA:
+            raise RegraDaRota(f'Horários por dia: "{dia}" não é um dia da semana.')
+        hs = _horarios_fixos(str(horas))
+        if hs:
+            saida[d] = hs
+    return saida
+
+
+def _tempo_previsto(bruto):
+    """Minutos previstos para o checklist no ponto: vazio = sem controle;
+    informado, de 1 a 480."""
+    bruto = str(bruto if bruto is not None else '').strip()
+    if not bruto:
+        return None
+    if not bruto.isascii() or not bruto.isdigit() \
+            or not TEMPO_PREVISTO_MIN <= int(bruto) <= TEMPO_PREVISTO_MAX:
+        raise RegraDaRota(f'Tempo previsto em minutos, de {TEMPO_PREVISTO_MIN} a '
+                          f'{TEMPO_PREVISTO_MAX} (ex.: 30).')
+    return int(bruto)
 
 
 def salvar_item(rota, item, dados):
@@ -363,19 +523,29 @@ def salvar_item(rota, item, dados):
     if not fixos and not freq:
         raise RegraDaRota('Diga os horários (ex.: 07:00, 09:00) ou a frequência '
                           '(ex.: a cada 60 minutos).')
+    tempo_previsto = _tempo_previsto(dados.get('tempo_previsto_min'))
     ini, fim = _janela(rota, tempo.hoje())
-    for h in fixos:
-        momento = datetime.combine(ini.date(), h)
-        if momento < ini:
-            momento += timedelta(days=1)
+    por_dia = _horarios_por_dia(dados.get('horarios_por_dia'))
+    for h in fixos + [h for hs in por_dia.values() for h in hs]:
+        momento = _dentro_da_janela(h, ini)
         if not ini <= momento <= fim:
             raise RegraDaRota(f'{h.strftime("%H:%M")} está fora do turno '
                               f'({rota.hora_inicio.strftime("%H:%M")} às '
                               f'{rota.hora_fim.strftime("%H:%M")}).')
+    dias = _dias_do_item(dados.get('dias_semana'), rota)
+    for d in por_dia:
+        if d not in (dias or rota.dias_semana):
+            raise RegraDaRota(f'Horários de {DIAS_DA_SEMANA[d]}: a atividade não acontece '
+                              'nesse dia.')
     item = item or RotaItem(rota_id=rota.id)
     item.ponto_id, item.modelo_id = ponto.id, modelo.id
     item.horarios = ', '.join(h.strftime('%H:%M') for h in fixos) or None
     item.frequencia_min = freq
+    item.tempo_previsto_min = tempo_previsto
+    item.dias_semana = dias
+    item.horarios_por_dia = json.dumps(
+        {d: ', '.join(h.strftime('%H:%M') for h in hs) for d, hs in sorted(por_dia.items())},
+        ensure_ascii=False) if por_dia else None
     item.ordem = int(dados.get('ordem') or 0) if str(dados.get('ordem') or '').isdigit() \
         else (item.ordem or len(rota.itens) + 1)
     if item.id is None:
@@ -402,7 +572,9 @@ def salvar_itens_em_lote(rota, ponto_ids, dados):
     inicio = int(base) if base.isdigit() else proxima
     itens = []
     for n, pid in enumerate(ids):
-        linha = {k: dados.get(k) for k in ('modelo_id', 'horarios', 'frequencia_min')}
+        linha = {k: dados.get(k) for k in ('modelo_id', 'horarios', 'frequencia_min',
+                                           'tempo_previsto_min', 'dias_semana',
+                                           'horarios_por_dia')}
         linha['ponto_id'] = pid
         linha['ordem'] = str(inicio + n)
         itens.append(salvar_item(rota, None, linha))
@@ -457,13 +629,21 @@ def escalado(rota, dia):
 # ── Agendador ─────────────────────────────────────────────────────────────
 
 def horarios_do_item(rota, item, dia):
-    """Os instantes (horas locais) em que o item acontece no turno de ``dia``."""
+    """Os instantes (horas locais) em que o item acontece no turno de ``dia``.
+
+    Respeita os dias do item (``dias_semana``), os horários próprios do dia
+    (``horarios_por_dia``, que nesse dia substituem ``horarios``) e o
+    intervalo da rota (nada cai dentro dele)."""
+    dia_semana = str(dia.isoweekday())
+    if item.dias_semana and dia_semana not in item.dias_semana:
+        return []
     ini, fim = _janela(rota, dia)
+    por_dia = item.horarios_por_dia_dict
+    fixos = _horarios_fixos(por_dia[dia_semana]) if dia_semana in por_dia \
+        else _horarios_fixos(item.horarios)
     momentos = set()
-    for h in _horarios_fixos(item.horarios):
-        m = datetime.combine(dia, h)
-        if m < ini:
-            m += timedelta(days=1)
+    for h in fixos:
+        m = _dentro_da_janela(h, ini)
         if ini <= m <= fim:
             momentos.add(m)
     if item.frequencia_min:
@@ -471,6 +651,9 @@ def horarios_do_item(rota, item, dia):
         while m < fim:
             momentos.add(m)
             m += timedelta(minutes=item.frequencia_min)
+    intervalo = _janela_do_intervalo(rota, ini)
+    if intervalo:
+        momentos = {m for m in momentos if not intervalo[0] <= m < intervalo[1]}
     return sorted(momentos)
 
 
@@ -653,6 +836,66 @@ def tarefas_do_dia(client_ids, dia, user=None):
     return q.order_by(TarefaDia.previsto_para, TarefaDia.id).all()
 
 
+def turno_de_hoje(user, client_id, agora_utc=None):
+    """O turno de hoje da pessoa NUM local (o do QR lido): as tarefas de hoje
+    dela (e as sem dono) com o tempo previsto e as fotos exigidas, o QR da
+    entrada do local (se houver) e se a chegada de hoje já foi registrada.
+    Inclui as do turno de ontem ainda em aberto (turno que vira a noite).
+
+    Gera as tarefas de hoje se o agendador ainda não rodou; o commit é de
+    quem chama."""
+    from facilities.core.acesso import allowed_client_ids_or_none
+    from facilities.core.models import Client
+    from facilities.rotas import chegadas
+    agora_utc = agora_utc or datetime.utcnow()
+    permitidos = allowed_client_ids_or_none(user)
+    if permitidos is not None and client_id not in permitidos:
+        raise RegraDaRota('Este local não está entre os seus.', 403)
+    local = db.session.get(Client, client_id)
+    if local is None or local.is_deleted:
+        raise RegraDaRota('Local não encontrado.', 404)
+    garantir_hoje([client_id])
+    hoje = tempo.local(agora_utc).date()
+    tarefas = [t for d in (hoje - timedelta(days=1), hoje)
+               for t in tarefas_do_dia([client_id], d, user=user)
+               if t.data == hoje or t.fim_do_turno >= agora_utc]
+    entrada = chegadas.ponto_de_entrada(client_id)
+    chegada = chegadas.de_hoje(user, client_id, agora_utc)
+
+    def tarefa_json(t):
+        itens = itens_da_versao(t.versao)
+        return {
+            'id': t.id, 'ponto': t.ponto.codigo_qr, 'ponto_nome': t.ponto.nome,
+            'ambiente': t.ponto.ambiente.nome, 'rota': t.rota.nome,
+            'hora': tempo.fmt(t.previsto_para, '%H:%M'),
+            'previsto': t.previsto_para.isoformat() + 'Z', 'tolerancia': t.tolerancia_min,
+            'fim_turno': t.fim_do_turno.isoformat() + 'Z', 'versao': t.versao_id,
+            'checklist': t.versao.modelo.nome,
+            'minha': t.user_id == user.id, 'escalado': t.pessoa.name if t.pessoa else '',
+            'status': t.status, 'situacao': situacao(t, agora_utc),
+            'tempo_previsto_min': t.item.tempo_previsto_min if t.item else None,
+            'materiais': t.versao.materiais or '', 'epi': t.versao.epi or '',
+            'exige_foto': bool(t.versao.exige_foto_antes or t.versao.exige_foto_depois
+                               or any(i.get('exige_foto') for i in itens)),
+            'foto_antes': t.versao.exige_foto_antes, 'foto_depois': t.versao.exige_foto_depois,
+            'itens_com_foto': [i['codigo'] for i in itens if i.get('exige_foto')],
+        }
+    return {
+        'local': {'id': local.id, 'nome': local.name},
+        'data': hoje.isoformat(),
+        'agora': agora_utc.isoformat() + 'Z',
+        'entrada': entrada.codigo_qr if entrada else None,
+        'entrada_nome': entrada.nome if entrada else None,
+        'chegada': ({'id': chegada.id, 'hora': tempo.fmt(chegada.chegou_em, '%H:%M'),
+                     'com_camera': chegada.com_camera} if chegada else None),
+        'exige_chegada': entrada is not None,
+        'tarefas': [tarefa_json(t) for t in tarefas],
+        'motivos_atraso': MOTIVOS_ATRASO,
+        'motivos_nao_feito': MOTIVOS_NAO_FEITO,
+        'tolerancia_atraso_min': TOLERANCIA_ATRASO_MIN,
+    }
+
+
 # ── Leitura do QR (o horário do servidor) ─────────────────────────────────
 
 def _assinador():
@@ -704,8 +947,30 @@ def _visivel(item, respostas):
     return str(respostas.get(se['codigo'], '')).strip().lower() == se['valor'].strip().lower()
 
 
-def conferir_respostas(itens, respostas, fotos_por_item):
-    """Valida as respostas; devolve (respostas limpas, não conformidades)."""
+def _motivo_nao_feito(item, bruto):
+    """O motivo de um item 'nao_feito' → {'motivo', 'texto', 'material_id'}."""
+    bruto = bruto if isinstance(bruto, dict) else {'motivo': bruto}
+    motivo = str(bruto.get('motivo') or '').strip()
+    if motivo not in MOTIVOS_NAO_FEITO:
+        raise RegraDaRota(f'"{item["texto"]}": diga por que não foi feito.',
+                          codigo_app='motivo_nao_feito', extra={'item': item['codigo']})
+    texto = str(bruto.get('texto') or '').strip()[:300]
+    if motivo == 'outro' and not texto:
+        raise RegraDaRota(f'"{item["texto"]}": conte em poucas palavras por que não foi feito.',
+                          codigo_app='motivo_nao_feito', extra={'item': item['codigo']})
+    mat = str(bruto.get('material_id') or '').strip()
+    return {'motivo': motivo, 'texto': texto or None,
+            'material_id': int(mat) if mat.isascii() and mat.isdigit() else None}
+
+
+def conferir_respostas(itens, respostas, fotos_por_item, motivos=None):
+    """Valida as respostas; devolve (respostas limpas, não conformidades).
+
+    Um item pode vir como ``'nao_feito'``: ele conta como respondido (vale
+    para o obrigatório), vira não conformidade e, com ``motivos`` informado
+    (``{código: {'motivo', 'texto', 'material_id'}}``), exige o motivo; o
+    item devolvido leva ``item['nao_feito']`` com ele. ``motivos=None`` é a
+    correção pela gestão, que só revalida o que já foi registrado."""
     limpas, ncs = {}, []
     for item in itens:
         cod = item['codigo']
@@ -716,6 +981,13 @@ def conferir_respostas(itens, respostas, fotos_por_item):
         if not valor:
             if item.get('obrigatorio'):
                 raise RegraDaRota(f'Responda: "{item["texto"]}".')
+            continue
+        if valor == RESPOSTA_NAO_FEITO:
+            limpas[cod] = valor
+            nao_feito = dict(item)
+            if motivos is not None:
+                nao_feito['nao_feito'] = _motivo_nao_feito(item, motivos.get(cod))
+            ncs.append(nao_feito)
             continue
         tipo = item['tipo']
         problema = False
@@ -745,6 +1017,29 @@ def conferir_respostas(itens, respostas, fotos_por_item):
         if problema:
             ncs.append(item)
     return limpas, ncs
+
+
+def fora_do_tempo(previsto_min, duracao_min):
+    """A execução passou do previsto (mais a tolerância)? Regra pura."""
+    if previsto_min is None or duracao_min is None:
+        return False
+    return duracao_min > previsto_min + TOLERANCIA_ATRASO_MIN
+
+
+def _motivo_do_atraso(dados, previsto, duracao):
+    """→ (motivo, texto) a gravar; exige o motivo quando passou do tempo."""
+    motivo = str(dados.get('motivo_atraso') or '').strip() or None
+    texto = str(dados.get('motivo_atraso_texto') or '').strip()[:300] or None
+    if motivo is not None and motivo not in MOTIVOS_ATRASO:
+        raise RegraDaRota('Escolha o motivo do atraso na lista.', codigo_app='motivo_atraso',
+                          extra={'duracao_min': duracao, 'previsto_min': previsto})
+    if fora_do_tempo(previsto, duracao):
+        if motivo is None or (motivo == 'outro' and not texto):
+            raise RegraDaRota(
+                f'Esta limpeza levou {duracao} min; o previsto era {previsto}. Diga o que '
+                'aconteceu.', 422, codigo_app='motivo_atraso',
+                extra={'duracao_min': duracao, 'previsto_min': previsto})
+    return motivo, texto if motivo else None
 
 
 def ler_imagem(arquivo):
@@ -778,11 +1073,20 @@ def registrar_execucao(user, dados, fotos, agora_utc=None):
     """Grava a execução de uma tarefa (ou atividade extra). → (execucao, nova?)
 
     ``dados``: envio_id, ponto (código do QR), tarefa_id ou modelo_id (extra),
-    respostas {código: valor}, selo_leitura (com sinal) ou os horários do
-    aparelho (lido_em, concluida_em) com sem_sinal, observacao.
+    respostas {código: valor | 'nao_feito'}, motivos {código: {'motivo',
+    'texto', 'material_id'}} dos itens não feitos, selo_leitura (com sinal)
+    ou os horários do aparelho (lido_em, concluida_em) com sem_sinal,
+    observacao, motivo_atraso e motivo_atraso_texto (quando levou mais que o
+    previsto do item da rota).
     ``fotos``: {'antes': [arq], 'depois': [arq], 'item:<codigo>': [arq]}.
+
+    Recusas que o aplicativo trata pela marca (``RegraDaRota.codigo_app``):
+    'sem_chegada' (409: o local tem QR de entrada e a pessoa não o leu hoje),
+    'motivo_atraso' (422: passou do tempo previsto sem dizer o motivo) e
+    'motivo_nao_feito' (400: item não feito sem motivo).
     """
     from facilities.core.acesso import allowed_client_ids_or_none
+    from facilities.rotas import chegadas
     agora_utc = agora_utc or datetime.utcnow()
     envio = str(dados.get('envio_id') or '').strip()[:64]
     if len(envio) < 8:
@@ -874,6 +1178,16 @@ def registrar_execucao(user, dados, fotos, agora_utc=None):
         concluida = max(lido, _hora_do_aparelho(dados.get('concluida_em'), agora_utc))
     else:
         concluida = agora_utc
+    # Chegada no local: com QR de entrada cadastrado, o checklist do dia só
+    # entra depois de a pessoa ter lido a entrada (no dia local da leitura).
+    if chegadas.exige_chegada(ponto.client_id) and not ponto.entrada_do_local \
+            and chegadas.de_hoje(user, ponto.client_id, lido) is None:
+        raise RegraDaRota('Confirme a chegada no local: leia o QR da entrada.', 409,
+                          codigo_app='sem_chegada')
+    # Tempo: do QR lido à conclusão, contra o previsto do item da rota.
+    duracao = max(0, int((concluida - lido).total_seconds() // 60))
+    previsto = tarefa.item.tempo_previsto_min if tarefa is not None and tarefa.item else None
+    motivo_atraso, motivo_atraso_texto = _motivo_do_atraso(dados, previsto, duracao)
     virou_extra = None
     if tarefa is not None:
         tol = timedelta(minutes=tarefa.tolerancia_min)
@@ -896,9 +1210,10 @@ def registrar_execucao(user, dados, fotos, agora_utc=None):
     fotos_por_item = {k.split(':', 1)[1]: v for k, v in fotos.items()
                       if k.startswith('item:') and v}
     respostas = dados.get('respostas') or {}
-    if not isinstance(respostas, dict):
+    motivos = dados.get('motivos') or {}
+    if not isinstance(respostas, dict) or not isinstance(motivos, dict):
         raise RegraDaRota('Respostas inválidas.')
-    limpas, ncs = conferir_respostas(itens, respostas, fotos_por_item)
+    limpas, ncs = conferir_respostas(itens, respostas, fotos_por_item, motivos=motivos)
     if versao.exige_foto_antes and not fotos.get('antes'):
         raise RegraDaRota('Tire a foto de ANTES.')
     if versao.exige_foto_depois and not fotos.get('depois'):
@@ -914,7 +1229,8 @@ def registrar_execucao(user, dados, fotos, agora_utc=None):
                   observacao=((f'[Registrada como atividade extra: {virou_extra}.] '
                                if virou_extra else '')
                               + (dados.get('observacao') or '').strip())[:2000] or None,
-                  envio_id=envio, n_nao_conformes=len(ncs))
+                  envio_id=envio, n_nao_conformes=len(ncs),
+                  motivo_atraso=motivo_atraso, motivo_atraso_texto=motivo_atraso_texto)
     ex.virou_extra = virou_extra
     db.session.add(ex)
     try:
@@ -935,11 +1251,14 @@ def registrar_execucao(user, dados, fotos, agora_utc=None):
     for item in ncs:
         nc = NaoConformidade(execucao_id=ex.id, client_id=ex.client_id,
                              item_codigo=item['codigo'], item_texto=item['texto'],
-                             resposta=limpas.get(item['codigo']))
+                             resposta=_resposta_da_nc(item, limpas))
         db.session.add(nc)
         novas_ncs.append(nc)
+    pedidos = _pedidos_dos_nao_feitos(user, ex, ncs)
     if novas_ncs:
-        _chamado_das_ncs(ex, novas_ncs, user)
+        _chamado_das_ncs(ex, novas_ncs, user, categoria=_categoria_das_ncs(ncs),
+                         pedidos=pedidos)
+    ex.pedidos_de_insumo = pedidos
     if chamado is not None:
         from facilities.preventiva.servico import resolver_pela_execucao
         resolver_pela_execucao(chamado, user, ex, agora_utc)
@@ -984,32 +1303,87 @@ def marcar_nao_realizada(tarefa, user, motivo, texto='', abrir_chamado=False):
     return tarefa
 
 
-def _chamado_das_ncs(ex, ncs, user):
-    """Decisão do dono (18/10/2026): item não conforme no checklist da rota
-    ABRE chamado na hora — um por execução, com os itens na descrição e as
-    fotos da execução (como a visita de supervisão). Antes o app dizia
-    "avisado à gestão" e ninguém era avisado.
+def _resposta_da_nc(item, limpas):
+    """O que fica gravado na não conformidade: a resposta, ou 'Não feito:
+    <motivo> — <texto>' para o item que não foi feito."""
+    nf = item.get('nao_feito')
+    if not nf:
+        return limpas.get(item['codigo'])
+    texto = f'Não feito: {MOTIVOS_NAO_FEITO[nf["motivo"]].lower()}'
+    if nf.get('texto'):
+        texto = f'{texto} — {nf["texto"]}'
+    return texto[:300]
 
-    O chamado nasce ligado à primeira não conformidade (o índice de origem viva
-    impede duplicar) e todas as da execução apontam para ele."""
+
+def _categoria_das_ncs(ncs):
+    """Algum item não feito por equipamento → o chamado é de equipamento."""
+    if any((it.get('nao_feito') or {}).get('motivo') == 'equipamento' for it in ncs):
+        return 'equipamento'
+    return 'outro'
+
+
+def _pedidos_dos_nao_feitos(user, ex, ncs):
+    """Item não feito por 'faltou_material' com o material escolhido → pedido
+    de insumo para o local (``materiais.servico.pedir`` já não duplica). O
+    mesmo material em dois itens vira um pedido só. → [PedidoInsumo]"""
+    from facilities.materiais import servico as materiais
+    pedidos, vistos = [], set()
+    for it in ncs:
+        nf = it.get('nao_feito') or {}
+        if nf.get('motivo') != 'faltou_material' or not nf.get('material_id') \
+                or nf['material_id'] in vistos:
+            continue
+        vistos.add(nf['material_id'])
+        texto = f'{ex.ponto.ambiente.nome} · {ex.ponto.nome}: "{it["texto"]}" não feito'
+        try:
+            pedidos.append(materiais.pedir(
+                user, ex.ponto.ambiente.setor.local,
+                {'material_id': nf['material_id'], 'texto': texto[:300]}, agora_utc=ex.recebida_em))
+        except materiais.RegraDoMaterial as erro:
+            raise RegraDaRota(f'"{it["texto"]}": {erro.mensagem}', erro.codigo)
+    return pedidos
+
+
+def _chamado_das_ncs(ex, ncs, user, categoria='outro', pedidos=()):
+    """Decisão do dono (18/10/2026, ajustada em 22/10/2026): item com problema
+    no checklist da rota ABRE chamado na hora — UM por execução, com os itens
+    (não conformes e não feitos) na descrição e as fotos da execução (como a
+    visita de supervisão).
+
+    O chamado nasce ligado à EXECUÇÃO (origem 'execucao', origem_id = a
+    execução; o índice de origem viva impede duplicar) e todas as não
+    conformidades da execução apontam para ele."""
     from facilities.chamados import servico as chamados
-    from facilities.chamados.models import ORIGEM_NAO_CONFORMIDADE, ChamadoAnexo
+    from facilities.chamados.models import ORIGEM_EXECUCAO, Chamado, ChamadoAnexo
     db.session.flush()
-    lista = '; '.join(f'"{nc.item_texto}": {nc.resposta or "—"}' for nc in ncs)
+    lista = '\n'.join(f'- {nc.item_texto}: {nc.resposta or "—"}' for nc in ncs)
+    descricao = (f'Checklist "{ex.versao.modelo.nome}" feito por {user.name} em '
+                 f'{tempo.fmt(ex.concluida_em)}.\n{len(ncs)} item(ns) com problema:\n{lista}')
+    if ex.observacao:
+        descricao += f'\nObservação: {ex.observacao}'
+    if ex.motivo_atraso:
+        descricao += (f'\nLevou {ex.duracao_min} min: '
+                      f'{MOTIVOS_ATRASO[ex.motivo_atraso].lower()}'
+                      + (f' — {ex.motivo_atraso_texto}' if ex.motivo_atraso_texto else '') + '.')
+    for p in pedidos:
+        descricao += f'\nPedido de insumo aberto: {p.resumo}.'
     try:
-        ch = chamados.abrir(
-            user, ex.client_id,
-            f'{ex.ponto.nome}: {len(ncs)} item(ns) não conforme(s) — '
-            f'{ex.versao.modelo.nome}'[:200],
-            descricao=(f'Checklist feito por {user.name} em {tempo.fmt(ex.concluida_em)}. '
-                       f'Não conforme: {lista}.'
-                       + (f' Observação: {ex.observacao}' if ex.observacao else '')),
-            local=f'{ex.ponto.ambiente.nome} · {ex.ponto.nome}'[:200],
-            origem=ORIGEM_NAO_CONFORMIDADE, origem_id=ncs[0].id)
+        with db.session.begin_nested():
+            ch = chamados.abrir(
+                user, ex.client_id,
+                f'{ex.ponto.nome} · {len(ncs)} item(ns) com problema'[:200],
+                descricao=descricao,
+                local=f'{ex.ponto.ambiente.nome} · {ex.ponto.nome}'[:200],
+                categoria=categoria, origem=ORIGEM_EXECUCAO, origem_id=ex.id)
     except chamados.RecusaChamado:
         # Perfil sem chamados (não deveria acontecer no campo): as não
         # conformidades ficam registradas e a gestão abre pela execução.
         return None
+    except IntegrityError:
+        ch = (Chamado.query.filter(Chamado.origem == ORIGEM_EXECUCAO, Chamado.origem_id == ex.id,
+                                   Chamado.status != 'cancelado').first())
+        if ch is None:
+            raise
     for nc in ncs:
         nc.chamado_id = ch.id
     for f in ex.fotos:

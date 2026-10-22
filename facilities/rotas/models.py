@@ -20,6 +20,7 @@ Decisões que este arquivo segue (MODELO_ROTAS, R1 a R7; D49, D51 a D53):
 * A execução não se edita. Correção é um registro à parte, com motivo.
 * Sem sinal vale o horário do aparelho, marcado "feito sem sinal" (R4).
 """
+import json
 from datetime import datetime
 
 from facilities.extensions import db
@@ -60,6 +61,29 @@ MOTIVOS_NAO_REALIZADA = {
     'equipamento': 'Equipamento quebrado',
     'acesso': 'Sem acesso ao local',
     'outro': 'Outro motivo',
+}
+
+# ── Bloco do técnico (decisões do dono, 22/10/2026) ───────────────────────
+# A limpeza levou mais que o previsto (``rota_itens.tempo_previsto_min`` +
+# TOLERANCIA_ATRASO_MIN): a pessoa diz o que aconteceu. 'outro' exige texto.
+TOLERANCIA_ATRASO_MIN = 10
+MOTIVOS_ATRASO = {
+    'sujo_acima_do_normal': 'Local muito sujo / uso acima do normal',
+    'faltou_material': 'Faltou material e fui buscar',
+    'chamado_no_meio': 'Fui chamado para outra coisa no meio',
+    'equipamento': 'Equipamento com problema',
+    'tempo_curto': 'O tempo previsto está curto',
+    'outro': 'Outro',
+}
+# Um item do checklist que NÃO foi feito (resposta 'nao_feito'): vira não
+# conformidade com o motivo; 'faltou_material' com material abre pedido de
+# insumo; 'equipamento' entra no chamado da execução. 'outro' exige texto.
+RESPOSTA_NAO_FEITO = 'nao_feito'
+MOTIVOS_NAO_FEITO = {
+    'faltou_material': 'Faltou material',
+    'equipamento': 'Equipamento com problema',
+    'sem_acesso': 'Sem acesso (fechado, ocupado)',
+    'outro': 'Outro',
 }
 
 
@@ -125,6 +149,11 @@ class ChecklistVersao(db.Model):
     itens_json = db.Column(db.Text, nullable=False, default='[]')
     exige_foto_antes = db.Column(db.Boolean, default=False, nullable=False)
     exige_foto_depois = db.Column(db.Boolean, default=False, nullable=False)
+    # Plano de limpeza (22/10/2026): o material usado e o EPI da atividade,
+    # como a planilha do cliente lista. Ficam na VERSÃO, congelados com a
+    # execução: a tela do técnico mostra o que valia no dia.
+    materiais = db.Column(db.Text)
+    epi = db.Column(db.Text)
     publicada_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     publicada_por = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='RESTRICT'),
                               nullable=True)
@@ -154,6 +183,12 @@ class Rota(db.Model):
                                     server_default='2')
     presenca_prazo_min = db.Column(db.Integer, nullable=False, default=10,
                                    server_default='10')
+    # Plano de limpeza (22/10/2026): o intervalo (almoço, ceia) dentro do
+    # turno — o agendador não põe tarefa nele — e as observações do plano
+    # (ex.: a regra das gaiolas), mostradas na tela da rota.
+    intervalo_inicio = db.Column(db.Time)
+    intervalo_fim = db.Column(db.Time)
+    observacoes = db.Column(db.Text)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -179,10 +214,28 @@ class RotaItem(db.Model):
     # do início ao fim do turno). Os dois podem conviver (R3).
     horarios = db.Column(db.String(300))
     frequencia_min = db.Column(db.Integer)
+    # Minutos para executar o checklist neste ponto (1 a 480; vazio = sem
+    # controle de tempo). Acima disto + TOLERANCIA_ATRASO_MIN, a execução
+    # pede o motivo do atraso.
+    tempo_previsto_min = db.Column(db.Integer)
+    # Plano de limpeza (22/10/2026): vazio = todos os dias da rota; preenchido
+    # ("12345") = só nesses dias (subconjunto dos dias da rota). E os horários
+    # diferentes de um dia específico, em JSON {"6": "07:00, 09:30"}: nesse
+    # dia valem SÓ estes; nos outros vale ``horarios``.
+    dias_semana = db.Column(db.String(7))
+    horarios_por_dia = db.Column(db.Text)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
 
     ponto = db.relationship('PontoInspecao')
     modelo = db.relationship('ChecklistModelo')
+
+    @property
+    def horarios_por_dia_dict(self):
+        try:
+            d = json.loads(self.horarios_por_dia or '{}')
+        except ValueError:
+            return {}
+        return d if isinstance(d, dict) else {}
 
 
 class RotaModelo(db.Model):
@@ -223,6 +276,8 @@ class RotaModeloItem(db.Model):
                                                        ondelete='RESTRICT'), nullable=False)
     horarios = db.Column(db.String(300), nullable=False)
     quantidade = db.Column(db.Integer, nullable=False, default=1, server_default='1')
+    # Tempo previsto (minutos) que ``aplicar`` copia para cada item da rota.
+    tempo_previsto_min = db.Column(db.Integer)
 
     checklist = db.relationship('ChecklistModelo')
 
@@ -320,8 +375,16 @@ class Execucao(db.Model):
     # duplo, resposta perdida) devolve a mesma execução em vez de duplicar.
     envio_id = db.Column(db.String(64), nullable=False, unique=True)
     n_nao_conformes = db.Column(db.Integer, default=0, nullable=False)
+    # Levou mais que o previsto: o motivo (MOTIVOS_ATRASO) e o texto de 'outro'.
+    motivo_atraso = db.Column(db.String(40))
+    motivo_atraso_texto = db.Column(db.String(300))
 
     tarefa = db.relationship('TarefaDia', backref='execucoes')
+
+    @property
+    def duracao_min(self):
+        """Minutos entre ler o QR e concluir (inteiro, nunca negativo)."""
+        return max(0, int((self.concluida_em - self.lido_em).total_seconds() // 60))
     ponto = db.relationship('PontoInspecao')
     versao = db.relationship('ChecklistVersao')
     pessoa = db.relationship('User')
@@ -393,7 +456,12 @@ class AgendadorExecucao(db.Model):
 
 
 # ── Ocorrência do QR público (D47, Q1 a Q3) ───────────────────────────────
+# Bloco do técnico (etapa 2): a pessoa só MARCA os itens do checklist do
+# ponto ("Falta papel") sem escolher um tipo da lista — a ocorrência fica
+# com este tipo e os itens marcados (``OcorrenciaPublica.itens``).
+TIPO_ITENS_DO_CHECKLIST = 'itens'
 TIPOS_OCORRENCIA_PUBLICA = {
+    'itens': 'Itens do checklist',
     'falta_papel': 'Falta papel',
     'falta_sabonete': 'Falta sabonete ou álcool',
     'sujo': 'Local sujo',
@@ -439,10 +507,22 @@ class OcorrenciaPublica(db.Model):
                               nullable=True)
     resolvida_em = db.Column(db.DateTime)
     resolucao = db.Column(db.String(300))
+    # Bloco do técnico (22/10/2026): os itens do checklist do ponto que quem
+    # abriu marcou ("Falta papel", "Lixeira cheia"), como lista JSON de
+    # códigos; e quem abriu, QUANDO estava logado (o cliente do portal). Sem
+    # login continua anônimo: ``autor_id`` fica vazio.
+    itens_json = db.Column(db.Text)
+    autor_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='RESTRICT'),
+                         nullable=True)
 
     ponto = db.relationship('PontoInspecao')
     quem_atendeu = db.relationship('User', foreign_keys=[atendida_por])
     quem_resolveu = db.relationship('User', foreign_keys=[resolvida_por])
+    autor = db.relationship('User', foreign_keys=[autor_id])
+
+    @property
+    def itens(self):
+        return json.loads(self.itens_json or '[]')
 
 
 # ── Confirmação de presença (D48, Q4) ─────────────────────────────────────
@@ -480,7 +560,39 @@ class ConfirmacaoPresenca(db.Model):
                                           name='uq_confirmacoes_presenca_pedido'),)
 
 
-MODELOS_EM_ORDEM_DE_LIMPEZA = (ConfirmacaoPresenca, OcorrenciaPublica, ExecucaoCorrecao,
+# ── Chegada no local (bloco do técnico, 22/10/2026) ───────────────────────
+class Chegada(db.Model):
+    """A pessoa chegou ao local: leu o QR da ENTRADA (``PontoInspecao.
+    entrada_do_local``). Uma por pessoa, local e dia: ler de novo no mesmo
+    dia devolve a mesma. A gestão pode LIBERAR a chegada (``com_camera``
+    falso) quando o QR da entrada não pôde ser lido."""
+    __tablename__ = 'chegadas'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='RESTRICT'),
+                        nullable=False, index=True)
+    client_id = db.Column(db.Integer, db.ForeignKey('clients.id', ondelete='RESTRICT'),
+                          nullable=False)
+    ponto_id = db.Column(db.Integer, db.ForeignKey('pontos_inspecao.id', ondelete='RESTRICT'),
+                         nullable=False)
+    data = db.Column(db.Date, nullable=False)                 # o dia LOCAL (Brasília)
+    chegou_em = db.Column(db.DateTime, nullable=False)        # UTC
+    com_camera = db.Column(db.Boolean, default=True, nullable=False)
+    # Quem liberou, quando não foi pela câmera (a gestão).
+    liberada_por = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='RESTRICT'),
+                             nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    pessoa = db.relationship('User', foreign_keys=[user_id])
+    ponto = db.relationship('PontoInspecao')
+    local = db.relationship('Client')
+
+    __table_args__ = (
+        db.UniqueConstraint('user_id', 'client_id', 'data', name='uq_chegadas_pessoa_local_dia'),
+        db.Index('ix_chegadas_local_data', 'client_id', 'data'),
+    )
+
+
+MODELOS_EM_ORDEM_DE_LIMPEZA = (Chegada, ConfirmacaoPresenca, OcorrenciaPublica, ExecucaoCorrecao,
                                NaoConformidade, ExecucaoFoto, Execucao, TarefaDia, RotaEscala,
                                RotaItem, Rota, RotaModeloItem, RotaModelo,
                                ChecklistDocumento, ChecklistVersao,

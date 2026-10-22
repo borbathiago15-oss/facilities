@@ -312,7 +312,9 @@ def qr(codigo):
     ponto = servico.ponto_pelo_codigo(codigo)
     if ponto is None:
         abort(404)
-    if not atual.is_authenticated:
+    if not atual.is_authenticated or _perfil() == 'cliente':
+        # Sem login, e o cliente do portal também: o formulário público (o
+        # cliente logado fica registrado como autor da ocorrência).
         from facilities.rotas.publico import pagina_publica
         return pagina_publica(ponto)
     require_client(ponto.client_id)

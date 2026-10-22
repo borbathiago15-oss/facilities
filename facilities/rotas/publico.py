@@ -8,6 +8,8 @@
 * ``/app/api/ocorrencias/<id>/<atender|resolver>`` e a versão do site.
 * ``/app/api/push`` (inscrever/sair) e ``/app/api/push/chave``.
 * ``/app/api/presenca`` e ``/app/api/presenca/<id>`` (confirmar).
+* Bloco do técnico (22/10/2026): o POST da ocorrência aceita ``itens`` (os
+  problemas marcados do checklist do ponto) e registra o autor logado.
 """
 import io
 
@@ -21,8 +23,9 @@ from facilities.extensions import db, limiter
 from facilities.core.acesso import allowed_client_ids_or_none, require_client
 from facilities.cadastros.models import PontoInspecao
 from facilities.rotas import ocorrencias, presenca
-from facilities.rotas.models import (SITUACOES_OCORRENCIA, TIPOS_OCORRENCIA_PUBLICA,
-                                     ConfirmacaoPresenca, OcorrenciaPublica)
+from facilities.rotas.models import (SITUACOES_OCORRENCIA, TIPO_ITENS_DO_CHECKLIST,
+                                     TIPOS_OCORRENCIA_PUBLICA, ConfirmacaoPresenca,
+                                     OcorrenciaPublica)
 from facilities.rotas.servico import PERFIS_QUE_EXECUTAM, RegraDaRota
 
 bp = Blueprint('publico', __name__)
@@ -36,8 +39,13 @@ def _ponto_ativo(codigo):
 
 
 def pagina_publica(ponto, erro=None, status=200):
-    return render_template('publico/ocorrencia.html', ponto=ponto,
-                           tipos=TIPOS_OCORRENCIA_PUBLICA, erro=erro), status
+    """A página do QR (etapa 2): "É aqui?" → os itens do checklist do ponto
+    para marcar → foto → enviar. Sem checklist no ponto, a lista de tipos de
+    antes continua valendo (o tipo "itens" é só do caminho com checklist)."""
+    tipos = {k: v for k, v in TIPOS_OCORRENCIA_PUBLICA.items() if k != TIPO_ITENS_DO_CHECKLIST}
+    return render_template('publico/ocorrencia.html', ponto=ponto, tipos=tipos, erro=erro,
+                           local=ponto.ambiente.setor.local.name if ponto.ambiente else '',
+                           itens_reportaveis=ocorrencias.itens_reportaveis(ponto)), status
 
 
 def _chave_do_qr():
@@ -55,7 +63,8 @@ def abrir_ocorrencia(codigo):
         return pagina_publica(ponto, 'Não foi possível enviar.', 400)
     try:
         oc = ocorrencias.abrir(ponto, request.form.get('tipo'), request.form.get('texto'),
-                               request.files.get('foto'))
+                               request.files.get('foto'), itens=request.form.getlist('itens'),
+                               autor=current_user)
         db.session.commit()
     except RegraDaRota as erro:
         db.session.rollback()

@@ -48,7 +48,7 @@ def _enviar(app_module, qr, **campos):
 def test_publico_abre_sem_login_e_acompanha(app_module, cena):
     c = app_module.app.test_client()
     html = c.get(f"/q/{cena['qr']}").get_data(as_text=True)
-    assert 'Viu algum problema aqui?' in html and 'Não pedimos seu nome' in html
+    assert 'É aqui?' in html and 'Não pedimos seu nome' in html
     c, r = _enviar(app_module, cena['qr'])
     assert r.status_code == 302 and '/acompanhar/' in r.headers['Location']
     html = c.get(r.headers['Location']).get_data(as_text=True)

@@ -19,6 +19,19 @@ QUANTIDADE_MAX = 10
 LINHAS_MAX = 60
 
 
+def tempo_previsto_padrao(ambiente):
+    """Minutos previstos pelo TIPO de ambiente (decisão do dono, 22/10/2026):
+    banheiro 30, vestiário 30, copa/refeitório 25, recepção 20, salas 40,
+    armazém/docas 45, área externa 30. Nome sem pista → None."""
+    from facilities.rotas.biblioteca_pronta import TEMPO_POR_AMBIENTE
+    import unicodedata
+    nome = unicodedata.normalize('NFKD', ambiente or '').encode('ascii', 'ignore').decode().lower()
+    for pistas, minutos in TEMPO_POR_AMBIENTE:
+        if any(p in nome for p in pistas):
+            return minutos
+    return None
+
+
 def _texto(valor, limite, rotulo):
     t = (valor or '').strip()[:limite]
     if not t:
@@ -44,8 +57,9 @@ def _checklist_da_biblioteca(bruto):
 
 def salvar_modelo(modelo, dados, linhas):
     """Cria ou edita a rota pronta (só o administrador, na tela). ``linhas``:
-    [{'setor', 'ambiente', 'checklist_id', 'horarios', 'quantidade'}]; linha
-    sem ambiente é ignorada (é a linha em branco do formulário)."""
+    [{'setor', 'ambiente', 'checklist_id', 'horarios', 'quantidade',
+    'tempo_previsto_min' (opcional; vazio = o padrão pelo tipo de ambiente)}];
+    linha sem ambiente é ignorada (é a linha em branco do formulário)."""
     nome = _texto(dados.get('nome'), 150, 'o nome da rota pronta')
     outro = RotaModelo.query.filter(db.func.lower(RotaModelo.nome) == nome.lower()).first()
     if outro is not None and (modelo is None or outro.id != modelo.id):
@@ -74,7 +88,9 @@ def salvar_modelo(modelo, dados, linhas):
         novas.append(RotaModeloItem(
             ordem=len(novas), setor=setor, ambiente=ambiente, checklist_id=checklist.id,
             horarios=', '.join(h.strftime('%H:%M') for h in horarios),
-            quantidade=_quantidade(ln.get('quantidade'))))
+            quantidade=_quantidade(ln.get('quantidade')),
+            tempo_previsto_min=servico._tempo_previsto(ln.get('tempo_previsto_min'))
+            or tempo_previsto_padrao(ambiente)))
     if not novas:
         raise RegraDaRota('Inclua pelo menos um ambiente na rota pronta.')
     modelo = modelo or RotaModelo()
@@ -101,7 +117,8 @@ def linhas_da_previa(modelo):
             nome = it.ambiente if it.quantidade == 1 else f'{it.ambiente} {n}'
             linhas.append({'setor': it.setor, 'ambiente': nome[:120],
                            'checklist_id': it.checklist_id, 'checklist': it.checklist.nome,
-                           'horarios': it.horarios})
+                           'horarios': it.horarios,
+                           'tempo_previsto_min': it.tempo_previsto_min or ''})
     return linhas
 
 
@@ -179,6 +196,9 @@ def aplicar(modelo, local, dados_rota, linhas, autor):
             'hora_fim': dados_rota.get('hora_fim') or modelo.hora_fim.strftime('%H:%M'),
             'tolerancia_min': dados_rota.get('tolerancia_min') or modelo.tolerancia_min,
             'dias_semana': dados_rota.get('dias_semana') or modelo.dias_semana,
+            'intervalo_inicio': dados_rota.get('intervalo_inicio') or '',
+            'intervalo_fim': dados_rota.get('intervalo_fim') or '',
+            'observacoes': dados_rota.get('observacoes') or '',
             'presencas_por_turno': '0'})
         validos = {it.checklist_id for it in modelo.itens}
         for ln in escolhidas:
@@ -195,8 +215,11 @@ def aplicar(modelo, local, dados_rota, linhas, autor):
             resumo['pontos'] += novo
             copia, novo = _checklist_do_local(local, origem, autor)
             resumo['checklists'] += novo
-            servico.salvar_item(rota, None, {'ponto_id': ponto.id, 'modelo_id': copia.id,
-                                             'horarios': ln.get('horarios') or ''})
+            servico.salvar_item(rota, None, {
+                'ponto_id': ponto.id, 'modelo_id': copia.id,
+                'horarios': ln.get('horarios') or '',
+                'tempo_previsto_min': (ln.get('tempo_previsto_min')
+                                       or tempo_previsto_padrao(amb_nome) or '')})
             resumo['itens'] += 1
     except CadastroInvalido as erro:
         raise RegraDaRota(str(erro))

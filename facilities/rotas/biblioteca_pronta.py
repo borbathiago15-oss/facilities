@@ -12,7 +12,7 @@ from facilities.extensions import db
 from facilities.rotas.models import ChecklistModelo
 
 _DANO = {'codigo': 'dano', 'texto': 'Viu algum vazamento, dano ou lâmpada queimada?',
-         'tipo': 'sim_nao',
+         'tipo': 'sim_nao', 'problema': 'Vazamento, dano ou lâmpada queimada',
          'obrigatorio': True, 'problema_se': 'sim',
          'como_fazer': 'Torneira pingando, descarga com defeito, louça ou porta quebrada, '
                        'lâmpada queimada, infiltração. Se sim, conte onde na pergunta abaixo.'}
@@ -27,20 +27,23 @@ MODELOS = [
      'exige_foto_depois': True,
      'itens': [
          {'texto': 'Lixeiras esvaziadas e com saco novo?', 'tipo': 'sim_nao', 'obrigatorio': True,
-          'problema_se': 'nao',
+          'problema_se': 'nao', 'problema': 'Lixeira cheia',
           'como_fazer': 'Amarre o saco, leve ao abrigo de lixo e coloque um saco novo do '
                         'tamanho da lixeira.'},
          {'texto': 'Papel higiênico, papel-toalha e sabonete repostos?', 'tipo': 'sim_nao',
-          'obrigatorio': True, 'problema_se': 'nao',
+          'obrigatorio': True, 'problema_se': 'nao', 'problema': 'Falta papel ou sabonete',
           'como_fazer': 'Deixe 2 rolos de papel higiênico por cabine, o papel-toalha cheio e '
                         'o sabonete acima da metade. Faltou material? Peça pelo app.'},
          {'texto': 'Pias, espelhos e bancadas', 'tipo': 'conforme', 'obrigatorio': True,
+          'problema': 'Pia ou espelho sujo',
           'como_fazer': 'Pano úmido com detergente neutro na pia e na bancada; seque o espelho '
                         'com pano de microfibra, sem manchas.'},
          {'texto': 'Vasos sanitários e mictórios', 'tipo': 'conforme', 'obrigatorio': True,
+          'problema': 'Vaso ou mictório sujo',
           'como_fazer': 'Escova com desinfetante por dentro; pano com desinfetante por fora, '
                         'no assento e na tampa. Dê descarga no fim.'},
          {'texto': 'Piso limpo e seco', 'tipo': 'conforme', 'obrigatorio': True,
+          'problema': 'Piso sujo ou molhado',
           'como_fazer': 'Varra, passe pano com desinfetante e deixe a placa de piso molhado '
                         'até secar.'},
          _DANO, _ONDE]},
@@ -49,33 +52,38 @@ MODELOS = [
      'exige_foto_depois': True,
      'itens': [
          {'texto': 'Lixo orgânico e reciclável retirados?', 'tipo': 'sim_nao', 'obrigatorio': True,
-          'problema_se': 'nao',
+          'problema_se': 'nao', 'problema': 'Lixeira cheia',
           'como_fazer': 'Separe orgânico e reciclável. Saco novo em cada lixeira.'},
          {'texto': 'Pia sem louça acumulada e escorredor organizado', 'tipo': 'conforme',
-          'obrigatorio': True,
+          'obrigatorio': True, 'problema': 'Pia com louça acumulada',
           'como_fazer': 'Lave o que estiver na pia (se for rotina do contrato) e deixe a cuba '
                         'limpa e seca.'},
          {'texto': 'Bancadas e mesas', 'tipo': 'conforme', 'obrigatorio': True,
+          'problema': 'Bancada ou mesa suja',
           'como_fazer': 'Retire migalhas e passe pano com detergente neutro; depois álcool 70%.'},
          {'texto': 'Micro-ondas, geladeira e cafeteira por fora', 'tipo': 'conforme',
-          'obrigatorio': True,
+          'obrigatorio': True, 'problema': 'Eletrodoméstico sujo',
           'como_fazer': 'Pano úmido nas portas e puxadores. Por dentro só no dia programado.'},
          {'texto': 'Sabão, esponja e papel-toalha repostos?', 'tipo': 'sim_nao',
-          'obrigatorio': True, 'problema_se': 'nao'},
+          'obrigatorio': True, 'problema_se': 'nao', 'problema': 'Falta sabão ou papel-toalha'},
          {'texto': 'Piso limpo e seco', 'tipo': 'conforme', 'obrigatorio': True,
+          'problema': 'Piso sujo ou molhado',
           'como_fazer': 'Varra, passe pano com desengordurante e deixe a placa até secar.'},
          _DANO, _ONDE]},
     {'nome': 'Limpeza de recepção e escritório — padrão Trino',
      'descricao': 'Rotina das áreas de atendimento e trabalho: lixo, mesas, vidros e piso.',
      'itens': [
          {'texto': 'Lixeiras esvaziadas?', 'tipo': 'sim_nao', 'obrigatorio': True,
-          'problema_se': 'nao'},
+          'problema_se': 'nao', 'problema': 'Lixeira cheia'},
          {'texto': 'Balcão, mesas e cadeiras', 'tipo': 'conforme', 'obrigatorio': True,
+          'problema': 'Balcão ou mesa suja',
           'como_fazer': 'Pano úmido com detergente neutro. Não mexa em papéis e objetos das '
                         'pessoas.'},
          {'texto': 'Vidros, portas e maçanetas', 'tipo': 'conforme', 'obrigatorio': True,
+          'problema': 'Vidro ou porta suja',
           'como_fazer': 'Limpa-vidros com pano de microfibra; álcool 70% nas maçanetas.'},
          {'texto': 'Piso e tapetes', 'tipo': 'conforme', 'obrigatorio': True,
+          'problema': 'Piso sujo',
           'como_fazer': 'Aspire os tapetes; varra e passe pano no piso.'},
          _DANO, _ONDE]},
     {'nome': 'Limpeza de vestiário — padrão Trino',
@@ -83,25 +91,31 @@ MODELOS = [
      'exige_foto_depois': True,
      'itens': [
          {'texto': 'Lixeiras esvaziadas e com saco novo?', 'tipo': 'sim_nao', 'obrigatorio': True,
-          'problema_se': 'nao'},
+          'problema_se': 'nao', 'problema': 'Lixeira cheia'},
          {'texto': 'Chuveiros e ralos', 'tipo': 'conforme', 'obrigatorio': True,
+          'problema': 'Chuveiro ou ralo sujo',
           'como_fazer': 'Escove o box com desinfetante e tire cabelo e sujeira do ralo.'},
          {'texto': 'Bancos e portas dos armários por fora', 'tipo': 'conforme',
-          'obrigatorio': True, 'como_fazer': 'Pano úmido com desinfetante.'},
-         {'texto': 'Vasos, pias e espelhos', 'tipo': 'conforme', 'obrigatorio': True},
+          'obrigatorio': True, 'problema': 'Bancos ou armários sujos',
+          'como_fazer': 'Pano úmido com desinfetante.'},
+         {'texto': 'Vasos, pias e espelhos', 'tipo': 'conforme', 'obrigatorio': True,
+          'problema': 'Vaso, pia ou espelho sujo'},
          {'texto': 'Piso limpo e seco', 'tipo': 'conforme', 'obrigatorio': True,
+          'problema': 'Piso sujo ou molhado',
           'como_fazer': 'Puxe a água com rodo, passe pano e deixe a placa até secar.'},
          _DANO, _ONDE]},
     {'nome': 'Área externa e calçada — padrão Trino',
      'descricao': 'Rotina da área externa: varrição, lixo, lixeiras e riscos.',
      'itens': [
          {'texto': 'Calçada e entrada varridas?', 'tipo': 'sim_nao', 'obrigatorio': True,
-          'problema_se': 'nao'},
+          'problema_se': 'nao', 'problema': 'Calçada suja'},
          {'texto': 'Bitucas, papéis e folhas recolhidos?', 'tipo': 'sim_nao', 'obrigatorio': True,
-          'problema_se': 'nao'},
+          'problema_se': 'nao', 'problema': 'Lixo no chão'},
          {'texto': 'Lixeiras externas', 'tipo': 'conforme', 'obrigatorio': True,
+          'problema': 'Lixeira externa cheia',
           'como_fazer': 'Esvazie e troque o saco; lixeira cheia atrai bicho.'},
-         {'texto': 'Canteiros e jardins sem lixo', 'tipo': 'conforme', 'obrigatorio': True},
+         {'texto': 'Canteiros e jardins sem lixo', 'tipo': 'conforme', 'obrigatorio': True,
+          'problema': 'Lixo no jardim'},
          {'codigo': 'risco',
           'texto': 'Viu algum risco (buraco, piso solto, luz apagada, fio exposto)?',
           'tipo': 'sim_nao', 'obrigatorio': True, 'problema_se': 'sim',
@@ -119,19 +133,19 @@ MODELOS.append(
      'exige_foto_depois': True,
      'itens': [
          {'texto': 'Corredores e faixas de pedestre livres?', 'tipo': 'sim_nao',
-          'obrigatorio': True, 'problema_se': 'nao',
+          'obrigatorio': True, 'problema_se': 'nao', 'problema': 'Corredor obstruído',
           'como_fazer': 'Nada de palete, caixa ou filme no corredor nem sobre a faixa '
                         'amarela. Se tiver, avise o líder do turno.'},
          {'texto': 'Piso sem óleo, água ou produto derramado', 'tipo': 'conforme',
-          'obrigatorio': True,
+          'obrigatorio': True, 'problema': 'Derramamento no piso',
           'como_fazer': 'Derramamento: isole com cone, use o absorvente do kit e só depois '
                         'lave. Óleo nunca vai para o ralo.'},
          {'texto': 'Filme, papelão e lixo nos coletores certos', 'tipo': 'conforme',
-          'obrigatorio': True,
+          'obrigatorio': True, 'problema': 'Lixo fora do coletor',
           'como_fazer': 'Papelão dobrado no coletor de papelão; filme stretch no de plástico; '
                         'o resto no lixo comum.'},
          {'texto': 'Docas varridas e niveladoras sem detritos', 'tipo': 'conforme',
-          'obrigatorio': True,
+          'obrigatorio': True, 'problema': 'Doca suja',
           'como_fazer': 'Varra a doca só com o caminhão fora ou a porta fechada.'},
          {'codigo': 'risco',
           'texto': 'Viu algum risco (palete quebrado, piso solto, luz apagada, vazamento)?',
@@ -140,6 +154,18 @@ MODELOS.append(
          {'texto': 'O que e onde?', 'tipo': 'texto', 'obrigatorio': True,
           'mostrar_se': 'risco=sim'}]})
 
+# Tempo previsto (minutos) por tipo de ambiente, pelo nome (sem acento,
+# minúsculo): o primeiro que casa vale. Salas por último: "sala" é genérico.
+TEMPO_POR_AMBIENTE = (
+    (('banheiro', 'sanitario', 'lavabo', 'wc'), 30),
+    (('vestiario',), 30),
+    (('copa', 'cozinha', 'refeitorio'), 25),
+    (('recepcao', 'portaria', 'hall'), 20),
+    (('armazem', 'doca', 'galpao', 'piso operacional', 'expedicao'), 45),
+    (('externa', 'calcada', 'patio', 'estacionamento', 'jardim'), 30),
+    (('sala', 'escritorio', 'estacao'), 40),
+)
+
 _BANHEIRO = 'Limpeza de banheiro — padrão Trino'
 _COPA = 'Limpeza de copa e cozinha — padrão Trino'
 _RECEPCAO = 'Limpeza de recepção e escritório — padrão Trino'
@@ -147,7 +173,8 @@ _VESTIARIO = 'Limpeza de vestiário — padrão Trino'
 _EXTERNA = 'Área externa e calçada — padrão Trino'
 _PISO = 'Piso operacional, docas e armazém — padrão Trino'
 
-# Rotas prontas. As frequências são o ponto de partida usual de mercado e o
+# Rotas prontas. As frequências e os tempos previstos (minutos por ponto,
+# decisão do dono de 22/10/2026) são o ponto de partida usual de mercado e o
 # administrador ajusta na tela; a referência legal é a NR-24 (instalações
 # sanitárias, vestiários e refeitórios em permanente estado de limpeza) e,
 # para refeitório e copa, a RDC 216/2004 da ANVISA (boas práticas em serviços
@@ -160,12 +187,12 @@ ROTAS = [
      'turno': 'Diurno', 'hora_inicio': '06:00', 'hora_fim': '18:00', 'tolerancia_min': 30,
      'dias_semana': '12345',
      'itens': [
-         ('Administrativo', 'Banheiro masculino', _BANHEIRO, '08:00, 10:00, 12:00, 14:00, 16:00', 1),
-         ('Administrativo', 'Banheiro feminino', _BANHEIRO, '08:00, 10:00, 12:00, 14:00, 16:00', 1),
-         ('Administrativo', 'Copa', _COPA, '09:30, 13:30, 16:30', 1),
-         ('Administrativo', 'Recepção', _RECEPCAO, '07:30, 13:00', 1),
-         ('Administrativo', 'Salas e estações de trabalho', _RECEPCAO, '07:00', 1),
-         ('Área externa', 'Entrada e calçada', _EXTERNA, '07:00', 1)]},
+         ('Administrativo', 'Banheiro masculino', _BANHEIRO, '08:00, 10:00, 12:00, 14:00, 16:00', 1, 30),
+         ('Administrativo', 'Banheiro feminino', _BANHEIRO, '08:00, 10:00, 12:00, 14:00, 16:00', 1, 30),
+         ('Administrativo', 'Copa', _COPA, '09:30, 13:30, 16:30', 1, 25),
+         ('Administrativo', 'Recepção', _RECEPCAO, '07:30, 13:00', 1, 20),
+         ('Administrativo', 'Salas e estações de trabalho', _RECEPCAO, '07:00', 1, 40),
+         ('Área externa', 'Entrada e calçada', _EXTERNA, '07:00', 1, 30)]},
     {'nome': 'Centro de distribuição — turno A (manhã)',
      'segmento': 'Centro de distribuição / galpão',
      'descricao': 'Vestiários na troca de turno e no meio dele, banheiros da operação a cada '
@@ -174,13 +201,13 @@ ROTAS = [
      'turno': 'Turno A', 'hora_inicio': '06:00', 'hora_fim': '14:20', 'tolerancia_min': 30,
      'dias_semana': '123456',
      'itens': [
-         ('Apoio', 'Vestiário masculino', _VESTIARIO, '06:30, 10:00, 13:45', 1),
-         ('Apoio', 'Vestiário feminino', _VESTIARIO, '06:30, 10:00, 13:45', 1),
-         ('Operação', 'Banheiro da operação', _BANHEIRO, '07:00, 09:00, 11:00, 13:00', 2),
-         ('Apoio', 'Refeitório', _COPA, '10:30, 13:00', 1),
-         ('Operação', 'Armazém e docas', _PISO, '08:00, 12:00', 1),
-         ('Administrativo', 'Escritório administrativo', _RECEPCAO, '07:00', 1),
-         ('Área externa', 'Portaria e pátio', _EXTERNA, '08:30', 1)]},
+         ('Apoio', 'Vestiário masculino', _VESTIARIO, '06:30, 10:00, 13:45', 1, 30),
+         ('Apoio', 'Vestiário feminino', _VESTIARIO, '06:30, 10:00, 13:45', 1, 30),
+         ('Operação', 'Banheiro da operação', _BANHEIRO, '07:00, 09:00, 11:00, 13:00', 2, 30),
+         ('Apoio', 'Refeitório', _COPA, '10:30, 13:00', 1, 25),
+         ('Operação', 'Armazém e docas', _PISO, '08:00, 12:00', 1, 45),
+         ('Administrativo', 'Escritório administrativo', _RECEPCAO, '07:00', 1, 40),
+         ('Área externa', 'Portaria e pátio', _EXTERNA, '08:30', 1, 30)]},
 ]
 
 
@@ -194,12 +221,12 @@ def semear_rotas():
         if RotaModelo.query.filter_by(nome=dados['nome']).first():
             continue
         linhas = []
-        for setor, ambiente, checklist, horarios, qtd in dados['itens']:
+        for setor, ambiente, checklist, horarios, qtd, minutos in dados['itens']:
             m = ChecklistModelo.query.filter(ChecklistModelo.client_id.is_(None),
                                              ChecklistModelo.nome == checklist).first()
             linhas.append({'setor': setor, 'ambiente': ambiente,
                            'checklist_id': m.id if m else '', 'horarios': horarios,
-                           'quantidade': qtd})
+                           'quantidade': qtd, 'tempo_previsto_min': minutos})
         rotas_prontas.salvar_modelo(None, dados, linhas)
         criados.append(dados['nome'])
     return criados

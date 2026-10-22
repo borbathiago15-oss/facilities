@@ -15,7 +15,7 @@ As regras, em uma frase cada:
   de quem chama.
 """
 import json
-from datetime import date, datetime
+from datetime import date, datetime, time
 
 from facilities.extensions import db
 from facilities.core.models import Client, User
@@ -44,7 +44,7 @@ def foto(obj):
         if col.name in _FORA_DA_FOTO:
             continue
         valor = getattr(obj, col.key)
-        if isinstance(valor, (datetime, date)):
+        if isinstance(valor, (datetime, date, time)):
             valor = valor.isoformat()
         dados[col.name] = valor
     return dados
@@ -355,11 +355,36 @@ def salvar_ponto(local, ponto, dados, autor):
     ponto.ambiente_id = ambiente.id
     ponto.equipamento_id = eq_id
     ponto.descricao = _texto(dados, 'descricao', 300)
+    # Só mexe na marca de entrada quando o formulário trouxe o campo: a tela
+    # que ainda não o tem não desmarca a entrada de quem já a definiu.
+    if 'entrada_do_local' in dados:
+        entrada = _ligado(dados.get('entrada_do_local'))
+        if entrada and ponto.is_active:
+            exigir_uma_entrada(local.id, ponto)
+        ponto.entrada_do_local = entrada
     if nova:
         db.session.add(ponto)
     acao = 'criado' if nova else ('movido' if mudou else 'alterado')
     registrar('ponto', ponto, acao, antes, autor, local.id)
     return ponto
+
+
+def _ligado(valor):
+    return str(valor if valor is not None else '').strip().lower() in ('1', 'true', 'on', 'sim')
+
+
+def ponto_de_entrada(client_id):
+    """O ponto ATIVO marcado como entrada do local (ou None)."""
+    return (PontoInspecao.query.filter_by(client_id=client_id, entrada_do_local=True,
+                                          is_active=True).order_by(PontoInspecao.id).first())
+
+
+def exigir_uma_entrada(client_id, ponto):
+    """No máximo UM ponto de entrada ativo por local."""
+    outro = ponto_de_entrada(client_id)
+    if outro is not None and (ponto is None or outro.id != ponto.id):
+        raise CadastroInvalido(f'Este local já tem um ponto de entrada: "{outro.nome}" '
+                               f'({outro.ambiente.nome}). Desmarque-o antes.')
 
 
 # entidade → (modelo, pai como atributo, filhos como atributos)
@@ -388,6 +413,8 @@ def definir_ativo(entidade, obj, ativo, autor):
         dono = getattr(obj, pai) if pai else None
         if dono is not None and not dono.is_active:
             raise CadastroInvalido(f'Reative primeiro "{dono.nome}", que está acima deste.')
+        if entidade == 'ponto' and obj.entrada_do_local:
+            exigir_uma_entrada(obj.client_id, obj)
     antes = foto(obj)
     obj.is_active = bool(ativo)
     registrar(entidade, obj, 'reativado' if ativo else 'desativado', antes, autor, obj.client_id)

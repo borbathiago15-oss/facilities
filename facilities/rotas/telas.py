@@ -29,9 +29,9 @@ from facilities.rotas.models import (MOTIVOS_NAO_REALIZADA, SITUACOES, TIPOS_DE_
                                      ChecklistModelo, Execucao, ExecucaoFoto, NaoConformidade,
                                      Rota, RotaEscala, RotaItem, TarefaDia)
 from facilities.rotas.servico import RegraDaRota
-from facilities.rotas import ocorrencias, presenca
-from facilities.rotas.models import (SITUACOES_OCORRENCIA, TIPOS_OCORRENCIA_PUBLICA,
-                                     OcorrenciaPublica)
+from facilities.rotas import chegadas, ocorrencias, presenca
+from facilities.rotas.models import (MOTIVOS_ATRASO, MOTIVOS_NAO_FEITO, SITUACOES_OCORRENCIA,
+                                     TIPOS_OCORRENCIA_PUBLICA, OcorrenciaPublica)
 
 bp = Blueprint('rotas', __name__)
 
@@ -126,7 +126,8 @@ LINHAS_EM_BRANCO_ROTA = 3
 
 
 def _linhas_do_formulario(form):
-    campos = ('setor', 'ambiente', 'checklist_id', 'horarios', 'quantidade')
+    campos = ('setor', 'ambiente', 'checklist_id', 'horarios', 'quantidade',
+              'tempo_previsto_min')
     listas = {c: form.getlist(c) for c in campos}
     n = len(listas['ambiente'])
     return [{c: (listas[c][i] if i < len(listas[c]) else '') for c in campos}
@@ -154,7 +155,8 @@ def rota_pronta(rmid=None):
         raise Forbidden('A biblioteca da Trino é mantida pelo administrador.')
     m = _rota_pronta(rmid) if rmid else None
     linhas = [{'setor': it.setor, 'ambiente': it.ambiente, 'checklist_id': it.checklist_id,
-               'horarios': it.horarios, 'quantidade': it.quantidade}
+               'horarios': it.horarios, 'quantidade': it.quantidade,
+               'tempo_previsto_min': it.tempo_previsto_min or ''}
               for it in (m.itens if m else [])]
     return render_template('rotas/rota_pronta.html', modelo=m,
                            linhas=linhas + [{}] * LINHAS_EM_BRANCO_ROTA,
@@ -236,6 +238,56 @@ def aplicar_rota_pronta_post(cid, rmid):
           f'{r["checklists"]} checklist(s). Falta a escala: quem faz esta rota. A '
           'confirmação de presença começa desligada.', 'success')
     return redirect(url_for('rotas.rota', rid=rota.id))
+
+
+# ── Plano de limpeza do cliente (planilha) ────────────────────────────────
+
+@bp.get('/rotas/locais/<int:cid>/importar-plano')
+@login_required
+def importar_plano(cid):
+    loc = _local(cid, montar=True)
+    return render_template('rotas/importar_plano.html', local=loc, previa=None,
+                           dias=servico.DIAS_DA_SEMANA)
+
+
+@bp.post('/rotas/locais/<int:cid>/importar-plano')
+@login_required
+def importar_plano_previa(cid):
+    """Recebe a planilha, guarda e mostra a prévia (nada é criado ainda)."""
+    from facilities.rotas import plano_limpeza
+    loc = _local(cid, montar=True)
+    try:
+        chave, plano = plano_limpeza.guardar_planilha(loc, request.files.get('arquivo'))
+        previa = plano_limpeza.planejar(plano, loc)
+    except RegraDaRota as erro:
+        flash(erro.mensagem, 'danger')
+        return redirect(url_for('rotas.importar_plano', cid=loc.id))
+    return render_template('rotas/importar_plano.html', local=loc, previa=previa, chave=chave,
+                           dias=servico.DIAS_DA_SEMANA,
+                           ja_existem=plano_limpeza.rotas_que_ja_existem(previa, loc))
+
+
+@bp.post('/rotas/locais/<int:cid>/importar-plano/criar')
+@login_required
+def importar_plano_criar(cid):
+    """Cria no local o que a prévia mostrou (a planilha guardada pela chave)."""
+    from facilities.rotas import plano_limpeza
+    loc = _local(cid, montar=True)
+    try:
+        plano = plano_limpeza.ler_guardada(loc, request.form.get('chave'))
+        previa = plano_limpeza.planejar(plano, loc)
+        resumo = plano_limpeza.aplicar(previa, loc, current_user,
+                                       substituir=request.form.get('substituir') == '1')
+        db.session.commit()
+    except RegraDaRota as erro:
+        db.session.rollback()
+        flash(erro.mensagem, 'danger')
+        return redirect(url_for('rotas.importar_plano', cid=loc.id))
+    flash(f'Plano importado: {resumo["rotas"]} rota(s) com {resumo["itens"]} atividade(s). '
+          f'Novos neste local: {resumo["setores"]} setor(es), {resumo["ambientes"]} bloco(s), '
+          f'{resumo["pontos"]} ponto(s) com QR e {resumo["checklists"]} checklist(s). Falta a '
+          'escala: quem faz cada rota.', 'success')
+    return redirect(url_for('rotas.local', cid=loc.id))
 
 
 # ── Checklists ────────────────────────────────────────────────────────────
@@ -322,7 +374,7 @@ def modelo(mid):
 
 def _itens_do_formulario(form, arquivos=None, modelo=None):
     campos = ('texto', 'tipo', 'opcoes', 'minimo', 'maximo', 'problema_se', 'mostrar_se',
-              'codigo', 'ordem', 'como_fazer', 'foto_ref')
+              'codigo', 'ordem', 'como_fazer', 'foto_ref', 'problema')
     linhas = []
     n = len(form.getlist('texto'))
     for i in range(n):
@@ -490,11 +542,11 @@ def criar_item(rid):
     r = _rota(rid, montar=True)
     ids = request.form.getlist('ponto_id')
     if len(ids) > 1:
-        return _gravar(servico.salvar_itens_em_lote, r, ids, request.form,
+        return _gravar(servico.salvar_itens_em_lote, r, ids, _com_dias(request.form),
                        sucesso=f'{len(ids)} pontos incluídos na rota, com o mesmo checklist e '
                                'os mesmos horários.',
                        destino=url_for('rotas.rota', rid=r.id))
-    return _gravar(servico.salvar_item, r, None, request.form,
+    return _gravar(servico.salvar_item, r, None, _com_dias(request.form),
                    sucesso='Atividade incluída na rota.', destino=url_for('rotas.rota', rid=r.id))
 
 
@@ -510,7 +562,7 @@ def editar_item(rid, iid):
         db.session.commit()
         flash('Atividade reativada.' if it.is_active else 'Atividade tirada da rota.', 'success')
         return redirect(url_for('rotas.rota', rid=r.id))
-    return _gravar(servico.salvar_item, r, it, request.form,
+    return _gravar(servico.salvar_item, r, it, _com_dias(request.form),
                    sucesso='Atividade atualizada.', destino=url_for('rotas.rota', rid=r.id))
 
 
@@ -569,7 +621,36 @@ def dia(cid):
                            situacoes_ocorrencia=SITUACOES_OCORRENCIA,
                            atrasada=ocorrencias.atrasada,
                            presencas=presenca.da_rota_no_dia(loc.id, d),
+                           chegadas=chegadas.do_dia(loc.id, d),
+                           entrada=chegadas.ponto_de_entrada(loc.id),
                            pode_atender=_perfil() in servico.PERFIS_QUE_EXECUTAM)
+
+
+@bp.post('/rotas/locais/<int:cid>/chegadas')
+@login_required
+def liberar_chegada(cid):
+    """A gestão libera a chegada de alguém no dia (o QR da entrada não pôde
+    ser lido). Formulário: ``user_id`` e ``data`` (opcional, hoje)."""
+    loc = _local(cid, montar=True)
+    dados = request.form if request.form else (request.get_json(silent=True) or {})
+    try:
+        uid = int(str(dados.get('user_id') or '').strip() or 0)
+        dia = datetime.strptime(str(dados.get('data') or ''), '%Y-%m-%d').date() \
+            if dados.get('data') else None
+    except ValueError:
+        uid, dia = 0, None
+    destino = url_for('rotas.dia', cid=loc.id, data=dia.isoformat() if dia else None)
+    try:
+        c, nova = chegadas.liberar(current_user, uid, loc, dia)
+        db.session.commit()
+    except RegraDaRota as erro:
+        db.session.rollback()
+        flash(erro.mensagem, 'danger')
+        return redirect(destino)
+    flash(f'Chegada de {c.pessoa.name} liberada para {c.data.strftime("%d/%m/%Y")}.' if nova
+          else f'{c.pessoa.name} já tinha chegada registrada em {c.data.strftime("%d/%m/%Y")}.',
+          'success')
+    return redirect(destino)
 
 
 def _execucao(eid):
@@ -711,6 +792,7 @@ def _dados_do_turno(locais):
     def v_json(v):
         return {'id': v.id, 'modelo': v.modelo.nome, 'numero': v.numero,
                 'procedimento': v.modelo.descricao or '', 'itens': _itens_com_referencia(v),
+                'materiais': v.materiais or '', 'epi': v.epi or '',
                 'documentos': [{'nome': d.nome, 'url': url_for('rotas.documento', did=d.id)}
                                for d in servico.documentos_ativos(v.modelo)],
                 'foto_antes': v.exige_foto_antes, 'foto_depois': v.exige_foto_depois}
@@ -720,20 +802,33 @@ def _dados_do_turno(locais):
         'tarefas': [{
             'id': t.id, 'ponto': t.ponto.codigo_qr, 'ponto_nome': t.ponto.nome,
             'ambiente': t.ponto.ambiente.nome, 'local': t.rota.local.name,
+            'local_id': t.client_id,
             'rota': t.rota.nome, 'hora': tempo.fmt(t.previsto_para, '%H:%M'),
             'previsto': t.previsto_para.isoformat() + 'Z', 'tolerancia': t.tolerancia_min,
             'fim_turno': t.fim_do_turno.isoformat() + 'Z', 'versao': t.versao_id,
             'minha': t.user_id == current_user.id, 'escalado': t.pessoa.name if t.pessoa else '',
             'status': t.status, 'situacao': servico.situacao(t, agora),
+            'tempo_previsto_min': t.item.tempo_previsto_min if t.item else None,
         } for t in vivas],
         'versoes': {str(k): v_json(v) for k, v in versoes.items()},
         'pontos': {codigo: {'id': p.id, 'nome': p.nome, 'ambiente': p.ambiente.nome,
                             'descricao': p.descricao or '', 'local': p.ambiente.setor.local.name,
+                            'local_id': p.client_id, 'entrada': bool(p.entrada_do_local),
                             'extras': [m.versao_atual.id for m in modelos
                                        if m.client_id == p.client_id and m.versao_atual]}
                    for codigo, p in pontos.items()},
         'preventivas': preventivas,
         'motivos': MOTIVOS_NAO_REALIZADA,
+        'motivos_atraso': MOTIVOS_ATRASO,
+        'motivos_nao_feito': MOTIVOS_NAO_FEITO,
+        # O JSON da tela sai com as chaves em ordem alfabética; os botões
+        # seguem a ordem do vocabulário (o "Outro" por último).
+        'motivos_atraso_ordem': list(MOTIVOS_ATRASO),
+        'motivos_nao_feito_ordem': list(MOTIVOS_NAO_FEITO),
+        'tolerancia_atraso_min': servico.TOLERANCIA_ATRASO_MIN,
+        # Etapa 2: um cartão por local da carteira — o QR da entrada (quando o
+        # local tem) e a chegada de hoje (hora), para o app abrir o turno certo.
+        'locais': _locais_json(locais),
         'situacoes': SITUACOES,
         # Fase 4B: o que o público avisou pelo QR e ainda não foi resolvido.
         'ocorrencias': [{
@@ -744,6 +839,19 @@ def _dados_do_turno(locais):
             'atrasada': ocorrencias.atrasada(o, agora),
         } for o in ocorrencias.abertas(ids)],
     }
+
+
+def _locais_json(locais):
+    saida = []
+    for c in locais:
+        entrada = chegadas.ponto_de_entrada(c.id)
+        chegada = chegadas.de_hoje(current_user, c.id)
+        saida.append({'id': c.id, 'nome': c.name,
+                      'entrada': entrada.codigo_qr if entrada else None,
+                      'entrada_nome': entrada.nome if entrada else None,
+                      'chegada': ({'id': chegada.id, 'hora': tempo.fmt(chegada.chegou_em, '%H:%M')}
+                                  if chegada else None)})
+    return saida
 
 
 def _itens_com_referencia(versao):
@@ -791,7 +899,68 @@ def turno():
 
 def _api_erro(erro):
     db.session.rollback()
-    return jsonify({'error': erro.mensagem}), erro.codigo
+    return jsonify(erro.como_json()), erro.codigo
+
+
+@bp.post('/app/api/chegada')
+@login_required
+def api_chegada():
+    """A pessoa leu o QR da ENTRADA do local: registra a chegada do dia
+    (idempotente). ``{'ponto': <QR>, 'selo_leitura': <opcional>}``."""
+    dados = request.get_json(silent=True) or {}
+    ponto = PontoInspecao.query.filter_by(codigo_qr=str(dados.get('ponto') or '')[:32]).first()
+    if ponto is None:
+        return jsonify({'error': 'QR não reconhecido.'}), 404
+    require_client(ponto.client_id)
+    lido = servico._hora_da_leitura(dados.get('selo_leitura'), current_user, ponto)
+    try:
+        c, nova = chegadas.registrar(current_user, ponto, lido or datetime.utcnow(),
+                                     com_camera=dados.get('com_camera', True))
+        db.session.commit()
+    except RegraDaRota as erro:
+        return _api_erro(erro)
+    return jsonify({'ok': True, 'nova': nova,
+                    'chegada': {'id': c.id, 'local': c.client_id, 'data': c.data.isoformat(),
+                                'hora': tempo.fmt(c.chegou_em, '%H:%M'),
+                                'com_camera': c.com_camera}}), 201 if nova else 200
+
+
+@bp.get('/app/api/turno')
+@login_required
+def api_turno():
+    """O turno de hoje da pessoa no local ``?local=<id>`` (o do QR lido)."""
+    bruto = str(request.args.get('local') or request.args.get('client_id') or '').strip()
+    if not bruto.isdigit():
+        return jsonify({'error': 'Diga o local (?local=<id>).'}), 400
+    try:
+        dados = servico.turno_de_hoje(current_user, int(bruto))
+        db.session.commit()
+    except RegraDaRota as erro:
+        return _api_erro(erro)
+    return jsonify(dados)
+
+
+@bp.get('/app/api/materiais')
+@login_required
+def api_materiais():
+    """O catálogo de materiais para o "Faltou material" de um item
+    (``?local=<id>``): [{id, nome}], primeiro os que o local já tem em
+    estoque, depois os demais do catálogo."""
+    from facilities.materiais import servico as materiais
+    from facilities.materiais.models import Material
+    bruto = str(request.args.get('local') or '').strip()
+    if not bruto.isdigit():
+        return jsonify({'error': 'Diga o local (?local=<id>).'}), 400
+    require_client(int(bruto))
+    import unicodedata
+    no_local = set(materiais.saldos(int(bruto)))
+    todos = Material.query.filter_by(is_active=True).all()
+
+    def chave(m):            # sem acento: "Água" fica perto de "Agua", não no fim
+        nome = unicodedata.normalize('NFKD', m.nome).encode('ascii', 'ignore').decode().lower()
+        return (m.id not in no_local, nome)
+    return jsonify([{'id': m.id, 'nome': m.nome, 'unidade': m.unidade, 'no_local': m.id in no_local}
+                    for m in sorted(todos, key=chave)])
 
 
 @bp.post('/app/api/leitura')
@@ -825,6 +994,8 @@ def api_execucao():
         return _api_erro(erro)
     t = ex.tarefa
     return jsonify({'id': ex.id, 'nova': nova, 'status': t.status if t else 'extra',
+                    'duracao_min': ex.duracao_min, 'motivo_atraso': ex.motivo_atraso,
+                    'pedidos_insumo': [p.id for p in getattr(ex, 'pedidos_de_insumo', ())],
                     'situacao': SITUACOES.get(t.status) if t else (
                         'Preventiva feita — a ordem ficou resolvida' if ex.chamado_id
                         else f'Registrada como atividade extra ({ex.virou_extra})'

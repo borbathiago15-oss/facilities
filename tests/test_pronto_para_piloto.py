@@ -23,7 +23,7 @@ from tests.test_rotas_servico import (SEGUNDA, _executar, _respostas, _s, _taref
 
 def test_item_nao_conforme_abre_um_chamado_com_as_fotos(app_module, cena):
     from app import db
-    from facilities.chamados.models import ORIGEM_NAO_CONFORMIDADE, Chamado, ChamadoAnexo
+    from facilities.chamados.models import ORIGEM_EXECUCAO, Chamado, ChamadoAnexo
     from facilities.rotas.models import NaoConformidade
     with app_module.app.app_context():
         _s().gerar(SEGUNDA)
@@ -34,9 +34,10 @@ def test_item_nao_conforme_abre_um_chamado_com_as_fotos(app_module, cena):
         db.session.commit()
         ncs = NaoConformidade.query.filter_by(execucao_id=ex.id).all()
         assert len(ncs) == 2
-        ch = Chamado.query.filter_by(origem=ORIGEM_NAO_CONFORMIDADE).one()
+        # Bloco do técnico (22/10/2026): UM chamado por execução, ligado a ela.
+        ch = Chamado.query.filter_by(origem=ORIGEM_EXECUCAO, origem_id=ex.id).one()
         assert {nc.chamado_id for nc in ncs} == {ch.id}
-        assert '2 item(ns) não conforme(s)' in ch.titulo
+        assert ch.titulo == 'Porta do banheiro · 2 item(ns) com problema'
         assert 'Papel higiênico reposto?' in ch.descricao and 'Mictórios' in ch.descricao
         anexos = ChamadoAnexo.query.filter_by(chamado_id=ch.id).all()
         assert len(anexos) == 1 and anexos[0].momento == 'antes'

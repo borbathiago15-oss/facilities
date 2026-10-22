@@ -58,6 +58,7 @@
   {% endfor %}
   {% if pode_montar %}
   <a class="btn btn-outline-primary fw-bold mt-2" href="{{ url_for('rotas.aplicar_rota_pronta', cid=local.id) }}"><i class="bi bi-magic" aria-hidden="true"></i> Usar uma rota pronta</a>
+  <a class="btn btn-outline-primary fw-bold mt-2" href="{{ url_for('rotas.importar_plano', cid=local.id) }}"><i class="bi bi-file-earmark-spreadsheet" aria-hidden="true"></i> Importar plano (planilha)</a>
   <details class="mt-2">
     <summary class="fw-semibold">Criar rota do zero</summary>
     <form method="post" action="{{ url_for('rotas.criar_rota', cid=local.id) }}" class="mt-2">

@@ -36,6 +36,14 @@ FORA = {
     # pelo QR, logada ou não. Testado em test_qr_publico.py.
     'publico.abrir_ocorrencia': 'aberto ao público por desenho',
 }
+# Rotas fora da varredura só para UM perfil, com o motivo.
+FORA_PARA = {
+    # Para o cliente do portal, /q/<código> é a MESMA página pública que o
+    # visitante sem login vê (bloco do técnico, etapa 2: "É aqui?" e os itens
+    # do checklist do ponto como problemas a marcar). Para a equipe e a
+    # gestão a rota continua na varredura (exige a carteira).
+    ('cliente', 'cadastros.qr'): 'a página pública do QR, igual à de quem não tem login',
+}
 
 
 def _png():
@@ -224,7 +232,13 @@ def _rotas_de_a(app_module, a, ids):
         {'setor': 'Sanitários', 'ambiente': 'Banheiro', 'checklist_id': str(lib.id),
          'horarios': '08:00', 'quantidade': '1'}])
     db.session.commit()
-    return {'rota_pronta': pronta.id, 'documento': doc.id, 'mes_relatorio': mes_rel.strftime('%Y-%m'), 'cobranca': cob.id, 'cliente_a': cli_a, 'foto_visita': foto_visita, 'material': material.id, 'pedido': pedido.id, 'chave': chave.id,'ocorrencia_publica': oc.id, 'presenca': pres.id, 'plano': plano.id,
+    # Bloco do técnico: o ponto de A é a ENTRADA do local, com a chegada de hoje do dono.
+    from facilities.rotas import chegadas
+    p_a = db.session.get(PontoInspecao, ids['ponto'])
+    p_a.entrada_do_local = True
+    chegadas.registrar(db.session.get(User, dono), p_a)
+    db.session.commit()
+    return {'dono': dono, 'rota_pronta': pronta.id, 'documento': doc.id, 'mes_relatorio': mes_rel.strftime('%Y-%m'), 'cobranca': cob.id, 'cliente_a': cli_a, 'foto_visita': foto_visita, 'material': material.id, 'pedido': pedido.id, 'chave': chave.id,'ocorrencia_publica': oc.id, 'presenca': pres.id, 'plano': plano.id,
             'funcionario': func.id, 'posto': posto.id, 'escala_trabalho': esc.id,
             'falta': falta.id, 'programada': prog.id,
             'visita': Visita.query.filter_by(programada_id=prog.id).one().id,
@@ -387,12 +401,19 @@ def _varrer(app_module, local_a, c, papel):
              'autorizar_negativo': '1',
              # Fase 9B: a cobrança (prazo) e o comentário de quem confirma.
              'prazo': (tempo.hoje() + timedelta(days=3)).isoformat(),
+             # Bloco do técnico: o QR de A na chegada, o local de A no turno, a
+             # pessoa de A na liberação da chegada e os itens do QR público.
+             'local': local_a['local'], 'user_id': local_a['dono'], 'itens': ['pergunta'],
+             'motivos': {'pergunta': {'motivo': 'faltou_material',
+                                      'material_id': local_a['material']}},
              'corpo': json.dumps({'envio_id': f'invasao-{papel}-0001', 'ponto': local_a['qr'],
                                   'tarefa_id': local_a['tarefa_rota'], 'respostas': {},
                                   'sem_sinal': True,
                                   'lido_em': '2026-10-17T12:00:00'})}
     vazou = []
     for endpoint, metodo, caminho in _urls(app_module, local_a):
+        if (papel, endpoint) in FORA_PARA:
+            continue
         url = caminho + (('&' if '?' in caminho else '?') + f'client_id={a}')
         if metodo == 'GET':
             respostas = [c.get(url)]

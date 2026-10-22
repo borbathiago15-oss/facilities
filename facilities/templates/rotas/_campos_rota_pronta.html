@@ -17,4 +17,13 @@
       <label class="border rounded px-2 py-1 small"><input type="checkbox" name="dias_semana" value="{{ k }}" {% if (m and k in m.dias_semana) or (not m and k in '12345') %}checked{% endif %}{% if not editavel %} disabled{% endif %}> {{ v }}</label>
       {% endfor %}
     </div></fieldset>
+  {% if editavel %}
+  <div class="col-6 col-md-2"><label class="form-label small fw-semibold" for="rpint1">Intervalo: início</label>
+    <input class="form-control" id="rpint1" name="intervalo_inicio" type="time" value=""></div>
+  <div class="col-6 col-md-2"><label class="form-label small fw-semibold" for="rpint2">Intervalo: fim</label>
+    <input class="form-control" id="rpint2" name="intervalo_fim" type="time" value=""></div>
+  <div class="col-12"><label class="form-label small fw-semibold" for="rpobs">Observações da rota (opcional)</label>
+    <textarea class="form-control" id="rpobs" name="observacoes" rows="2" maxlength="4000"></textarea></div>
+  {% endif %}
 </div>
+{% if editavel %}<p class="form-text mb-0">Intervalo (almoço, ceia): nenhuma tarefa cai dentro dele; deixe vazio se não houver.</p>{% endif %}

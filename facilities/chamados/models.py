@@ -82,6 +82,9 @@ ORIGEM_PENDENCIA = 'pendencia'
 # não conformidade (ou tarefa) vira UM chamado.
 ORIGEM_NAO_CONFORMIDADE = 'nao_conformidade'
 ORIGEM_TAREFA_ROTA = 'tarefa_rota'
+# Bloco do técnico (22/10/2026): os itens com problema de UMA execução do
+# checklist viram UM chamado (origem_id = a execução), com os itens dentro.
+ORIGEM_EXECUCAO = 'execucao'
 # Fase 5: a ordem de serviço gerada por um plano preventivo (origem_id é o
 # ciclo, ``preventiva_ordens.id``: um ciclo vira UMA OS).
 ORIGEM_PREVENTIVA = 'preventiva'

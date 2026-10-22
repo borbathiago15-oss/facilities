@@ -20,5 +20,11 @@
       <label class="border rounded px-2 py-1 small"><input type="checkbox" name="dias_semana" value="{{ k }}" {% if (r and k in r.dias_semana) or (not r) %}checked{% endif %}> {{ v }}</label>
       {% endfor %}
     </div></fieldset>
+  <div class="col-6 col-md-2"><label class="form-label small fw-semibold" for="rint1">Intervalo: início</label>
+    <input class="form-control" id="rint1" name="intervalo_inicio" type="time" value="{{ r.intervalo_inicio.strftime('%H:%M') if r and r.intervalo_inicio else '' }}"></div>
+  <div class="col-6 col-md-2"><label class="form-label small fw-semibold" for="rint2">Intervalo: fim</label>
+    <input class="form-control" id="rint2" name="intervalo_fim" type="time" value="{{ r.intervalo_fim.strftime('%H:%M') if r and r.intervalo_fim else '' }}"></div>
+  <div class="col-12"><label class="form-label small fw-semibold" for="robs">Observações do plano (opcional)</label>
+    <textarea class="form-control" id="robs" name="observacoes" rows="2" maxlength="4000" placeholder="Ex.: manter as gaiolas de recicláveis conforme a identificação da câmara.">{{ r.observacoes or '' if r else '' }}</textarea></div>
 </div>
-<p class="form-text mb-0">Turno que passa da meia-noite: ponha o fim menor que o início (ex.: 22:00 às 06:00). Presença: o aplicativo pede a confirmação em horários sorteados do turno a quem está escalado; 0 desliga.</p>
+<p class="form-text mb-0">Turno que passa da meia-noite: ponha o fim menor que o início (ex.: 22:00 às 06:00). Intervalo (almoço, ceia): nenhuma tarefa cai dentro dele; deixe vazio se não houver. Presença: o aplicativo pede a confirmação em horários sorteados do turno a quem está escalado; 0 desliga.</p>

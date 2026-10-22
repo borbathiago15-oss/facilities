@@ -789,6 +789,65 @@ body.dark .page-title, body.dark .pg-titulo, body.dark .pg-num-v, body.dark .pg-
 .fc-proxima { border: 2px solid var(--marca); border-radius: var(--radius-lg); background: var(--blue-50); }
 .fc-proxima .fc-roteiro-n { background: var(--marca); color: #fff; }
 
+/* ── Aplicativo do técnico (etapa 2): locais, chegada, execução ──────── */
+.fc-local-turno { display: flex; flex-direction: column; gap: 4px; color: inherit; text-decoration: none;
+  padding: 14px 16px; }
+.fc-local-turno:hover, .fc-local-turno:focus-visible { border-color: var(--marca); color: inherit; }
+.fc-local-turno:focus-visible { outline: 3px solid var(--info); outline-offset: 2px; }
+.fc-local-turno-nome { font-size: 17px; font-weight: 800; }
+.fc-local-turno-sub { font-size: 13.5px; color: var(--gray-600); }
+.fc-local-turno-acao { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; margin-top: 4px;
+  font-weight: 700; color: var(--marca); }
+.fc-local-turno-aqui { border-color: var(--ok-borda); background: var(--ok-fundo); }
+.fc-local-turno-aqui .fc-local-turno-acao { color: var(--ok); }
+.fc-chegada { padding: 28px 18px; }
+.fc-chegada-icone { font-size: 56px; color: var(--marca); display: block; margin-bottom: 8px; }
+.fc-exec-sub { color: var(--gray-500); font-size: 14px; }
+.fc-exec-passo { font-size: 13px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--gray-500); margin: 18px 0 8px; }
+.fc-exec-passo:first-child { margin-top: 4px; }
+.fc-foto-botao { min-height: 64px; font-size: 17px; }
+.fc-itens { display: flex; flex-direction: column; gap: 8px; }
+.fc-item { background: var(--surface); border: 1px solid var(--linha); border-radius: var(--radius-lg);
+  padding: 10px 12px; }
+.fc-item-topo { display: flex; align-items: center; gap: 10px; }
+.fc-item-texto { flex: 1; min-width: 0; display: flex; flex-direction: column; font-weight: 600; font-size: 16px; }
+.fc-item-estado { font-size: 13px; font-weight: 700; color: var(--gray-500); }
+.fc-check { flex: none; width: 48px; height: 48px; border-radius: 50%; border: 2px solid var(--gray-300);
+  background: var(--surface); color: var(--gray-400); font-size: 24px; display: inline-flex;
+  align-items: center; justify-content: center; }
+.fc-check-feito { background: var(--ok); border-color: var(--ok); color: #fff; }
+.fc-check:focus-visible, .fc-item-info:focus-visible, .fc-naodeu:focus-visible { outline: 3px solid var(--info); outline-offset: 2px; }
+.fc-item-feito { border-color: var(--ok-borda); background: var(--ok-fundo); }
+.fc-item-feito .fc-item-estado { color: var(--ok); }
+.fc-item-naodeu { border-color: var(--aviso-borda); background: var(--aviso-fundo); }
+.fc-item-naodeu .fc-item-estado { color: var(--aviso); }
+.fc-item-naodeu .fc-check { border-color: var(--aviso); color: var(--aviso); }
+.fc-item-info { flex: none; width: 44px; height: 44px; border: 0; background: none; color: var(--gray-500);
+  font-size: 20px; border-radius: 50%; }
+.fc-item-info:hover { background: var(--gray-100); color: var(--gray-900); }
+.fc-item-ajuda { margin-top: 8px; }
+.fc-naodeu { flex: none; min-height: 44px; font-weight: 700; }
+.fc-item-naodeu .fc-naodeu { background: var(--aviso); border-color: var(--aviso); color: #fff; }
+.fc-item-campo { margin-top: 8px; }
+.fc-exec-obs summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; color: var(--gray-600); }
+.fc-pronto { min-height: 64px; font-size: 19px; }
+.fc-pronto-feito { padding: 28px 18px; border-color: var(--ok-borda); background: var(--ok-fundo); }
+.fc-pronto-icone { font-size: 56px; color: var(--ok); display: block; margin-bottom: 8px; }
+.fc-proxima-tarefa { border-color: var(--marca); }
+.fc-motivo { text-align: left; justify-content: flex-start; }
+.fc-radio-linha { min-height: 44px; align-items: center; }
+.fc-folha { position: fixed; inset: 0; z-index: 1060; background: rgba(4, 6, 7, .55); display: flex;
+  align-items: flex-end; justify-content: center; }
+.fc-folha-caixa { width: 100%; max-width: 560px; max-height: 90vh; overflow-y: auto; background: var(--surface);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0; padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); }
+.fc-folha-aberta { overflow: hidden; }
+/* Página pública do QR, passo a passo */
+.fc-qr-passos .fc-qr-passo h1, .fc-qr-passos .fc-qr-passo h2 { outline: none; }
+.fc-qr-item { gap: 10px; }
+.fc-qr-item i { font-size: 22px; }
+.fc-qr-item:has(.fc-opcao-radio:checked) i { color: #fff; }
+
 /* ── Relatório do cliente ────────────────────────────────────────────── */
 .fc-rel-nota { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;
   align-items: center; }
