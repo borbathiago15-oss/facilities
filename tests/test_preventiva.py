@@ -358,7 +358,9 @@ def test_painel_junta_chamados_e_preventivas_atrasado_primeiro(app_module, cena)
     with app_module.app.app_context():
         _ordem(app_module, cena)
         ch = _chamado(app_module, cena, 'urgente')
-        ch.prazo = datetime.utcnow() - timedelta(hours=1)
+        # Bem mais vencido que a ordem preventiva (que vence HOJE, numa data
+        # fixa): o teste não pode depender da hora em que roda.
+        ch.prazo = datetime.utcnow() - timedelta(days=30)
         db.session.commit()
         itens = demandas.demandas([cena['local']])
         assert itens[0]['situacao'] == 'atrasada' and itens[0]['tipo'] == 'chamado'
