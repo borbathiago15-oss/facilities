@@ -72,8 +72,12 @@
       <h1 class="pg-titulo">Passagem de Turno</h1>
       <div class="pg-sub">O turno, as pendências e as ocorrências num histórico só.</div>
     </div>
+    {# Só para quem GRAVA na Passagem: a diretoria (só leitura) lê o painel,
+       e a tela de lançar o turno devolve 403 para ela. #}
+    {% if pode_gravar %}
     <a class="btn btn-primary px-3" href="{{ url_for('diario_operacional.turno', client_id=client_id) }}">
       <i class="bi bi-plus-lg"></i> Nova passagem</a>
+    {% endif %}
   </div>
 
   <div class="pg-acoes">

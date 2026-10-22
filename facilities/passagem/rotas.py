@@ -801,7 +801,13 @@ def turno():
     operação — e deixa para a pessoa só o que ela precisa decidir: a data, o
     turno e as respostas. Cada pergunta a responder vem do modelo daquele
     contrato, do mesmo jeito que a régua do SLA Contratual é de cada contrato.
+
+    Só para quem GRAVA no módulo: o ``module_required`` libera o GET para a
+    diretoria (só leitura), mas esta tela é um formulário que grava e os
+    botões "Resolver" das pendências também — mesmo padrão de Chamados › novo.
     """
+    if not current_user.can_access(MODULO):
+        abort(403)
     clients = _clientes_visiveis()
     client_id = request.args.get('client_id', type=int) or (clients[0].id if clients else None)
     if client_id and client_id not in [c.id for c in clients]:

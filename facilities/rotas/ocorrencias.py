@@ -79,7 +79,7 @@ def abrir(ponto, tipo, texto, foto=None, agora_utc=None):
     db.session.flush()
     na_rota, acompanham = _destinatarios(ponto, agora_utc)
     titulo = f'Ocorrência: {TIPOS_OCORRENCIA_PUBLICA[tipo]}'
-    onde = f'{ponto.ambiente.nome} · {ponto.nome}'
+    onde = f'{ponto.ambiente.setor.local.name} · {ponto.ambiente.nome} · {ponto.nome}'
     link_campo = f'/app/turno?ponto={ponto.codigo_qr}'
     link_gestao = f'/rotas/locais/{ponto.client_id}/dia'
     if na_rota:
@@ -139,7 +139,16 @@ def resolver(oc, user, resolucao='', agora_utc=None):
 
 
 def abertas(client_ids):
+    """As ocorrências em aberto dos locais, com ponto → ambiente → setor →
+    local já carregados: a tela escreve o nome do local em cada linha, e sem
+    isso seriam quatro consultas por ocorrência."""
+    from sqlalchemy.orm import joinedload
+    from facilities.cadastros.models import Ambiente, PontoInspecao, Setor
     return (OcorrenciaPublica.query
+            .options(joinedload(OcorrenciaPublica.ponto)
+                     .joinedload(PontoInspecao.ambiente)
+                     .joinedload(Ambiente.setor)
+                     .joinedload(Setor.local))
             .filter(OcorrenciaPublica.client_id.in_(list(client_ids) or [-1]),
                     OcorrenciaPublica.status != OCORRENCIA_RESOLVIDA)
             .order_by(OcorrenciaPublica.criada_em).all())
