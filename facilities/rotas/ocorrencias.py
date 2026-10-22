@@ -22,7 +22,7 @@ from facilities.rotas.models import (OCORRENCIA_ABERTA, OCORRENCIA_EM_ATENDIMENT
                                      OcorrenciaPublica, TarefaDia)
 
 TEXTO_MAX = 300
-FOTO_MAX = 8 * 1024 * 1024
+FOTO_MAX = 3 * 1024 * 1024      # anônimo: 3 MB na entrada, e ainda é reduzida
 
 
 def prazo_minutos(ponto, tipo):
@@ -94,7 +94,8 @@ def abrir(ponto, tipo, texto, foto=None, agora_utc=None):
 
 
 def _guardar_foto(oc, foto):
-    from facilities.core.anexos import ANEXO_ASSINATURA, ANEXO_TIPOS, imagem_aceitavel, storage
+    from facilities.core.anexos import (ANEXO_ASSINATURA, ANEXO_TIPOS, imagem_aceitavel,
+                                        reduzir_imagem, storage)
     from facilities.rotas.servico import RegraDaRota
     nome = (foto.filename or '').lower()
     ext = nome.rsplit('.', 1)[-1] if '.' in nome else 'jpg'
@@ -107,6 +108,7 @@ def _guardar_foto(oc, foto):
             not imagem_aceitavel(dados, ext):
         raise RegraDaRota('A foto não foi aceita (formato ou tamanho). Envie sem foto ou '
                           'tire outra.')
+    dados, ext = reduzir_imagem(dados, ext)
     oc.foto_key = f'ocorrencias/{uuid.uuid4().hex}.{ext}'
     oc.foto_mime = ANEXO_TIPOS[ext]
     storage().save(oc.foto_key, dados, oc.foto_mime)

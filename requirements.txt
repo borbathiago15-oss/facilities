@@ -7,6 +7,8 @@ Flask-Login==0.6.3
 Flask-Migrate==4.0.7
 Flask-WTF==1.2.1
 Flask-Limiter==3.8.0
+# Limites compartilhados entre os workers (RATELIMIT_STORAGE_URI=redis://...).
+redis==8.1.0
 Werkzeug==3.1.9
 reportlab==4.4.1
 pillow==13.0.0

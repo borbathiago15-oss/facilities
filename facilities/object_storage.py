@@ -137,3 +137,33 @@ def get_storage(local_base_dir, local_implicito=True):
             'reinício. Defina as variáveis do R2 — ou STORAGE_BACKEND=local, se '
             'o disco local for mesmo o destino (com volume persistente).')
     return LocalStorage(local_base_dir)
+
+
+def espelhar_no_r2(base_dir):
+    """Cópia de segurança do disco para o R2 (``flask anexos espelhar``):
+    percorre ``base_dir`` e envia o que o bucket ainda não tem, com a mesma
+    chave relativa. Idempotente: rodar de novo só manda o que é novo.
+    Precisa das variáveis ``R2_*``. Devolve (copiados, já existiam, erros)."""
+    import mimetypes
+    faltam = [v for v in _R2_VARS if not os.environ.get(v)]
+    if faltam:
+        raise StorageError('Espelho no R2 pede as variáveis ' + ', '.join(faltam) + '.')
+    r2 = R2Storage(os.environ['R2_ENDPOINT'], os.environ['R2_ACCESS_KEY_ID'],
+                   os.environ['R2_SECRET_ACCESS_KEY'], os.environ['R2_BUCKET'],
+                   prefix=os.environ.get('R2_PREFIX', ''))
+    base = os.path.abspath(base_dir)
+    copiados = ja = erros = 0
+    for raiz, _dirs, arquivos in os.walk(base):
+        for nome in arquivos:
+            caminho = os.path.join(raiz, nome)
+            chave = os.path.relpath(caminho, base).replace(os.sep, '/')
+            try:
+                if r2.exists(chave):
+                    ja += 1
+                    continue
+                with open(caminho, 'rb') as f:
+                    r2.save(chave, f.read(), mimetypes.guess_type(nome)[0])
+                copiados += 1
+            except Exception:
+                erros += 1
+    return copiados, ja, erros

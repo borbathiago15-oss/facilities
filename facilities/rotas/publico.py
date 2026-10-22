@@ -47,6 +47,7 @@ def _chave_do_qr():
 @bp.post('/q/<codigo>/ocorrencia')
 @limiter.limit('5 per hour')                          # por endereço de quem envia
 @limiter.limit('30 per hour', key_func=_chave_do_qr)  # por QR (um banheiro, muitos visitantes)
+@limiter.limit('100 per day', key_func=_chave_do_qr)  # teto do dia por QR (auditoria N-06)
 def abrir_ocorrencia(codigo):
     ponto = _ponto_ativo(codigo)
     # Campo-isca: invisível para gente, preenchido por robô.

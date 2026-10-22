@@ -33,6 +33,8 @@ Onde os dados ficam, e o que apaga:
 2. **Banco:** *Create › Database › PostgreSQL*. Mantenha o nome `Postgres`.
 3. **Volume dos anexos:** no `web`, *Settings › Volumes › Add volume*, ponto de
    montagem `/data`.
+3b. **Redis:** *Create › Database › Redis*. Mantenha o nome `Redis`. É só
+   para os limites de acesso; não guarda dado da operação.
 4. **Variáveis do `web`** (*Variables › Raw Editor*):
 
    ```
@@ -40,7 +42,7 @@ Onde os dados ficam, e o que apaga:
    SECRET_KEY=${{secret(64)}}
    STORAGE_BACKEND=local
    UPLOAD_FOLDER=/data/uploads
-   RAILWAY_RUN_UID=0
+   RATELIMIT_STORAGE_URI=${{Redis.REDIS_URL}}
    PROXY_HOPS=1
    WEB_CONCURRENCY=2
    CLIENTE_EXTERNO_LIBERADO=0
@@ -48,8 +50,15 @@ Onde os dados ficam, e o que apaga:
 
    * `${{secret(64)}}` faz o Railway sortear a chave uma vez e guardar. **Não
      troque depois**: trocar derruba todas as sessões (ninguém perde dado).
-   * `RAILWAY_RUN_UID=0`: o volume do Railway é do usuário root; sem isso o
-     app (que roda como usuário comum) não consegue gravar as fotos.
+   * **Não** defina `RAILWAY_RUN_UID`. O contêiner começa como root só para
+     acertar o dono do volume e larga o privilégio sozinho
+     (`docker-entrypoint.sh`); o app nunca roda como root e o código fica só
+     leitura (auditoria SEC-008).
+   * `RATELIMIT_STORAGE_URI`: os limites de acesso (login, código, QR
+     público, API) precisam de um lugar comum aos workers; sem Redis cada
+     limite vale `WEB_CONCURRENCY` vezes e zera a cada deploy. Crie o Redis
+     no passo 3b. Enquanto ele não existir, o site sobe com um aviso no log;
+     com `RATELIMIT_EXIGIR_COMPARTILHADO=1` ele se recusa a subir sem Redis.
    * `CLIENTE_EXTERNO_LIBERADO=0` até o jurídico entregar os termos (Grupo C).
 5. **Configuração do `web`:** *Settings › Deploy*: *Healthcheck Path*
    `/healthz`; *Replicas* 1. *Networking › Generate Domain* (endereço
@@ -96,7 +105,14 @@ Onde os dados ficam, e o que apaga:
 8. **Avisos no celular (opcional, recomendado):** no mesmo `railway ssh`,
    `flask --app facilities push chaves` e cole as três linhas
    (`VAPID_PRIVATE_KEY`, `VAPID_PUBLIC_KEY`, `VAPID_SUBJECT`) nas variáveis do
-   `web` **e** do `agendador`. Sem elas, os avisos ficam só no sino.
+   `web` **e** do `agendador` (volte ao passo 6 e acrescente lá também: é o
+   agendador que manda o aviso da hora da tarefa). Sem elas, o aviso da
+   tarefa não chega por canal nenhum; os demais ficam no sino.
+8b. **Biblioteca de checklists e rotas prontas:** entre como administrador,
+   abra *Cadastros › Biblioteca de checklists* e clique **Instalar na
+   biblioteca** (ou `flask --app facilities semear-checklists` no
+   `railway ssh`). Sem isso a biblioteca nasce vazia e "Usar uma rota
+   pronta" não tem o que oferecer.
 9. **Backup diário:** *Create › Docker Image* › `postgres:17` (use a MESMA
    versão principal do Postgres do projeto, ou maior — veja em *Postgres ›
    Settings*). Nome `backup`. Volume em `/backup`. Variável
@@ -112,6 +128,21 @@ Onde os dados ficam, e o que apaga:
    (`railway ssh --service backup` e `cat /backup/<arquivo> > ...`, ou
    *Volume › Download*, se o painel oferecer) e guarde no drive da empresa.
    Restaurar: `pg_restore --clean --no-owner -d "$DATABASE_URL" arquivo.dump`.
+9b. **Backup das fotos e documentos.** O `pg_dump` **não** leva os anexos:
+   eles estão no volume `/data/uploads`, que só o `web` enxerga. Perder o
+   volume perde todas as fotos. Duas saídas, da melhor para a mais simples:
+   * **Recomendado para produção:** guardar os anexos direto no Cloudflare R2
+     em vez do volume (`STORAGE_BACKEND=r2` + `R2_ENDPOINT`,
+     `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`). O bucket fica
+     fora do Railway, com versionamento ligado no painel da Cloudflare.
+   * **Com o volume:** mantenha `STORAGE_BACKEND=local` e acrescente nas
+     variáveis do `web` as quatro `R2_*` de um bucket de cópia **e**
+     `ANEXOS_ESPELHO_R2=1`. Uma vez por dia o próprio `web` copia para o
+     bucket o que ainda não está lá (`flask anexos espelhar`; o intervalo é
+     `ANEXOS_ESPELHO_INTERVALO`, em segundos). Para forçar agora:
+     `railway ssh --service web` e `flask --app facilities anexos espelhar`.
+   Restaurar os anexos: copiar a árvore do bucket de volta para
+   `/data/uploads` (ou trocar para `STORAGE_BACKEND=r2`, que lê do bucket).
 10. **Conferir:**
     * abrir o domínio → tela de login;
     * entrar com o administrador, trocar a senha, ativar a segunda etapa;
