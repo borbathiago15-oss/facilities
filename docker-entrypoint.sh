@@ -9,7 +9,12 @@ set -e
 # do volume dos anexos e larga o privilégio. O app nunca roda como root.
 if [ "$(id -u)" = "0" ]; then
   if [ -n "${UPLOAD_FOLDER:-}" ]; then
-    mkdir -p "$UPLOAD_FOLDER" && chown -R facilities "$UPLOAD_FOLDER"
+    mkdir -p "$UPLOAD_FOLDER"
+    # Recursivo só na primeira vez (arquivos gravados quando ainda era root);
+    # depois disso tudo nasce do usuário certo e o boot não percorre o volume.
+    if [ "$(stat -c %U "$UPLOAD_FOLDER")" != "facilities" ]; then
+      chown -R facilities "$UPLOAD_FOLDER"
+    fi
   fi
   chown facilities /app/instance 2>/dev/null || true
   exec gosu facilities "$0" "$@"
