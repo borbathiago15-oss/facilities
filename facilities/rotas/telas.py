@@ -802,15 +802,18 @@ def _dados_do_turno(locais):
         'tarefas': [{
             'id': t.id, 'ponto': t.ponto.codigo_qr, 'ponto_nome': t.ponto.nome,
             'ambiente': t.ponto.ambiente.nome, 'local': t.rota.local.name,
+            'local_id': t.client_id,
             'rota': t.rota.nome, 'hora': tempo.fmt(t.previsto_para, '%H:%M'),
             'previsto': t.previsto_para.isoformat() + 'Z', 'tolerancia': t.tolerancia_min,
             'fim_turno': t.fim_do_turno.isoformat() + 'Z', 'versao': t.versao_id,
             'minha': t.user_id == current_user.id, 'escalado': t.pessoa.name if t.pessoa else '',
             'status': t.status, 'situacao': servico.situacao(t, agora),
+            'tempo_previsto_min': t.item.tempo_previsto_min if t.item else None,
         } for t in vivas],
         'versoes': {str(k): v_json(v) for k, v in versoes.items()},
         'pontos': {codigo: {'id': p.id, 'nome': p.nome, 'ambiente': p.ambiente.nome,
                             'descricao': p.descricao or '', 'local': p.ambiente.setor.local.name,
+                            'local_id': p.client_id, 'entrada': bool(p.entrada_do_local),
                             'extras': [m.versao_atual.id for m in modelos
                                        if m.client_id == p.client_id and m.versao_atual]}
                    for codigo, p in pontos.items()},
@@ -818,11 +821,14 @@ def _dados_do_turno(locais):
         'motivos': MOTIVOS_NAO_REALIZADA,
         'motivos_atraso': MOTIVOS_ATRASO,
         'motivos_nao_feito': MOTIVOS_NAO_FEITO,
+        # O JSON da tela sai com as chaves em ordem alfabética; os botões
+        # seguem a ordem do vocabulário (o "Outro" por último).
+        'motivos_atraso_ordem': list(MOTIVOS_ATRASO),
+        'motivos_nao_feito_ordem': list(MOTIVOS_NAO_FEITO),
         'tolerancia_atraso_min': servico.TOLERANCIA_ATRASO_MIN,
-        # O QR da entrada de cada local da carteira e se a chegada de hoje já foi feita.
-        'entradas': {str(c.id): {'ponto': (e.codigo_qr if e else None),
-                                 'chegada': chegadas.de_hoje(current_user, c.id) is not None}
-                     for c in locais for e in [chegadas.ponto_de_entrada(c.id)]},
+        # Etapa 2: um cartão por local da carteira — o QR da entrada (quando o
+        # local tem) e a chegada de hoje (hora), para o app abrir o turno certo.
+        'locais': _locais_json(locais),
         'situacoes': SITUACOES,
         # Fase 4B: o que o público avisou pelo QR e ainda não foi resolvido.
         'ocorrencias': [{
@@ -833,6 +839,19 @@ def _dados_do_turno(locais):
             'atrasada': ocorrencias.atrasada(o, agora),
         } for o in ocorrencias.abertas(ids)],
     }
+
+
+def _locais_json(locais):
+    saida = []
+    for c in locais:
+        entrada = chegadas.ponto_de_entrada(c.id)
+        chegada = chegadas.de_hoje(current_user, c.id)
+        saida.append({'id': c.id, 'nome': c.name,
+                      'entrada': entrada.codigo_qr if entrada else None,
+                      'entrada_nome': entrada.nome if entrada else None,
+                      'chegada': ({'id': chegada.id, 'hora': tempo.fmt(chegada.chegou_em, '%H:%M')}
+                                  if chegada else None)})
+    return saida
 
 
 def _itens_com_referencia(versao):
@@ -919,6 +938,29 @@ def api_turno():
     except RegraDaRota as erro:
         return _api_erro(erro)
     return jsonify(dados)
+
+
+@bp.get('/app/api/materiais')
+@login_required
+def api_materiais():
+    """O catálogo de materiais para o "Faltou material" de um item
+    (``?local=<id>``): [{id, nome}], primeiro os que o local já tem em
+    estoque, depois os demais do catálogo."""
+    from facilities.materiais import servico as materiais
+    from facilities.materiais.models import Material
+    bruto = str(request.args.get('local') or '').strip()
+    if not bruto.isdigit():
+        return jsonify({'error': 'Diga o local (?local=<id>).'}), 400
+    require_client(int(bruto))
+    import unicodedata
+    no_local = set(materiais.saldos(int(bruto)))
+    todos = Material.query.filter_by(is_active=True).all()
+
+    def chave(m):            # sem acento: "Água" fica perto de "Agua", não no fim
+        nome = unicodedata.normalize('NFKD', m.nome).encode('ascii', 'ignore').decode().lower()
+        return (m.id not in no_local, nome)
+    return jsonify([{'id': m.id, 'nome': m.nome, 'unidade': m.unidade, 'no_local': m.id in no_local}
+                    for m in sorted(todos, key=chave)])
 
 
 @bp.post('/app/api/leitura')

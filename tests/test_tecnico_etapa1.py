@@ -473,7 +473,7 @@ def test_publico_marca_itens_e_o_cliente_logado_fica_como_autor(app_module, cena
     from app import db
     from facilities.rotas.models import OcorrenciaPublica
     html = app_module.app.test_client().get(f"/q/{cena['qr']}").get_data(as_text=True)
-    assert 'Viu algum problema aqui?' in html
+    assert 'É aqui?' in html
     # Anônimo, com itens e sem texto (o tipo não é "outro"): aceito.
     c = app_module.app.test_client()
     r = c.post(f"/q/{cena['qr']}/ocorrencia",
@@ -496,7 +496,7 @@ def test_publico_marca_itens_e_o_cliente_logado_fica_como_autor(app_module, cena
     with app_module.app.app_context():
         fabrica.cliente(app_module, 'cliente.etapa1@gl.com', cena['cliente'])
     cli = fabrica.entrar_com_codigo(app_module, 'cliente.etapa1@gl.com')
-    assert 'Viu algum problema aqui?' in cli.get(f"/q/{cena['qr']}").get_data(as_text=True)
+    assert 'É aqui?' in cli.get(f"/q/{cena['qr']}").get_data(as_text=True)
     r = cli.post(f"/q/{cena['qr']}/ocorrencia", data={'tipo': 'lixo', 'itens': ['mictorios']},
                  content_type='multipart/form-data')
     assert r.status_code == 302, r.get_data(as_text=True)[:300]

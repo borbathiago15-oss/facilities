@@ -4,12 +4,33 @@
 <h1 class="fc-titulo">Olá, {{ current_user.name.split(' ')[0] }}</h1>
 <p class="fc-sub">{{ tempo.fmt(tempo.agora(), '%d/%m/%Y') }} · {{ current_user.perfil_rotulo }}</p>
 
-<a class="btn btn-primary btn-lg w-100 fc-app-acao mb-2" href="{{ url_for('campo.ler_qr') }}">
+<a class="btn btn-primary btn-lg w-100 fc-app-acao mb-3" href="{{ url_for('campo.ler_qr') }}">
   <i class="bi bi-qr-code-scan"></i> Ler o QR do local
 </a>
-<a class="btn btn-outline-primary w-100 fc-app-acao mb-3" href="{{ url_for('rotas.turno') }}">
-  <i class="bi bi-list-check"></i> Meu turno (tarefas da rota)
-</a>
+
+{# Etapa 2 do bloco do técnico: um cartão por local da carteira. Com QR de
+   entrada, o turno só abre depois da chegada; sem entrada, abre direto. #}
+{% if turno_por_local %}
+<section class="mb-3" aria-labelledby="tit-turno">
+  <h2 class="h6 fw-bold" id="tit-turno"><i class="bi bi-list-check"></i> Meu turno de hoje</h2>
+  {% for l in turno_por_local %}
+  {% set n = l.tarefas %}
+  {% if l.entrada and not l.chegada %}
+  <a class="fc-cartao fc-local-turno mb-2" href="{{ url_for('campo.ler_qr') }}" data-local="{{ l.local.id }}" data-situacao="sem_chegada">
+    <span class="fc-local-turno-nome">{{ l.local.name }}</span>
+    <span class="fc-local-turno-sub">{% if n.total %}{{ n.total }} tarefa{{ 's' if n.total != 1 }} hoje · {% endif %}Ao chegar, leia o QR da entrada ({{ l.entrada.nome }})</span>
+    <span class="fc-local-turno-acao"><i class="bi bi-qr-code-scan"></i> Ler o QR da entrada</span>
+  </a>
+  {% else %}
+  <a class="fc-cartao fc-local-turno mb-2{% if l.chegada %} fc-local-turno-aqui{% endif %}" href="{{ url_for('rotas.turno', local=l.local.id) }}" data-local="{{ l.local.id }}" data-situacao="{{ 'chegou' if l.chegada else 'sem_entrada' }}">
+    <span class="fc-local-turno-nome">{% if l.chegada %}Você está no {{ l.local.name }}{% else %}{{ l.local.name }}{% endif %}</span>
+    <span class="fc-local-turno-sub">{% if l.chegada %}Chegou às {{ l.chegada.chegou_em|hora_local('%H:%M') }} · {% endif %}{% if n.total %}{{ n.abertas }} de {{ n.total }} tarefa{{ 's' if n.total != 1 }} por fazer{% else %}Nenhuma tarefa da rota hoje{% endif %}</span>
+    <span class="fc-local-turno-acao"><i class="bi bi-list-check"></i> Ver o turno</span>
+  </a>
+  {% endif %}
+  {% endfor %}
+</section>
+{% endif %}
 {% if usa_material %}
 <a class="btn btn-outline-primary w-100 fc-app-acao mb-2" href="{{ url_for('materiais.app') }}">
   <i class="bi bi-box-seam"></i> Material: usei / está faltando
@@ -83,8 +104,9 @@
   <button class="btn btn-outline-primary w-100 fc-app-acao" type="button" id="fc-ativar-avisos"><i class="bi bi-bell"></i> Receber avisos neste celular</button>
 </section>
 
+{% if current_user.can_access('diario_operacional') %}
 <section class="fc-cartao" aria-labelledby="tit-locais">
-  <h2 class="h6 fw-bold" id="tit-locais"><i class="bi bi-geo-alt"></i> Meus locais</h2>
+  <h2 class="h6 fw-bold" id="tit-locais"><i class="bi bi-journal-check"></i> Passagem de turno</h2>
   {% for l in locais %}
   <a class="fc-app-item" href="{{ url_for('diario_operacional.turno', client_id=l.id) }}">
     <span class="fw-semibold">{{ l.name }}</span>
@@ -92,5 +114,6 @@
   </a>
   {% endfor %}
 </section>
+{% endif %}
 {% endif %}
 {% endblock %}
