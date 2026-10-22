@@ -501,11 +501,18 @@ def test_pedido_de_insumo_enviado_duas_vezes_ao_mesmo_tempo_abre_um_pedido(app_m
                        'texto': 'Acabou o detergente'})
         return p.id
 
+    def avisos():
+        return Notification.query.filter_by(notification_type='insumo').count()
+
+    with app_module.app.app_context():
+        antes = avisos()
     saida = _em_paralelo(app_module.app, pedir, pedir)
     assert not _erros(saida), _erros(saida)
     with app_module.app.app_context():
         assert PedidoInsumo.query.filter_by(client_id=c['local'], user_id=c['ana']).count() == 1
-        assert Notification.query.filter_by(notification_type='insumo').count() <= 1
+        # Um pedido avisa os gestores do local uma vez (um aviso por gestor):
+        # o segundo envio não pode ter avisado de novo.
+        assert avisos() - antes <= 1
     assert len(set(_oks(saida))) == 1, 'os dois envios devem devolver o MESMO pedido'
 
 
