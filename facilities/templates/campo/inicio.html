@@ -50,8 +50,10 @@
   <h2 class="h6 fw-bold" id="tit-ocor"><i class="bi bi-megaphone"></i> Avisos do público ({{ ocorrencias|length }})</h2>
   {% for o in ocorrencias %}
   <a class="fc-app-item" href="{{ url_for('rotas.turno', ponto=o.ponto.codigo_qr) }}">
-    <span class="fw-semibold">{{ tipos_ocorrencia[o.tipo] }} · {{ o.ponto.nome }}</span>
-    <span class="small text-muted">{{ o.ponto.ambiente.nome }} · {{ o.criada_em|hora_local('%H:%M') }}{% if o.texto %} · "{{ o.texto }}"{% endif %}</span>
+    {# Local primeiro: quem cuida de dois locais com ambientes de mesmo nome
+       ("Banheiro da operação 1" nos dois) precisa saber em QUAL deles é. #}
+    <span class="fw-semibold">{{ o.ponto.ambiente.setor.local.name }} · {{ o.ponto.ambiente.nome }} · {{ tipos_ocorrencia[o.tipo] }}</span>
+    <span class="small text-muted">{{ o.ponto.nome }} · {{ o.criada_em|hora_local('%H:%M') }}{% if o.texto %} · "{{ o.texto }}"{% endif %}</span>
   </a>
   {% endfor %}
 </section>
