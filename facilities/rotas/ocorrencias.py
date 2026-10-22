@@ -139,7 +139,16 @@ def resolver(oc, user, resolucao='', agora_utc=None):
 
 
 def abertas(client_ids):
+    """As ocorrências em aberto dos locais, com ponto → ambiente → setor →
+    local já carregados: a tela escreve o nome do local em cada linha, e sem
+    isso seriam quatro consultas por ocorrência."""
+    from sqlalchemy.orm import joinedload
+    from facilities.cadastros.models import Ambiente, PontoInspecao, Setor
     return (OcorrenciaPublica.query
+            .options(joinedload(OcorrenciaPublica.ponto)
+                     .joinedload(PontoInspecao.ambiente)
+                     .joinedload(Ambiente.setor)
+                     .joinedload(Setor.local))
             .filter(OcorrenciaPublica.client_id.in_(list(client_ids) or [-1]),
                     OcorrenciaPublica.status != OCORRENCIA_RESOLVIDA)
             .order_by(OcorrenciaPublica.criada_em).all())

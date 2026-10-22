@@ -127,3 +127,33 @@ console.log(JSON.stringify([
     assert json.loads(saida.stdout) == ['/q/yKRZYpIynxphxvqui581Iw',
                                         '/q/yKRZYpIynxphxvqui581Iw',
                                         None, None, None, None, None]
+
+
+def test_aviso_do_publico_diz_o_local(app_module):
+    """Dois locais com um ambiente de mesmo nome: sem o local, as duas linhas
+    de "Avisos do público" ficavam idênticas (visto na gravação de 22/10/2026)."""
+    from app import db
+    from facilities.cadastros import servico
+    from facilities.rotas import ocorrencias
+    from facilities.cadastros.models import PontoInspecao
+    with app_module.app.app_context():
+        admin = app_module.User.query.filter_by(email='admin@grupotrino.com.br').one()
+        pontos = []
+        for nome in ('Shopping Centro', 'Hospital Norte'):
+            loc = fabrica.local(nome)
+            setor = servico.salvar_setor(loc, None, {'nome': 'Operação'}, admin.id)
+            amb = servico.salvar_ambiente(loc, None, {'nome': 'Banheiro da operação 1',
+                                                      'setor_id': setor.id}, admin.id)
+            pontos.append(servico.salvar_ponto(loc, None, {'nome': 'Entrada',
+                                                           'ambiente_id': amb.id}, admin.id).id)
+        db.session.commit()
+        for pid in pontos:
+            ocorrencias.abrir(db.session.get(PontoInspecao, pid), 'vazamento', '')
+        db.session.commit()
+        fabrica.pessoa(app_module, 'dois.locais@trino.com', 'encarregado',
+                       locais=['Shopping Centro', 'Hospital Norte'])
+    c = fabrica.entrar(app_module, 'dois.locais@trino.com')
+    html = c.get('/app/').get_data(as_text=True)
+    assert 'Avisos do público (2)' in html
+    assert 'Shopping Centro · Banheiro da operação 1 · Vazamento ou entupimento' in html
+    assert 'Hospital Norte · Banheiro da operação 1 · Vazamento ou entupimento' in html
