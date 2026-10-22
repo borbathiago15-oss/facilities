@@ -29,7 +29,7 @@ Os cenários:
 import os
 import threading
 import uuid
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 
 import pytest
 
@@ -116,6 +116,7 @@ def cena_rota(app_module):
     """Uma rota todos os dias, 07:00–15:00, checklist sem foto obrigatória,
     tarefa às 09:00 e 11:00, a Ana escalada; presença ligada (2 por turno)."""
     from app import db
+    from facilities.cadastros.models import PontoInspecao
     from facilities.rotas import servico as s
     with app_module.app.app_context():
         ids = fabrica.estrutura(app_module)
@@ -138,10 +139,11 @@ def cena_rota(app_module):
                                'data_inicio': '2026-10-01'})
         db.session.commit()
         ids.update(modelo=m.id, versao=v.id, rota=rota.id, item=item.id, ana=ana,
-                   mariana=mariana, qr=db.session.get(
-                       __import__('facilities.cadastros.models', fromlist=['PontoInspecao'])
-                       .PontoInspecao, ids['ponto']).codigo_qr)
-        yield ids
+                   mariana=mariana, qr=db.session.get(PontoInspecao, ids['ponto']).codigo_qr)
+    # Fora do ``with``: um app context vivo na thread principal seria
+    # reaproveitado por todos os pedidos do test client (Flask ≥ 2.2), e o
+    # ``g._login_user`` do primeiro login contaminaria os logins seguintes.
+    return ids
 
 
 def _tarefa_das(dia, hhmm):
@@ -316,7 +318,12 @@ def test_duas_rodadas_do_agendador_ao_mesmo_tempo_so_uma_trabalha(app_module, ce
     from app import db
     from facilities.core.models import Notification
     from facilities.rotas import servico as s
-    from facilities.rotas.models import PERDIDA, AgendadorExecucao, ConfirmacaoPresenca, TarefaDia
+    from facilities.rotas.models import (
+        PERDIDA,
+        AgendadorExecucao,
+        ConfirmacaoPresenca,
+        TarefaDia,
+    )
     with app_module.app.app_context():
         s.gerar(SEXTA, agora_utc=_cedo(SEXTA))          # vai vencer sem registro
         s.gerar(SEGUNDA, agora_utc=_cedo(SEGUNDA))      # o turno "de agora"
@@ -364,7 +371,7 @@ def test_confirmar_a_mesma_presenca_em_duas_threads_e_uma_confirmacao(app_module
     from facilities.rotas.models import PRESENCA_CONFIRMADA, ConfirmacaoPresenca, Rota
     with app_module.app.app_context():
         rota = db.session.get(Rota, cena_rota['rota'])
-        agora = datetime.utcnow()
+        agora = datetime.now(timezone.utc).replace(tzinfo=None)   # UTC ingênuo, como as colunas
         c = ConfirmacaoPresenca(rota_id=rota.id, client_id=rota.client_id,
                                 user_id=cena_rota['ana'], data=tempo.hoje(),
                                 pedido_em=agora - timedelta(minutes=1),
@@ -411,7 +418,7 @@ def cena_estoque(app_module):
                        {'material_id': str(det.id), 'quantidade': '10'}, 'entrada')
         db.session.commit()
         ids['det'] = det.id
-        yield ids
+    return ids
 
 
 def _consumir(user_id, local_id, material_id, qtd):
@@ -435,6 +442,7 @@ def test_dois_consumos_que_estourariam_o_saldo_um_e_recusado(app_module, cena_es
     já enxerga o movimento que o primeiro acabou de gravar.
     """
     from decimal import Decimal
+
     from facilities.materiais import servico as mat
     from facilities.materiais.models import CONSUMO, MovimentoEstoque
     c = cena_estoque
@@ -461,6 +469,7 @@ def test_dois_consumos_dentro_do_saldo_nenhum_se_perde(app_module, cena_estoque)
     de ``_travar`` só põe em fila; não perde nada.
     """
     from decimal import Decimal
+
     from facilities.materiais import servico as mat
     from facilities.materiais.models import CONSUMO, MovimentoEstoque
     c = cena_estoque
@@ -475,15 +484,9 @@ def test_dois_consumos_dentro_do_saldo_nenhum_se_perde(app_module, cena_estoque)
         assert {m.user_id for m in movs} == {c['ana'], c['mariana']}
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason='DEFEITO: materiais/servico.py, função pedir(): o pedido de insumo não tem '
-           'proteção contra duplo envio (sem envio_id único nem janela de reenvio). O '
-           'mesmo toque em "Pedir" chegando duas vezes grava DOIS pedidos e avisa o gestor '
-           'duas vezes. Corrigir como em chamados.abrir_sem_duplicar (mesma pessoa, mesmo '
-           'local, mesmo material/texto dentro de uma janela curta devolve o pedido '
-           'anterior, com a trava de linha do local em volta da conferência) ou com um '
-           'envio_id único vindo do aplicativo.')
+# Protege: materiais/servico.py, pedir() — trava a linha do local (_travar) e
+# devolve o pedido igual da mesma pessoa aberto nos últimos 2 minutos
+# (JANELA_DE_REENVIO), como chamados.abrir_sem_duplicar.
 def test_pedido_de_insumo_enviado_duas_vezes_ao_mesmo_tempo_abre_um_pedido(app_module,
                                                                          cena_estoque):
     from facilities.core.models import Notification
@@ -531,8 +534,9 @@ def cena_chamado(app_module):
         ch_s.executar(tec, ch, 'resolver', {'texto': 'Troquei o reparo'})
         db.session.commit()
         ids['ch'] = ch.id
-        yield ids
-        db.session.get(Client, c1.id).responsible_user_id = None
+    yield ids
+    with app_module.app.app_context():
+        db.session.get(Client, ids['c1']).responsible_user_id = None
         db.session.commit()
 
 
@@ -560,7 +564,12 @@ def test_resolver_e_reabrir_ao_mesmo_tempo_deixam_estado_e_trilha_coerentes(app_
     contra o estado NOVO.
     """
     from app import db
-    from facilities.chamados.models import EM_ATENDIMENTO, RESOLVIDO, Chamado, ChamadoEvento
+    from facilities.chamados.models import (
+        EM_ATENDIMENTO,
+        RESOLVIDO,
+        Chamado,
+        ChamadoEvento,
+    )
     c = cena_chamado
     enc = fabrica.entrar(app_module, 'enc.conc@trino.com')
     tec = fabrica.entrar(app_module, 'tec.conc@trino.com')
@@ -593,34 +602,3 @@ def test_resolver_e_reabrir_ao_mesmo_tempo_deixam_estado_e_trilha_coerentes(app_
 
 
 
-
-def test_DEBUG_load(app_module, cena_rota):
-    from flask import request, session, g
-    lm = app_module.app.login_manager
-    orig_load = lm._load_user
-    orig_fail = lm._session_protection_failed
-    def fail():
-        r = orig_fail()
-        print('PROT', threading.current_thread().name, 'failed=', r, 'sess=', {k: (str(v)[:12]) for k, v in dict(session).items()},
-              'ident=', lm._session_identifier_generator()[:12], 'addr=', request.remote_addr, 'xff=', request.headers.get('X-Forwarded-For'))
-        return r
-    def load():
-        print('LOAD', threading.current_thread().name, 'g_has=', '_login_user' in g, 'path=', request.path)
-        r = orig_load()
-        print('LOADED', threading.current_thread().name, 'user=', getattr(g.get('_login_user'), 'id', None))
-        return r
-    lm._load_user = load
-    lm._session_protection_failed = fail
-    try:
-        a = fabrica.entrar(app_module, 'ana.conc@trino.com')
-        b = fabrica.entrar(app_module, 'ana.conc@trino.com')
-        print('MAIN', a.get('/app/api/presenca').status_code, b.get('/app/api/presenca').status_code)
-        saida = [None, None]
-        def t(i, cl):
-            saida[i] = cl.get('/app/api/presenca').status_code
-        ths = [threading.Thread(target=t, args=(i, cl), name=f'T{i}') for i, cl in enumerate((a, b))]
-        [x.start() for x in ths]; [x.join() for x in ths]
-        print('THR', saida)
-    finally:
-        lm._load_user = orig_load
-        lm._session_protection_failed = orig_fail
