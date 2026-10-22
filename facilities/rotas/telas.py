@@ -770,6 +770,10 @@ def _dados_do_turno(locais):
         'motivos': MOTIVOS_NAO_REALIZADA,
         'motivos_atraso': MOTIVOS_ATRASO,
         'motivos_nao_feito': MOTIVOS_NAO_FEITO,
+        # O JSON da tela sai com as chaves em ordem alfabética; os botões
+        # seguem a ordem do vocabulário (o "Outro" por último).
+        'motivos_atraso_ordem': list(MOTIVOS_ATRASO),
+        'motivos_nao_feito_ordem': list(MOTIVOS_NAO_FEITO),
         'tolerancia_atraso_min': servico.TOLERANCIA_ATRASO_MIN,
         # Etapa 2: um cartão por local da carteira — o QR da entrada (quando o
         # local tem) e a chegada de hoje (hora), para o app abrir o turno certo.

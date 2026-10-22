@@ -71,6 +71,8 @@ def test_turno_leva_os_locais_as_entradas_e_o_tempo_previsto(app_module):
     for t in dados['tarefas']:
         assert t['local_id'] == cena['local'] and t['tempo_previsto_min'] == 30
     assert dados['motivos_nao_feito']['faltou_material'] == 'Faltou material'
+    assert dados['motivos_nao_feito_ordem'] == ['faltou_material', 'equipamento', 'sem_acesso', 'outro']
+    assert dados['motivos_atraso_ordem'][-1] == 'outro'
     assert 'entradas' not in dados
     with app_module.app.app_context():
         entrada = _entrada(app_module, cena)

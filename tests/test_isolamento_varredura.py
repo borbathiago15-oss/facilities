@@ -36,6 +36,14 @@ FORA = {
     # pelo QR, logada ou não. Testado em test_qr_publico.py.
     'publico.abrir_ocorrencia': 'aberto ao público por desenho',
 }
+# Rotas fora da varredura só para UM perfil, com o motivo.
+FORA_PARA = {
+    # Para o cliente do portal, /q/<código> é a MESMA página pública que o
+    # visitante sem login vê (bloco do técnico, etapa 2: "É aqui?" e os itens
+    # do checklist do ponto como problemas a marcar). Para a equipe e a
+    # gestão a rota continua na varredura (exige a carteira).
+    ('cliente', 'cadastros.qr'): 'a página pública do QR, igual à de quem não tem login',
+}
 
 
 def _png():
@@ -404,6 +412,8 @@ def _varrer(app_module, local_a, c, papel):
                                   'lido_em': '2026-10-17T12:00:00'})}
     vazou = []
     for endpoint, metodo, caminho in _urls(app_module, local_a):
+        if (papel, endpoint) in FORA_PARA:
+            continue
         url = caminho + (('&' if '?' in caminho else '?') + f'client_id={a}')
         if metodo == 'GET':
             respostas = [c.get(url)]

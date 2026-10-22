@@ -53,6 +53,9 @@
       estado.textContent = foto.files.length ? 'Foto pronta.' : 'Nenhuma foto.';
     });
   }
+  // Marcou ou escreveu algo: o aviso de "marque o que está acontecendo" some.
+  form.addEventListener('change', function () { if (problemaOk()) form.querySelector('[data-erro-problema]').hidden = true; });
+  form.addEventListener('input', function () { if (problemaOk()) form.querySelector('[data-erro-problema]').hidden = true; });
   form.addEventListener('submit', function (ev) {
     if (!problemaOk()) { ev.preventDefault(); mostrar(1); form.querySelector('[data-erro-problema]').hidden = false; }
   });

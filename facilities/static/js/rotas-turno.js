@@ -784,7 +784,7 @@
       limpar(caixa);
       caixa.appendChild(el('h2', {classe: 'h5 fw-bold', texto: 'Não deu: ' + it.texto}));
       caixa.appendChild(el('p', {classe: 'small text-muted', texto: 'O que aconteceu?'}));
-      Object.keys(dados.motivos_nao_feito).forEach(function (k) {
+      (dados.motivos_nao_feito_ordem || Object.keys(dados.motivos_nao_feito)).forEach(function (k) {
         var b = el('button', {type: 'button', classe: 'btn btn-outline-dark btn-lg w-100 fc-app-acao mb-2 fc-motivo',
                               'data-motivo': k, texto: dados.motivos_nao_feito[k]});
         b.addEventListener('click', function () {
@@ -975,7 +975,7 @@
     var texto = el('input', {classe: 'form-control form-control-lg mb-2', maxlength: '300', hidden: true,
                              'aria-label': 'O que aconteceu', placeholder: 'Conte em poucas palavras'});
     var erro = el('p', {classe: 'small text-danger', hidden: true, texto: 'Escreva o que aconteceu.'});
-    Object.keys(dados.motivos_atraso).forEach(function (k) {
+    (dados.motivos_atraso_ordem || Object.keys(dados.motivos_atraso)).forEach(function (k) {
       var b = el('button', {type: 'button', classe: 'btn btn-outline-dark btn-lg w-100 fc-app-acao mb-2 fc-motivo',
                             'data-motivo': k, texto: dados.motivos_atraso[k]});
       b.addEventListener('click', function () {
