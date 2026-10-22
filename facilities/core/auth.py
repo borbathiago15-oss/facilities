@@ -205,9 +205,12 @@ def login():
             return render_template('core/login.html', email=email), 401
         # Fase 9B: o cliente só entra com o portal liberado (padrão: não) e
         # com o cadastro apontando para um cliente.
+        # A resposta é a mesma de senha errada: dizer "o portal ainda não foi
+        # liberado" só depois da senha certa confirmaria o par e-mail/senha
+        # a quem está tentando (auditoria N-17).
         if u.role in PERFIS_SEM_LOGIN and not (_portal_liberado() and u.cliente_id):
-            flash(MSG_CLIENTE_SEM_ACESSO, 'warning')
-            return render_template('core/login.html', email=email), 403
+            flash(MSG_LOGIN_RECUSADO, 'danger')
+            return render_template('core/login.html', email=email), 401
         u.failed_login_count = 0
         u.lockout_until = None
         db.session.commit()
@@ -239,7 +242,10 @@ def _avisar_bloqueio(u):
         link = url_for('admin.usuarios')
         avisados = avisar(admins, titulo, texto, link)
         db.session.commit()
-        push.avisar(list(avisados), titulo, texto, link=link, marca=f'bloqueio-{u.id}')
+        # No celular o aviso aparece na tela bloqueada: vai sem o e-mail da
+        # pessoa. O detalhe fica no sino, atrás do login (auditoria N-08).
+        push.avisar(list(avisados), 'Uma conta foi bloqueada por senha errada',
+                    'Veja qual em Pessoas e acessos.', link=link, marca=f'bloqueio-{u.id}')
         db.session.commit()
     except Exception:
         # O aviso nunca impede a resposta do login.
@@ -321,6 +327,11 @@ def logout():
     # "Manter conectado") deixa de valer. Vale em todos os aparelhos.
     u = current_user._get_current_object()
     u.session_epoch = (u.session_epoch or 0) + 1
+    # Os avisos no celular param junto com a sessão: num aparelho
+    # compartilhado, quem sai não continua recebendo chamado e cobrança na
+    # tela bloqueada (auditoria N-04). Quem entrar de novo liga outra vez.
+    from facilities.core.models import PushInscricao
+    PushInscricao.query.filter_by(user_id=u.id).delete()
     db.session.commit()
     logout_user()
     session.clear()

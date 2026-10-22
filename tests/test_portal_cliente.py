@@ -104,8 +104,10 @@ def _data(dias):
 def test_desligado_o_cliente_nao_entra_nem_com_a_segunda_etapa(app_module, cena):
     c = app_module.app.test_client()
     r = c.post('/login', data={'email': 'cliente@gl.com', 'password': fabrica.SENHA})
-    assert r.status_code == 403
-    assert 'ainda não foi liberado' in r.get_data(as_text=True)
+    # A resposta é a de senha errada: "portal não liberado" depois da senha
+    # certa confirmaria o par e-mail/senha a quem tenta (auditoria N-17).
+    assert r.status_code == 401
+    assert 'ainda não foi liberado' not in r.get_data(as_text=True)
 
 
 def test_desligar_o_portal_derruba_a_sessao_aberta(app_module, cena, liberado):
@@ -125,7 +127,7 @@ def test_cliente_sem_cliente_no_cadastro_nao_entra(app_module, cena, liberado):
         db.session.commit()
     r = app_module.app.test_client().post('/login', data={'email': 'cliente@gl.com',
                                                           'password': fabrica.SENHA})
-    assert r.status_code == 403
+    assert r.status_code == 401
 
 
 def test_sem_a_segunda_etapa_so_abre_a_tela_de_seguranca(app_module, cena, liberado):

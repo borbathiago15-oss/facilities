@@ -206,3 +206,36 @@ def test_errar_a_senha_atual_bloqueia_e_derruba_a_sessao(app_module):
     assert _usuario(app_module, uid).lockout_until is not None
     r = c.get('/')
     assert r.status_code == 302 and '/login' in r.headers['Location']
+
+
+# ── Auditoria de 22/10/2026: push sem dado pessoal; push some no logout ──
+
+def test_push_do_bloqueio_nao_leva_o_email(app_module, monkeypatch):
+    from facilities.core import push
+    mandados = []
+    monkeypatch.setattr(push, 'avisar', lambda ids, titulo, texto, **k: mandados.append((titulo, texto)))
+    _pessoa(app_module, 'alvo2@trino.com')
+    _pessoa(app_module, 'adm.aviso2@trino.com', 'master')
+    c = app_module.app.test_client()
+    for i in range(5):
+        c.post('/login', data={'email': 'alvo2@trino.com', 'password': f'errada{i}xx'})
+    assert mandados, 'o administrador recebe o push'
+    assert all('alvo2@trino.com' not in t and 'alvo2@trino.com' not in x for t, x in mandados)
+
+
+def test_sair_apaga_as_inscricoes_de_push_da_pessoa(app_module):
+    from app import db
+    from facilities.core.models import PushInscricao
+    uid = _pessoa(app_module, 'push.sai@trino.com')
+    with app_module.app.app_context():
+        db.session.add(PushInscricao(user_id=uid, endpoint='https://fcm.googleapis.com/x/1',
+                                     p256dh='a', auth='b'))
+        db.session.commit()
+    c = app_module.app.test_client()
+    c.post('/login', data={'email': 'push.sai@trino.com', 'password': fabrica.SENHA})
+    html = c.get('/app/').get_data(as_text=True)
+    import re
+    token = re.search(r'name="csrf_token" value="([^"]+)"', html).group(1)
+    assert c.post('/logout', data={'csrf_token': token}).status_code == 302
+    with app_module.app.app_context():
+        assert PushInscricao.query.filter_by(user_id=uid).count() == 0

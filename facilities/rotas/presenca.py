@@ -1,6 +1,6 @@
 """Confirmação de presença em horário aleatório (D48, Q4).
 
-* Cada rota diz quantas por turno (padrão 2; 0 desliga) e o prazo para
+* Cada rota diz quantas por turno (padrão 0, desligada; a gestão liga) e o prazo para
   responder (padrão 10 min).
 * Os horários são sorteados dentro do turno, longe do começo e do fim
   (30 min de folga), para quem está ESCALADO naquele dia. O sorteio usa uma
@@ -16,6 +16,8 @@ no aviso de privacidade aos colaboradores.
 """
 import random
 from datetime import datetime, timedelta
+
+from sqlalchemy.exc import IntegrityError
 
 from facilities import tempo
 from facilities.extensions import db
@@ -60,10 +62,16 @@ def gerar(rota, dia, user_id, agora_utc=None):
         pedido = tempo.para_utc(m.date(), m.time())
         if pedido in existentes or pedido < agora_utc:
             continue
-        db.session.add(ConfirmacaoPresenca(rota_id=rota.id, client_id=rota.client_id,
-                                           user_id=user_id, data=dia, pedido_em=pedido,
-                                           prazo_ate=pedido + prazo))
-        criados += 1
+        # Como nas tarefas: a geração também roda nas telas (GET), e dois
+        # acessos na virada do dia disputam o mesmo horário sorteado.
+        try:
+            with db.session.begin_nested():
+                db.session.add(ConfirmacaoPresenca(rota_id=rota.id, client_id=rota.client_id,
+                                                   user_id=user_id, data=dia, pedido_em=pedido,
+                                                   prazo_ate=pedido + prazo))
+            criados += 1
+        except IntegrityError:
+            pass
     return criados
 
 

@@ -12,8 +12,8 @@ def test_conta_de_cliente_nao_faz_login(app_module):
         fabrica.pessoa(app_module, 'cliente.gl@cliente.com', 'cliente', cliente_id=gl.id)
     c = app_module.app.test_client()
     r = c.post('/login', data={'email': 'cliente.gl@cliente.com', 'password': fabrica.SENHA})
-    assert r.status_code == 403
-    assert 'ainda não foi liberado' in r.get_data(as_text=True)
+    assert r.status_code == 401   # mesma resposta de senha errada (auditoria N-17)
+    assert 'ainda não foi liberado' not in r.get_data(as_text=True)
     assert c.get('/').status_code == 302
 
 
