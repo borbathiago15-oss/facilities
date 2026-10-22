@@ -1,16 +1,17 @@
 {% extends 'campo/base_app.html' %}
 {% block title %}Meu turno{% endblock %}
 {% block content %}
-<div id="turno-app">
+<div id="turno-app" data-ler-qr="{{ url_for('campo.ler_qr') }}">
   <noscript><div class="alert alert-warning">O aplicativo precisa do JavaScript ligado.</div></noscript>
   <div id="turno-aviso" role="status"></div>
+  {# As três telas (desenhadas por static/js/rotas-turno.js): o turno (um
+     cartão por local, ou as tarefas de hoje do local escolhido), o ponto
+     (chegada, próxima tarefa, o que mais há ali) e a execução. #}
   <section id="turno-ponto" hidden></section>
   <section id="turno-execucao" hidden></section>
   <section id="turno-lista">
     <h1 class="fc-titulo">Meu turno</h1>
-    <p class="fc-sub" id="turno-sub">Tarefas de hoje nos seus locais.</p>
-    <a class="btn btn-primary btn-lg w-100 fc-app-acao mb-3" href="{{ url_for('campo.ler_qr') }}"><i class="bi bi-qr-code-scan"></i> Ler o QR do local</a>
-    <div id="turno-itens"></div>
+    <p class="fc-sub">Carregando…</p>
   </section>
 </div>
 {# Os dados vão como JSON (não executa): é o que deixa a tela funcionar

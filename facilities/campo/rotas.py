@@ -56,6 +56,31 @@ def _hoje_do_posto(locais):
     return {'tarefas': tarefas, 'pendencias': pendencias, 'chamados': chamados}
 
 
+def _turno_por_local(locais):
+    """Um cartão por local (etapa 2 do bloco do técnico): o local tem QR de
+    entrada? A pessoa já chegou hoje (hora)? Quantas tarefas da rota ela tem
+    lá hoje? A lista do turno só abre depois de escolher o local."""
+    from facilities.extensions import db
+    from facilities.rotas import chegadas, servico
+    ids = [c.id for c in locais]
+    if ids:
+        servico.garantir_hoje(ids)
+        db.session.commit()
+    hoje = tempo.hoje()
+    por_local = {}
+    for t in servico.tarefas_do_dia(ids, hoje, user=current_user):
+        n = por_local.setdefault(t.client_id, {'total': 0, 'abertas': 0})
+        n['total'] += 1
+        n['abertas'] += t.status == 'prevista'
+    saida = []
+    for c in locais:
+        entrada = chegadas.ponto_de_entrada(c.id)
+        chegada = chegadas.de_hoje(current_user, c.id)
+        saida.append({'local': c, 'entrada': entrada, 'chegada': chegada,
+                      'tarefas': por_local.get(c.id, {'total': 0, 'abertas': 0})})
+    return saida
+
+
 @bp.get('/')
 @login_required
 def inicio():
@@ -67,6 +92,7 @@ def inicio():
     locais = clientes_visiveis()
     lanca = current_user._effective_role() in PERFIS_QUE_LANCAM
     return render_template('campo/inicio.html', locais=locais, **_hoje_do_posto(locais),
+                           turno_por_local=_turno_por_local(locais),
                            lanca_presenca=lanca,
                            usa_material=current_user._effective_role() in PERFIS_QUE_CONSOMEM,
                            visitas_abertas=len(visitas.abertas([c.id for c in locais],

@@ -229,6 +229,20 @@
       });
     },
 
+    // Chegada no local (bloco do técnico): o QR da entrada lido sem sinal.
+    // Idempotente no servidor (uma chegada por pessoa/local/dia): reenviar
+    // devolve a mesma. Fica na fila ANTES das execuções do dia, que o
+    // servidor só aceita depois da chegada.
+    chegada: function (it, s) {
+      return pedir('/app/api/chegada', {
+        method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRFToken': s.csrf},
+        body: JSON.stringify(it.corpo)
+      }).then(function (r) {
+        if (r.tipo === 'recusado') { r.tipo = 'conflito'; }
+        return r;
+      });
+    },
+
     'auditoria-foto': function (it, s) {
       var fd = new FormData();
       fd.append('arquivo', it.arquivo, it.nome || it.arquivo.name || 'foto.jpg');

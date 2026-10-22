@@ -1,7 +1,8 @@
 """Fase 4A — a Ana executa a rota no aplicativo, no celular e no PC.
 
-* lê o QR com a câmera → o ponto abre com a tarefa da hora → "Fazer agora"
-  → responde, tira a foto de depois → Confirmar → "Concluída no prazo";
+* lê o QR com a câmera → o ponto abre DIRETO no checklist da hora → um check
+  por item, a foto de depois → Pronto → "Pronto. … feito às" (etapa 2 do
+  bloco do técnico);
 * sem sinal: confirma, fica guardado no aparelho e sobe UMA vez quando o
   sinal volta, marcado "feito sem sinal".
 """
@@ -25,10 +26,9 @@ def _execucoes(servidor):
 
 
 def _fazer_checklist(pg, foto):
-    pg.get_by_role('button', name='Fazer agora').first.click()
-    pg.locator('label.fc-opcao', has_text='Sim').click()
+    pg.get_by_role('button', name='Feito: Papel higiênico reposto?').click()
     pg.set_input_files('[data-foto="depois"]', foto)
-    pg.get_by_role('button', name='Confirmar').click()
+    pg.get_by_role('button', name='Pronto').click()
 
 
 def test_ana_le_o_qr_e_faz_o_checklist(servidor, navegador, perfil, tmp_path):
@@ -44,7 +44,7 @@ def test_ana_le_o_qr_e_faz_o_checklist(servidor, navegador, perfil, tmp_path):
         # Lido pela câmera: não aparece o aviso de "aberto sem ler o QR".
         assert pg.locator('text=Aberto sem ler o QR').count() == 0
         _fazer_checklist(pg, _foto(tmp_path))
-        pg.wait_for_selector('text=Registrado: Concluída no prazo', timeout=15000)
+        pg.wait_for_selector('text=Pronto. Porta do banheiro feito às', timeout=15000)
         assert _execucoes(servidor) == [(0, 'ana@e2e.test', 'concluida_no_prazo')]
         largura = pg.evaluate('document.documentElement.scrollWidth')
         assert largura <= pg.viewport_size['width']
@@ -61,7 +61,7 @@ def test_sem_sinal_a_execucao_sobe_depois_uma_vez(servidor, navegador, perfil, t
         pg.wait_for_load_state('networkidle')
         ctx.set_offline(True)
         _fazer_checklist(pg, _foto(tmp_path))
-        pg.wait_for_selector('text=ficou guardada no aparelho', timeout=15000)
+        pg.wait_for_selector('text=Guardada no aparelho', timeout=15000)
         assert _execucoes(servidor) == []
         ctx.set_offline(False)
         pg.evaluate('window.TrinoFila.enviarAgora()')
@@ -75,22 +75,28 @@ def test_sem_sinal_a_execucao_sobe_depois_uma_vez(servidor, navegador, perfil, t
 
 
 def test_roteiro_numerado_e_como_fazer(servidor, navegador, perfil):
-    """O turno aparece como roteiro (1, 2, 3…) com a próxima destacada; no
-    checklist, o "como fazer" de cada pergunta e o POP."""
+    """O turno do local aparece como roteiro (1, 2, 3…) com a próxima
+    destacada; no checklist, o "como fazer" fica atrás do (i) e o POP à parte."""
     b, ctx = abrir_contexto(navegador, perfil)
     try:
         pg = ctx.new_page()
         entrar(pg, servidor['base'], 'ana@e2e.test')
         pg.goto(servidor['base'] + '/app/turno')
+        # Sem local escolhido: um cartão por local, não a lista de tudo.
+        assert pg.locator('.fc-local-turno').count() == 2
+        assert pg.locator('.fc-roteiro-n').count() == 0
+        pg.locator('.fc-local-turno', has_text='GL Armazém 1').click()
+        pg.wait_for_selector('.fc-roteiro-n')
         assert pg.locator('.fc-roteiro-n').first.inner_text() == '1'
         assert pg.locator('.fc-proxima').count() == 1
         # Aberto pelo endereço (como o link de um aviso): vale a hora do celular.
         pg.goto(servidor['base'] + '/app/turno?ponto=' + servidor['qr'])
         assert pg.locator('text=Aberto sem ler o QR').count() == 1
-        pg.get_by_role('button', name='Fazer agora').first.click()
+        assert pg.locator('text=Deixe 2 rolos em cada cabine.').is_visible() is False
+        pg.get_by_role('button', name='Como fazer: Papel higiênico reposto?').click()
         assert pg.locator('text=Deixe 2 rolos em cada cabine.').is_visible()
-        # O resumo do POP e o documento completo, à parte.
-        pg.locator('summary', has_text='Como fazer (resumo do POP)').click()
+        # O procedimento e o documento completo, à parte.
+        pg.locator('summary', has_text='Ver o procedimento (POP)').click()
         assert pg.locator('text=Repor papel, limpar e secar o piso.').is_visible()
         pop = pg.get_by_role('link', name='Ver o POP completo: POP Banheiro.pdf')
         assert pop.is_visible() and '/rotas/documentos/' in pop.get_attribute('href')
@@ -98,4 +104,3 @@ def test_roteiro_numerado_e_como_fazer(servidor, navegador, perfil):
         assert largura <= pg.viewport_size['width']
     finally:
         b.close()
-

@@ -23,8 +23,9 @@ from datetime import datetime, timedelta
 from facilities import tempo
 from facilities.extensions import db
 from facilities.rotas.models import (OCORRENCIA_ABERTA, OCORRENCIA_EM_ATENDIMENTO,
-                                     OCORRENCIA_RESOLVIDA, PREVISTA, TIPOS_OCORRENCIA_PUBLICA,
-                                     OcorrenciaPublica, Rota, RotaItem, TarefaDia)
+                                     OCORRENCIA_RESOLVIDA, PREVISTA, TIPO_ITENS_DO_CHECKLIST,
+                                     TIPOS_OCORRENCIA_PUBLICA, OcorrenciaPublica, Rota, RotaItem,
+                                     TarefaDia)
 
 TEXTO_MAX = 300
 ITENS_MAX = 30
@@ -111,10 +112,14 @@ def abrir(ponto, tipo, texto, foto=None, agora_utc=None, itens=None, autor=None)
     agora_utc = agora_utc or datetime.utcnow()
     if not ponto.is_active:
         raise RegraDaRota('Este ponto não recebe mais ocorrências.', 409)
-    if tipo not in TIPOS_OCORRENCIA_PUBLICA:
-        raise RegraDaRota('Escolha o que está acontecendo.')
     texto = (texto or '').strip()[:TEXTO_MAX] or None
     marcados = _itens_marcados(ponto, itens)
+    # Sem tipo escolhido (a página do QR com checklist não pergunta): os itens
+    # marcados dão o tipo; só texto é "outro"; nada marcado nem escrito, erro.
+    if not tipo:
+        tipo = TIPO_ITENS_DO_CHECKLIST if marcados else ('outro' if texto else None)
+    if tipo not in TIPOS_OCORRENCIA_PUBLICA:
+        raise RegraDaRota('Marque o que está acontecendo ou escreva em poucas palavras.')
     if tipo == 'outro' and not texto:
         raise RegraDaRota('Conte em poucas palavras o que está acontecendo.')
     autor_id = getattr(autor, 'id', None) if getattr(autor, 'is_authenticated', False) else None

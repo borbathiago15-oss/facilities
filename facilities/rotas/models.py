@@ -431,7 +431,12 @@ class AgendadorExecucao(db.Model):
 
 
 # ── Ocorrência do QR público (D47, Q1 a Q3) ───────────────────────────────
+# Bloco do técnico (etapa 2): a pessoa só MARCA os itens do checklist do
+# ponto ("Falta papel") sem escolher um tipo da lista — a ocorrência fica
+# com este tipo e os itens marcados (``OcorrenciaPublica.itens``).
+TIPO_ITENS_DO_CHECKLIST = 'itens'
 TIPOS_OCORRENCIA_PUBLICA = {
+    'itens': 'Itens do checklist',
     'falta_papel': 'Falta papel',
     'falta_sabonete': 'Falta sabonete ou álcool',
     'sujo': 'Local sujo',

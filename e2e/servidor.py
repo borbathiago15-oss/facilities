@@ -16,6 +16,10 @@ RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, RAIZ)
 
 QR_DO_TESTE = 'QRdoTesteE2E0000000001'
+# Bloco do técnico (etapa 2): um segundo local da Ana, COM QR de entrada.
+QR_ENTRADA = 'QRentradaE2E0000000002'
+QR_COPA = 'QRcopaE2E00000000000003'
+QR_REFEITORIO = 'QRrefeitorioE2E00000004'
 SENHA = 'senha12345'
 
 
@@ -132,6 +136,47 @@ def montar(caminho_db):
         det = materiais.salvar_material(None, {'nome': 'Detergente neutro', 'unidade': 'L',
                                                'preco_unitario': '12,90'})
         materiais.movimentar(admin, local, {'material_id': det.id, 'quantidade': '10'},
+                             'entrada')
+        # Bloco do técnico (etapa 2): o "GL Armazém 2" exige a chegada pelo QR
+        # da Portaria; a copa (agora, 1 min previsto, foto antes/depois e um
+        # item com foto) e o refeitório (daqui a 30 min) são da Ana.
+        from datetime import timedelta
+        local2 = Client(name='GL Armazém 2', cost_center='GL-02', is_active=True)
+        db.session.add(local2)
+        db.session.flush()
+        for email in ('ana@e2e.test', 'sueli@e2e.test'):
+            pessoas[email].clients = [local, local2]
+        setor2 = servico.salvar_setor(local2, None, {'nome': 'Operação'}, admin)
+        amb2 = servico.salvar_ambiente(local2, None, {'nome': 'Térreo', 'setor_id': setor2.id},
+                                       admin)
+        db.session.add(PontoInspecao(ambiente_id=amb2.id, client_id=local2.id, nome='Portaria',
+                                     codigo_qr=QR_ENTRADA, entrada_do_local=True))
+        copa = PontoInspecao(ambiente_id=amb2.id, client_id=local2.id, nome='Copa',
+                             codigo_qr=QR_COPA)
+        refeitorio = PontoInspecao(ambiente_id=amb2.id, client_id=local2.id, nome='Refeitório',
+                                   codigo_qr=QR_REFEITORIO)
+        db.session.add_all([copa, refeitorio])
+        db.session.flush()
+        mc = rotas.criar_modelo(local2.id, {'nome': 'Limpeza da copa'}, admin)
+        rotas.publicar(mc, rotas.normalizar_itens([
+            {'texto': 'Pia limpa?', 'tipo': 'sim_nao', 'obrigatorio': True, 'problema_se': 'nao',
+             'como_fazer': 'Esponja macia e detergente neutro.', 'problema': 'Pia suja'},
+            {'texto': 'Lixo retirado?', 'tipo': 'sim_nao', 'obrigatorio': True,
+             'problema_se': 'nao', 'exige_foto': True, 'problema': 'Lixeira cheia'}]),
+            {'exige_foto_antes': '1', 'exige_foto_depois': '1'}, admin)
+        rota2 = rotas.salvar_rota(local2, None, {
+            'nome': 'Limpeza do térreo', 'turno': '1º Turno', 'hora_inicio': '00:00',
+            'hora_fim': '23:59', 'tolerancia_min': '240', 'dias_semana': '1234567'})
+        rotas.salvar_item(rota2, None, {'ponto_id': copa.id, 'modelo_id': mc.id,
+                                        'horarios': tempo.agora().strftime('%H:%M'),
+                                        'tempo_previsto_min': '1'})
+        rotas.salvar_item(rota2, None, {'ponto_id': refeitorio.id, 'modelo_id': mc.id,
+                                        'horarios': (tempo.agora() + timedelta(minutes=30))
+                                        .strftime('%H:%M'), 'tempo_previsto_min': '10'})
+        rotas.salvar_escala(rota2, {'user_id': pessoas['ana@e2e.test'].id,
+                                    'dias_semana': '1234567',
+                                    'data_inicio': tempo.hoje().isoformat()})
+        materiais.movimentar(admin, local2, {'material_id': det.id, 'quantidade': '4'},
                              'entrada')
         # Fase 9B: o cliente do local (Grupo GL), ainda sem a segunda etapa.
         emp = servico.salvar_empresa(None, {'nome': 'Trino Serviços'}, admin)

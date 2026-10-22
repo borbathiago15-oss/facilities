@@ -1,29 +1,62 @@
 {% extends 'publico/_base.html' %}
 {% block title %}Avisar um problema{% endblock %}
 {% block content %}
-<h1 class="h4 fw-bold">Viu algum problema aqui?</h1>
-<p class="text-muted">{{ ponto.ambiente.nome }} · {{ ponto.nome }}</p>
 {% if not ponto.is_active %}
-<div class="alert alert-warning">Este QR não está mais em uso. Procure a equipe de limpeza ou a portaria.</div>
+<h1 class="h4 fw-bold">Este QR não está mais em uso</h1>
+<div class="alert alert-warning">Procure a equipe de limpeza ou a portaria.</div>
 {% else %}
-<p>Conte para a equipe responsável. Não pedimos seu nome nem seu contato.</p>
-{% if erro %}<div class="alert alert-danger" role="alert">{{ erro }}</div>{% endif %}
-<form method="post" action="{{ url_for('publico.abrir_ocorrencia', codigo=ponto.codigo_qr) }}" enctype="multipart/form-data">
+{# Passo a passo (static/js/publico-qr.js): sem JavaScript, tudo aparece de
+   uma vez e o envio funciona do mesmo jeito. #}
+<form method="post" action="{{ url_for('publico.abrir_ocorrencia', codigo=ponto.codigo_qr) }}" enctype="multipart/form-data" id="fc-qr-form" class="fc-qr-passos" data-passos>
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-  <fieldset class="mb-3">
-    <legend class="form-label fw-semibold">O que está acontecendo?</legend>
-    {% for k, v in tipos.items() %}
-    <label class="fc-opcao fc-opcao-lista mb-2"><input class="fc-opcao-radio" type="radio" name="tipo" value="{{ k }}" required> <span>{{ v }}</span></label>
-    {% endfor %}
-  </fieldset>
-  <label class="form-label fw-semibold" for="texto">Quer contar mais? (opcional)</label>
-  <textarea class="form-control mb-3" id="texto" name="texto" rows="3" maxlength="300"></textarea>
-  <label class="form-label fw-semibold" for="foto">Foto (opcional)</label>
-  <input class="form-control mb-1" id="foto" name="foto" type="file" accept="image/*" capture="environment">
-  <p class="small text-muted mb-3">Fotografe só o problema, sem pessoas.</p>
-  <div class="fc-isca" aria-hidden="true"><label for="site">Não preencha</label><input id="site" name="site" tabindex="-1" autocomplete="off"></div>
-  <button class="btn btn-primary btn-lg w-100 fw-bold" type="submit">Enviar</button>
+  {% if erro %}<div class="alert alert-danger" role="alert">{{ erro }}</div>{% endif %}
+
+  <section class="fc-qr-passo" data-passo="lugar">
+    <h1 class="h4 fw-bold">Você está no {{ ponto.nome }} · {{ local or ponto.ambiente.nome }}. É aqui?</h1>
+    <p class="text-muted">{{ ponto.ambiente.nome }}</p>
+    <button class="btn btn-primary btn-lg w-100 fw-bold fc-app-acao mb-2" type="button" data-proximo>Sim</button>
+    <button class="btn btn-outline-secondary btn-lg w-100 fc-app-acao" type="button" data-voltar-pagina>Não, voltar</button>
+  </section>
+
+  <section class="fc-qr-passo" data-passo="problema">
+    <h2 class="h5 fw-bold">O que está acontecendo?</h2>
+    {% if itens_reportaveis %}
+    <p class="text-muted small">Marque um ou mais. Não pedimos seu nome nem seu contato.</p>
+    <div class="mb-3">
+      {% for it in itens_reportaveis %}
+      <label class="fc-opcao fc-opcao-lista fc-qr-item mb-2"><input class="fc-opcao-radio" type="checkbox" name="itens" value="{{ it.codigo }}"> <i class="bi bi-square" aria-hidden="true"></i><span>{{ it.rotulo_problema }}</span></label>
+      {% endfor %}
+    </div>
+    <label class="form-label fw-semibold" for="texto">Outro (escreva)</label>
+    <textarea class="form-control mb-3" id="texto" name="texto" rows="2" maxlength="300" placeholder="Ex.: a porta não fecha"></textarea>
+    {% else %}
+    <p class="text-muted small">Não pedimos seu nome nem seu contato.</p>
+    <fieldset class="mb-3">
+      <legend class="visually-hidden">O que está acontecendo?</legend>
+      {% for k, v in tipos.items() %}
+      <label class="fc-opcao fc-opcao-lista mb-2"><input class="fc-opcao-radio" type="radio" name="tipo" value="{{ k }}" required> <span>{{ v }}</span></label>
+      {% endfor %}
+    </fieldset>
+    <label class="form-label fw-semibold" for="texto">Quer contar mais? (opcional)</label>
+    <textarea class="form-control mb-3" id="texto" name="texto" rows="2" maxlength="300"></textarea>
+    {% endif %}
+    <p class="small text-danger mb-2" data-erro-problema hidden>Marque o que está acontecendo ou escreva em poucas palavras.</p>
+    <button class="btn btn-primary btn-lg w-100 fw-bold fc-app-acao" type="button" data-proximo>Continuar</button>
+  </section>
+
+  <section class="fc-qr-passo" data-passo="foto">
+    <h2 class="h5 fw-bold">Quer mandar uma foto?</h2>
+    <p class="text-muted small">Opcional. Fotografe só o problema, sem pessoas.</p>
+    <div class="fc-foto mb-2">
+      <input class="fc-foto-input" id="foto" name="foto" type="file" accept="image/*" capture="environment">
+      <label class="btn btn-outline-primary btn-lg w-100 fc-app-acao" for="foto"><i class="bi bi-camera"></i> Tirar foto</label>
+      <p class="small text-muted mt-1 mb-0" data-foto-estado>Nenhuma foto.</p>
+    </div>
+    <div class="fc-isca" aria-hidden="true"><label for="site">Não preencha</label><input id="site" name="site" tabindex="-1" autocomplete="off"></div>
+    <button class="btn btn-primary btn-lg w-100 fw-bold fc-app-acao" type="submit">Enviar</button>
+  </section>
 </form>
 <p class="small text-muted mt-3">É da equipe? <a href="{{ url_for('auth.login', next=request.path) }}">Entre no sistema</a>.</p>
 {% endif %}
 {% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/publico-qr.js') }}"></script>{% endblock %}
