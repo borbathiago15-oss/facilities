@@ -240,6 +240,56 @@ def aplicar_rota_pronta_post(cid, rmid):
     return redirect(url_for('rotas.rota', rid=rota.id))
 
 
+# ── Plano de limpeza do cliente (planilha) ────────────────────────────────
+
+@bp.get('/rotas/locais/<int:cid>/importar-plano')
+@login_required
+def importar_plano(cid):
+    loc = _local(cid, montar=True)
+    return render_template('rotas/importar_plano.html', local=loc, previa=None,
+                           dias=servico.DIAS_DA_SEMANA)
+
+
+@bp.post('/rotas/locais/<int:cid>/importar-plano')
+@login_required
+def importar_plano_previa(cid):
+    """Recebe a planilha, guarda e mostra a prévia (nada é criado ainda)."""
+    from facilities.rotas import plano_limpeza
+    loc = _local(cid, montar=True)
+    try:
+        chave, plano = plano_limpeza.guardar_planilha(loc, request.files.get('arquivo'))
+        previa = plano_limpeza.planejar(plano, loc)
+    except RegraDaRota as erro:
+        flash(erro.mensagem, 'danger')
+        return redirect(url_for('rotas.importar_plano', cid=loc.id))
+    return render_template('rotas/importar_plano.html', local=loc, previa=previa, chave=chave,
+                           dias=servico.DIAS_DA_SEMANA,
+                           ja_existem=plano_limpeza.rotas_que_ja_existem(previa, loc))
+
+
+@bp.post('/rotas/locais/<int:cid>/importar-plano/criar')
+@login_required
+def importar_plano_criar(cid):
+    """Cria no local o que a prévia mostrou (a planilha guardada pela chave)."""
+    from facilities.rotas import plano_limpeza
+    loc = _local(cid, montar=True)
+    try:
+        plano = plano_limpeza.ler_guardada(loc, request.form.get('chave'))
+        previa = plano_limpeza.planejar(plano, loc)
+        resumo = plano_limpeza.aplicar(previa, loc, current_user,
+                                       substituir=request.form.get('substituir') == '1')
+        db.session.commit()
+    except RegraDaRota as erro:
+        db.session.rollback()
+        flash(erro.mensagem, 'danger')
+        return redirect(url_for('rotas.importar_plano', cid=loc.id))
+    flash(f'Plano importado: {resumo["rotas"]} rota(s) com {resumo["itens"]} atividade(s). '
+          f'Novos neste local: {resumo["setores"]} setor(es), {resumo["ambientes"]} bloco(s), '
+          f'{resumo["pontos"]} ponto(s) com QR e {resumo["checklists"]} checklist(s). Falta a '
+          'escala: quem faz cada rota.', 'success')
+    return redirect(url_for('rotas.local', cid=loc.id))
+
+
 # ── Checklists ────────────────────────────────────────────────────────────
 
 @bp.get('/rotas/biblioteca')
@@ -492,11 +542,11 @@ def criar_item(rid):
     r = _rota(rid, montar=True)
     ids = request.form.getlist('ponto_id')
     if len(ids) > 1:
-        return _gravar(servico.salvar_itens_em_lote, r, ids, request.form,
+        return _gravar(servico.salvar_itens_em_lote, r, ids, _com_dias(request.form),
                        sucesso=f'{len(ids)} pontos incluídos na rota, com o mesmo checklist e '
                                'os mesmos horários.',
                        destino=url_for('rotas.rota', rid=r.id))
-    return _gravar(servico.salvar_item, r, None, request.form,
+    return _gravar(servico.salvar_item, r, None, _com_dias(request.form),
                    sucesso='Atividade incluída na rota.', destino=url_for('rotas.rota', rid=r.id))
 
 
@@ -512,7 +562,7 @@ def editar_item(rid, iid):
         db.session.commit()
         flash('Atividade reativada.' if it.is_active else 'Atividade tirada da rota.', 'success')
         return redirect(url_for('rotas.rota', rid=r.id))
-    return _gravar(servico.salvar_item, r, it, request.form,
+    return _gravar(servico.salvar_item, r, it, _com_dias(request.form),
                    sucesso='Atividade atualizada.', destino=url_for('rotas.rota', rid=r.id))
 
 
@@ -742,6 +792,7 @@ def _dados_do_turno(locais):
     def v_json(v):
         return {'id': v.id, 'modelo': v.modelo.nome, 'numero': v.numero,
                 'procedimento': v.modelo.descricao or '', 'itens': _itens_com_referencia(v),
+                'materiais': v.materiais or '', 'epi': v.epi or '',
                 'documentos': [{'nome': d.nome, 'url': url_for('rotas.documento', did=d.id)}
                                for d in servico.documentos_ativos(v.modelo)],
                 'foto_antes': v.exige_foto_antes, 'foto_depois': v.exige_foto_depois}

@@ -196,6 +196,9 @@ def aplicar(modelo, local, dados_rota, linhas, autor):
             'hora_fim': dados_rota.get('hora_fim') or modelo.hora_fim.strftime('%H:%M'),
             'tolerancia_min': dados_rota.get('tolerancia_min') or modelo.tolerancia_min,
             'dias_semana': dados_rota.get('dias_semana') or modelo.dias_semana,
+            'intervalo_inicio': dados_rota.get('intervalo_inicio') or '',
+            'intervalo_fim': dados_rota.get('intervalo_fim') or '',
+            'observacoes': dados_rota.get('observacoes') or '',
             'presencas_por_turno': '0'})
         validos = {it.checklist_id for it in modelo.itens}
         for ln in escolhidas:

@@ -550,6 +550,56 @@ def _comandos(app):
         click.echo(f'{len(criados)} modelo(s) instalado(s)' + (': ' + ', '.join(criados)
                                                               if criados else '.'))
 
+    @app.cli.command('semear-trino-frio')
+    def semear_trino_frio():
+        """Cadastro de teste da Trino Frio: empresa, cliente, local "Galpão
+        Frio" e o plano de limpeza da planilha empacotada (não duplica)."""
+        from facilities.rotas.plano_limpeza import semear_trino_frio
+        loc, r = semear_trino_frio()
+        db.session.commit()
+        click.echo(f'Local "{loc.name}" (id {loc.id}): {r["rotas"]} rota(s) criada(s), '
+                   f'{r["puladas"]} já existia(m); {r["itens"]} atividade(s); novos: '
+                   f'{r["setores"]} setor(es), {r["ambientes"]} bloco(s), {r["pontos"]} '
+                   f'ponto(s) com QR, {r["checklists"]} checklist(s).')
+        for a in r['avisos']:
+            click.echo(f'  ! {a}')
+
+    @app.cli.group('rotas')
+    def rotas_cli():
+        """Rotas e checklists."""
+
+    @rotas_cli.command('importar-plano')
+    @click.argument('arquivo', type=click.Path(exists=True, dir_okay=False))
+    @click.option('--local', 'local_id', type=int, required=True, help='Id do local.')
+    @click.option('--dry-run', is_flag=True, help='Só mostra a prévia; não grava.')
+    @click.option('--substituir', is_flag=True,
+                  help='Rota com o mesmo nome já no local: desativa a antiga e cria a nova.')
+    def rotas_importar_plano(arquivo, local_id, dry_run, substituir):
+        """Lê a planilha "Plano de limpeza e conservação" e cria no local os
+        blocos (um QR por bloco), os checklists e as rotas."""
+        from facilities.core.models import Client
+        from facilities.rotas import plano_limpeza
+        from facilities.rotas.servico import RegraDaRota
+        loc = db.session.get(Client, local_id)
+        if loc is None or loc.is_deleted:
+            raise click.ClickException(f'Local {local_id} não encontrado.')
+        try:
+            previa = plano_limpeza.planejar(plano_limpeza.ler(arquivo), loc)
+            click.echo(plano_limpeza.descrever(previa))
+            if dry_run:
+                click.echo('(--dry-run: nada foi gravado)')
+                return
+            r = plano_limpeza.aplicar(previa, loc, None, substituir=substituir)
+            db.session.commit()
+        except RegraDaRota as erro:
+            db.session.rollback()
+            raise click.ClickException(erro.mensagem)
+        click.echo(f'{r["rotas"]} rota(s) criada(s) ({r["substituidas"]} substituída(s)), '
+                   f'{r["itens"]} atividade(s); novos: {r["setores"]} setor(es), '
+                   f'{r["ambientes"]} bloco(s), {r["pontos"]} ponto(s) com QR, '
+                   f'{r["checklists"]} checklist(s) ({r["checklists_atualizados"]} '
+                   'reaproveitado(s)).')
+
     @app.cli.command('semear-modelos')
     @click.option('--contrato', 'contrato_id', type=int, required=True,
                   help='Id do contrato que recebe os modelos prontos.')

@@ -230,6 +230,12 @@ SEMENTES = [
     "created_at) SELECT u.id,p.client_id,p.id,'2026-10-18','2026-10-18 10:30',false,g.id,now() "
     "FROM users u, users g, pontos_inspecao p WHERE u.email='sup@ensaio' "
     "AND g.email='gerente@ensaio'",
+    # Plano de limpeza: o item só de segunda a sexta com sábado diferente, a
+    # versão com materiais e EPI, a rota com intervalo e observações.
+    "UPDATE rota_itens SET dias_semana='12345', horarios_por_dia='{\"6\": \"08:00\"}'",
+    "UPDATE checklist_versoes SET materiais='Vassoura, pá, mop úmido', epi='Luva nitrílica'",
+    "UPDATE rotas SET intervalo_inicio='11:00', intervalo_fim='12:00', "
+    "observacoes='Manter as gaiolas conforme a identificação da câmara.'",
 ]
 
 

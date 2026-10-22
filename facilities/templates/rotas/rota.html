@@ -3,7 +3,13 @@
 {% block breadcrumb %}<li class="breadcrumb-item"><a href="{{ url_for('rotas.inicio') }}">Rotas</a></li><li class="breadcrumb-item"><a href="{{ url_for('rotas.local', cid=rota.client_id) }}">{{ rota.local.name }}</a></li><li class="breadcrumb-item active" aria-current="page">{{ rota.nome }}</li>{% endblock %}
 {% block content %}
 <h1 class="fc-titulo">{{ rota.nome }}</h1>
-<p class="fc-sub">{{ rota.turno }} · {{ rota.hora_inicio.strftime('%H:%M') }} às {{ rota.hora_fim.strftime('%H:%M') }} · tolerância de {{ rota.tolerancia_min }} min · {% for d in rota.dias_semana %}{{ dias[d] }}{% if not loop.last %}, {% endif %}{% endfor %}{% if not rota.is_active %} · <strong>desativada</strong>{% endif %}</p>
+<p class="fc-sub">{{ rota.turno }} · {{ rota.hora_inicio.strftime('%H:%M') }} às {{ rota.hora_fim.strftime('%H:%M') }}{% if rota.intervalo_inicio and rota.intervalo_fim %} · intervalo {{ rota.intervalo_inicio.strftime('%H:%M') }} às {{ rota.intervalo_fim.strftime('%H:%M') }}{% endif %} · tolerância de {{ rota.tolerancia_min }} min · {% for d in rota.dias_semana %}{{ dias[d] }}{% if not loop.last %}, {% endif %}{% endfor %}{% if not rota.is_active %} · <strong>desativada</strong>{% endif %}</p>
+{% if rota.observacoes %}
+<section class="fc-cartao mb-3" aria-labelledby="tit-obs">
+  <h2 class="h6 fw-bold" id="tit-obs"><i class="bi bi-info-circle"></i> Observações do plano</h2>
+  <p class="small mb-0 fc-texto-livre">{{ rota.observacoes }}</p>
+</section>
+{% endif %}
 
 <section class="fc-cartao mb-3" aria-labelledby="tit-ativ">
   <h2 class="h6 fw-bold" id="tit-ativ"><i class="bi bi-list-check"></i> Atividades (onde, o quê e quando)</h2>
@@ -16,6 +22,9 @@
     </div>
     <div class="small text-muted">
       {% if it.horarios %}Horários: {{ it.horarios }}{% endif %}{% if it.horarios and it.frequencia_min %} · {% endif %}{% if it.frequencia_min %}a cada {{ it.frequencia_min }} min{% endif %}
+      {% if it.tempo_previsto_min %}· {{ it.tempo_previsto_min }} min previstos{% endif %}
+      {% if it.dias_semana %}· só {% for d in it.dias_semana %}{{ dias[d] }}{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}
+      {% for d, hs in it.horarios_por_dia_dict.items() %}· {{ dias.get(d, d) }}: {{ hs }} {% endfor %}
       · hoje: {% for m in horarios(it) %}{{ m.strftime('%H:%M') }}{% if not loop.last %}, {% endif %}{% else %}nenhum{% endfor %}
     </div>
     {% if pode_montar %}

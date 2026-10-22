@@ -149,6 +149,11 @@ class ChecklistVersao(db.Model):
     itens_json = db.Column(db.Text, nullable=False, default='[]')
     exige_foto_antes = db.Column(db.Boolean, default=False, nullable=False)
     exige_foto_depois = db.Column(db.Boolean, default=False, nullable=False)
+    # Plano de limpeza (22/10/2026): o material usado e o EPI da atividade,
+    # como a planilha do cliente lista. Ficam na VERSÃO, congelados com a
+    # execução: a tela do técnico mostra o que valia no dia.
+    materiais = db.Column(db.Text)
+    epi = db.Column(db.Text)
     publicada_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     publicada_por = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='RESTRICT'),
                               nullable=True)
@@ -178,6 +183,12 @@ class Rota(db.Model):
                                     server_default='2')
     presenca_prazo_min = db.Column(db.Integer, nullable=False, default=10,
                                    server_default='10')
+    # Plano de limpeza (22/10/2026): o intervalo (almoço, ceia) dentro do
+    # turno — o agendador não põe tarefa nele — e as observações do plano
+    # (ex.: a regra das gaiolas), mostradas na tela da rota.
+    intervalo_inicio = db.Column(db.Time)
+    intervalo_fim = db.Column(db.Time)
+    observacoes = db.Column(db.Text)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -207,10 +218,24 @@ class RotaItem(db.Model):
     # controle de tempo). Acima disto + TOLERANCIA_ATRASO_MIN, a execução
     # pede o motivo do atraso.
     tempo_previsto_min = db.Column(db.Integer)
+    # Plano de limpeza (22/10/2026): vazio = todos os dias da rota; preenchido
+    # ("12345") = só nesses dias (subconjunto dos dias da rota). E os horários
+    # diferentes de um dia específico, em JSON {"6": "07:00, 09:30"}: nesse
+    # dia valem SÓ estes; nos outros vale ``horarios``.
+    dias_semana = db.Column(db.String(7))
+    horarios_por_dia = db.Column(db.Text)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
 
     ponto = db.relationship('PontoInspecao')
     modelo = db.relationship('ChecklistModelo')
+
+    @property
+    def horarios_por_dia_dict(self):
+        try:
+            d = json.loads(self.horarios_por_dia or '{}')
+        except ValueError:
+            return {}
+        return d if isinstance(d, dict) else {}
 
 
 class RotaModelo(db.Model):

@@ -15,7 +15,7 @@ As regras, em uma frase cada:
   de quem chama.
 """
 import json
-from datetime import date, datetime
+from datetime import date, datetime, time
 
 from facilities.extensions import db
 from facilities.core.models import Client, User
@@ -44,7 +44,7 @@ def foto(obj):
         if col.name in _FORA_DA_FOTO:
             continue
         valor = getattr(obj, col.key)
-        if isinstance(valor, (datetime, date)):
+        if isinstance(valor, (datetime, date, time)):
             valor = valor.isoformat()
         dados[col.name] = valor
     return dados

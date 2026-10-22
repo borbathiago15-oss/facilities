@@ -92,6 +92,8 @@ def _numero(bruto):
 
 COMO_FAZER_MAX = 400
 PROBLEMA_MAX = 120
+MATERIAIS_MAX = 2000
+OBSERVACOES_MAX = 4000
 TEMPO_PREVISTO_MIN, TEMPO_PREVISTO_MAX = 1, 480
 CHAVE_DA_REFERENCIA = re.compile(r'^checklists/\d+/ref/[0-9a-f]{32}\.(jpg|png|webp)$')
 
@@ -209,12 +211,20 @@ def publicar(modelo, itens, dados, autor):
         modelo.descricao = (dados.get('descricao') or '').strip() or None
     atual = modelo.versao_atual
     novo_json = json.dumps(itens, ensure_ascii=False, sort_keys=True)
+    # Material usado e EPI (plano de limpeza): ficam na versão. Fora do
+    # formulário (chave ausente), continuam os da versão atual.
+    materiais = ((dados.get('materiais') or '').strip()[:MATERIAIS_MAX] or None) \
+        if 'materiais' in dados else (atual.materiais if atual else None)
+    epi = ((dados.get('epi') or '').strip()[:MATERIAIS_MAX] or None) \
+        if 'epi' in dados else (atual.epi if atual else None)
     if atual is not None and atual.itens_json == novo_json \
-            and atual.exige_foto_antes == antes and atual.exige_foto_depois == depois:
+            and atual.exige_foto_antes == antes and atual.exige_foto_depois == depois \
+            and atual.materiais == materiais and atual.epi == epi:
         return atual, False
     v = ChecklistVersao(modelo_id=modelo.id, numero=(atual.numero + 1) if atual else 1,
                         itens_json=novo_json, exige_foto_antes=antes,
-                        exige_foto_depois=depois, publicada_por=getattr(autor, 'id', None))
+                        exige_foto_depois=depois, materiais=materiais, epi=epi,
+                        publicada_por=getattr(autor, 'id', None))
     db.session.add(v)
     db.session.flush()
     db.session.refresh(modelo)
@@ -283,12 +293,19 @@ def copiar_da_biblioteca(origem, client_id, autor):
                                           enviado_por=autor.id if autor else None))
     v = origem.versao_atual
     publicar(m, json.loads(v.itens_json), {'exige_foto_antes': v.exige_foto_antes,
-                                           'exige_foto_depois': v.exige_foto_depois}, autor)
+                                           'exige_foto_depois': v.exige_foto_depois,
+                                           'materiais': v.materiais, 'epi': v.epi}, autor)
     return m
 
 
 def itens_da_versao(versao):
     return json.loads(versao.itens_json or '[]')
+
+
+def dados_da_versao(versao):
+    """O que a tela do técnico mostra além das perguntas: o material usado e
+    o EPI da versão (vazios quando o checklist não os tem)."""
+    return {'materiais': versao.materiais or '', 'epi': versao.epi or ''}
 
 
 # ── Rotas ─────────────────────────────────────────────────────────────────
@@ -337,16 +354,59 @@ def salvar_rota(local, rota, dados):
     if not 0 <= presencas <= 6 or not 5 <= prazo_presenca <= 60:
         raise RegraDaRota('Confirmação de presença: de 0 a 6 por turno, com 5 a 60 minutos '
                           'para responder.')
+    intervalo = _intervalo(dados, inicio, fim, rota)
     rota = rota or Rota(client_id=local.id)
     rota.nome, rota.turno = nome, turno
     rota.hora_inicio, rota.hora_fim = inicio, fim
     rota.tolerancia_min = tolerancia
     rota.presencas_por_turno, rota.presenca_prazo_min = presencas, prazo_presenca
     rota.dias_semana = _dias(dados.get('dias_semana'))
+    rota.intervalo_inicio, rota.intervalo_fim = intervalo
+    if 'observacoes' in dados:
+        rota.observacoes = (dados.get('observacoes') or '').strip()[:OBSERVACOES_MAX] or None
     if rota.id is None:
         db.session.add(rota)
     db.session.flush()
     return rota
+
+
+def _intervalo(dados, inicio, fim, rota):
+    """O intervalo do turno (ex.: almoço) → (início, fim) ou (None, None).
+
+    Os dois juntos, dentro do turno, com duração. Fora do formulário (chaves
+    ausentes), continua o da rota."""
+    if 'intervalo_inicio' not in dados and 'intervalo_fim' not in dados:
+        return (rota.intervalo_inicio, rota.intervalo_fim) if rota else (None, None)
+    bi, bf = str(dados.get('intervalo_inicio') or '').strip(), \
+        str(dados.get('intervalo_fim') or '').strip()
+    if not bi and not bf:
+        return None, None
+    if not bi or not bf:
+        raise RegraDaRota('Intervalo: informe o início e o fim (ex.: 11:00 e 12:00), ou '
+                          'deixe os dois vazios.')
+    ii, ff = _hora(bi, 'Início do intervalo'), _hora(bf, 'Fim do intervalo')
+    if ii == ff:
+        raise RegraDaRota('O intervalo precisa ter duração (início e fim iguais).')
+    janela_ini = datetime.combine(tempo.hoje(), inicio)
+    janela_fim = datetime.combine(tempo.hoje(), fim)
+    if janela_fim <= janela_ini:
+        janela_fim += timedelta(days=1)
+    mi, mf = _dentro_da_janela(ii, janela_ini), _dentro_da_janela(ff, janela_ini)
+    if mf <= mi:
+        mf += timedelta(days=1)
+    if not (janela_ini <= mi and mf <= janela_fim):
+        raise RegraDaRota(f'O intervalo ({bi} às {bf}) precisa caber no turno '
+                          f'({inicio.strftime("%H:%M")} às {fim.strftime("%H:%M")}).')
+    return ii, ff
+
+
+def _dentro_da_janela(hora, ini):
+    """A hora (sem data) → o instante no turno que começa em ``ini``: se cai
+    antes do início, é do dia seguinte (turno que vira a noite)."""
+    m = datetime.combine(ini.date(), hora)
+    if m < ini:
+        m += timedelta(days=1)
+    return m
 
 
 def _janela(rota, dia):
@@ -358,12 +418,77 @@ def _janela(rota, dia):
     return ini, fim
 
 
+def _janela_do_intervalo(rota, ini):
+    """O intervalo do turno que começa em ``ini`` → (início, fim) ou None."""
+    if rota.intervalo_inicio is None or rota.intervalo_fim is None:
+        return None
+    mi = _dentro_da_janela(rota.intervalo_inicio, ini)
+    mf = _dentro_da_janela(rota.intervalo_fim, ini)
+    if mf <= mi:
+        mf += timedelta(days=1)
+    return mi, mf
+
+
 def _horarios_fixos(bruto):
     out = set()
     for pedaco in re.split(r'[,;\s]+', bruto or ''):
         if pedaco:
             out.add(_hora(pedaco, f'Horário "{pedaco}"'))
     return sorted(out)
+
+
+def _dias_do_item(bruto, rota):
+    """Os dias do item: vazio = todos os da rota (None); informado, só dias
+    em que a rota roda."""
+    dias = ''.join(sorted({d for d in str(bruto or '') if d in DIAS_DA_SEMANA}))
+    if not dias or dias == rota.dias_semana:
+        return None
+    fora = [DIAS_DA_SEMANA[d] for d in dias if d not in rota.dias_semana]
+    if fora:
+        raise RegraDaRota(f'A rota não roda em {", ".join(fora)}: tire esse(s) dia(s) da '
+                          'atividade ou inclua na rota.')
+    return dias
+
+
+_NOME_DO_DIA = {v: k for k, v in DIAS_DA_SEMANA.items()}
+_NOME_DO_DIA.update({'sab': '6', 'sabado': '6', 'sábado': '6', 'domingo': '7', 'segunda': '1',
+                     'terca': '2', 'terça': '2', 'quarta': '3', 'quinta': '4', 'sexta': '5'})
+
+
+def _horarios_por_dia(bruto):
+    """Horários diferentes num dia → {dia: [time]}. Aceita o JSON guardado
+    ({"6": "07:00, 09:30"}) ou o texto do formulário, uma linha por dia
+    ("sáb: 07:00, 09:30" ou "6: 07:00")."""
+    if not bruto:
+        return {}
+    if isinstance(bruto, dict):
+        pares = bruto.items()
+    else:
+        texto = str(bruto).strip()
+        if texto.startswith('{'):
+            try:
+                pares = json.loads(texto).items()
+            except (ValueError, AttributeError):
+                raise RegraDaRota('Horários por dia ilegíveis.')
+        else:
+            pares = []
+            for linha in re.split(r'[;\n]+', texto):
+                if not linha.strip():
+                    continue
+                dia, sep, horas = linha.partition(':')
+                if not sep or ':' not in horas:
+                    raise RegraDaRota('Horários por dia: uma linha por dia, no formato '
+                                      '"sáb: 07:00, 09:30".')
+                pares.append((dia, horas))
+    saida = {}
+    for dia, horas in pares:
+        d = _NOME_DO_DIA.get(str(dia).strip().lower(), str(dia).strip())
+        if d not in DIAS_DA_SEMANA:
+            raise RegraDaRota(f'Horários por dia: "{dia}" não é um dia da semana.')
+        hs = _horarios_fixos(str(horas))
+        if hs:
+            saida[d] = hs
+    return saida
 
 
 def _tempo_previsto(bruto):
@@ -400,19 +525,27 @@ def salvar_item(rota, item, dados):
                           '(ex.: a cada 60 minutos).')
     tempo_previsto = _tempo_previsto(dados.get('tempo_previsto_min'))
     ini, fim = _janela(rota, tempo.hoje())
-    for h in fixos:
-        momento = datetime.combine(ini.date(), h)
-        if momento < ini:
-            momento += timedelta(days=1)
+    por_dia = _horarios_por_dia(dados.get('horarios_por_dia'))
+    for h in fixos + [h for hs in por_dia.values() for h in hs]:
+        momento = _dentro_da_janela(h, ini)
         if not ini <= momento <= fim:
             raise RegraDaRota(f'{h.strftime("%H:%M")} está fora do turno '
                               f'({rota.hora_inicio.strftime("%H:%M")} às '
                               f'{rota.hora_fim.strftime("%H:%M")}).')
+    dias = _dias_do_item(dados.get('dias_semana'), rota)
+    for d in por_dia:
+        if d not in (dias or rota.dias_semana):
+            raise RegraDaRota(f'Horários de {DIAS_DA_SEMANA[d]}: a atividade não acontece '
+                              'nesse dia.')
     item = item or RotaItem(rota_id=rota.id)
     item.ponto_id, item.modelo_id = ponto.id, modelo.id
     item.horarios = ', '.join(h.strftime('%H:%M') for h in fixos) or None
     item.frequencia_min = freq
     item.tempo_previsto_min = tempo_previsto
+    item.dias_semana = dias
+    item.horarios_por_dia = json.dumps(
+        {d: ', '.join(h.strftime('%H:%M') for h in hs) for d, hs in sorted(por_dia.items())},
+        ensure_ascii=False) if por_dia else None
     item.ordem = int(dados.get('ordem') or 0) if str(dados.get('ordem') or '').isdigit() \
         else (item.ordem or len(rota.itens) + 1)
     if item.id is None:
@@ -440,7 +573,8 @@ def salvar_itens_em_lote(rota, ponto_ids, dados):
     itens = []
     for n, pid in enumerate(ids):
         linha = {k: dados.get(k) for k in ('modelo_id', 'horarios', 'frequencia_min',
-                                           'tempo_previsto_min')}
+                                           'tempo_previsto_min', 'dias_semana',
+                                           'horarios_por_dia')}
         linha['ponto_id'] = pid
         linha['ordem'] = str(inicio + n)
         itens.append(salvar_item(rota, None, linha))
@@ -495,13 +629,21 @@ def escalado(rota, dia):
 # ── Agendador ─────────────────────────────────────────────────────────────
 
 def horarios_do_item(rota, item, dia):
-    """Os instantes (horas locais) em que o item acontece no turno de ``dia``."""
+    """Os instantes (horas locais) em que o item acontece no turno de ``dia``.
+
+    Respeita os dias do item (``dias_semana``), os horários próprios do dia
+    (``horarios_por_dia``, que nesse dia substituem ``horarios``) e o
+    intervalo da rota (nada cai dentro dele)."""
+    dia_semana = str(dia.isoweekday())
+    if item.dias_semana and dia_semana not in item.dias_semana:
+        return []
     ini, fim = _janela(rota, dia)
+    por_dia = item.horarios_por_dia_dict
+    fixos = _horarios_fixos(por_dia[dia_semana]) if dia_semana in por_dia \
+        else _horarios_fixos(item.horarios)
     momentos = set()
-    for h in _horarios_fixos(item.horarios):
-        m = datetime.combine(dia, h)
-        if m < ini:
-            m += timedelta(days=1)
+    for h in fixos:
+        m = _dentro_da_janela(h, ini)
         if ini <= m <= fim:
             momentos.add(m)
     if item.frequencia_min:
@@ -509,6 +651,9 @@ def horarios_do_item(rota, item, dia):
         while m < fim:
             momentos.add(m)
             m += timedelta(minutes=item.frequencia_min)
+    intervalo = _janela_do_intervalo(rota, ini)
+    if intervalo:
+        momentos = {m for m in momentos if not intervalo[0] <= m < intervalo[1]}
     return sorted(momentos)
 
 
@@ -729,6 +874,7 @@ def turno_de_hoje(user, client_id, agora_utc=None):
             'minha': t.user_id == user.id, 'escalado': t.pessoa.name if t.pessoa else '',
             'status': t.status, 'situacao': situacao(t, agora_utc),
             'tempo_previsto_min': t.item.tempo_previsto_min if t.item else None,
+            'materiais': t.versao.materiais or '', 'epi': t.versao.epi or '',
             'exige_foto': bool(t.versao.exige_foto_antes or t.versao.exige_foto_depois
                                or any(i.get('exige_foto') for i in itens)),
             'foto_antes': t.versao.exige_foto_antes, 'foto_depois': t.versao.exige_foto_depois,

@@ -1,0 +1,75 @@
+{% extends 'base.html' %}
+{% block title %}Importar plano de limpeza{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item"><a href="{{ url_for('rotas.inicio') }}">Rotas</a></li><li class="breadcrumb-item"><a href="{{ url_for('rotas.local', cid=local.id) }}">{{ local.name }}</a></li><li class="breadcrumb-item active" aria-current="page">Importar plano</li>{% endblock %}
+{% block content %}
+<h1 class="fc-titulo">Importar plano de limpeza (planilha)</h1>
+<p class="fc-sub">{{ local.name }} · envie a planilha "Plano de limpeza e conservação" do cliente (uma aba por rota). Primeiro você vê a prévia; nada é criado antes de clicar em "Criar".</p>
+
+<form method="post" action="{{ url_for('rotas.importar_plano_previa', cid=local.id) }}" enctype="multipart/form-data" class="fc-cartao mb-3 d-flex flex-wrap gap-2 align-items-end">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="flex-grow-1"><label class="form-label small fw-semibold" for="arquivo">Planilha do plano (.xlsx, até 5 MB)</label>
+    <input class="form-control" type="file" id="arquivo" name="arquivo" accept=".xlsx" required></div>
+  <button class="btn btn-outline-primary fw-bold" type="submit"><i class="bi bi-eye" aria-hidden="true"></i> Ver a prévia</button>
+</form>
+
+{% if previa %}
+{% if previa.avisos %}
+<section class="alert alert-warning" aria-labelledby="tit-avisos">
+  <h2 class="h6 fw-bold" id="tit-avisos">O que não entendi ou ajustei ({{ previa.avisos|length }})</h2>
+  <ul class="mb-0 small">{% for a in previa.avisos %}<li>{{ a }}</li>{% endfor %}</ul>
+</section>
+{% endif %}
+
+<section class="fc-cartao mb-3" aria-labelledby="tit-blocos">
+  <h2 class="h6 fw-bold" id="tit-blocos"><i class="bi bi-geo-alt"></i> Blocos ({{ previa.blocos|length }}) — um ponto com QR por bloco</h2>
+  <div class="table-responsive"><table class="table table-sm align-middle mb-0">
+    <thead><tr><th scope="col">Setor</th><th scope="col">Bloco</th><th scope="col">Atividades</th><th scope="col">Situação</th></tr></thead>
+    <tbody>{% for b in previa.blocos %}<tr><td>{{ b.setor }}</td><td>{{ b.nome }}</td><td>{{ b.atividades }}</td><td class="small text-muted">{{ 'já existe' if b.existe else 'novo' }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+</section>
+
+<section class="fc-cartao mb-3" aria-labelledby="tit-cks">
+  <h2 class="h6 fw-bold" id="tit-cks"><i class="bi bi-ui-checks"></i> Checklists ({{ previa.checklists|length }}) — um por atividade distinta</h2>
+  <div class="table-responsive"><table class="table table-sm align-middle mb-0">
+    <thead><tr><th scope="col">Checklist</th><th scope="col">Perguntas</th><th scope="col">Materiais</th><th scope="col">EPI</th><th scope="col">Situação</th></tr></thead>
+    <tbody>{% for c in previa.checklists %}<tr>
+      <td>{{ c.nome }}</td>
+      <td class="small">{% for it in c.itens %}☐ {{ it.texto }}{% if not loop.last %} {% endif %}{% endfor %}</td>
+      <td class="small text-muted">{{ c.materiais or '—' }}</td>
+      <td class="small text-muted">{{ c.epi or '—' }}</td>
+      <td class="small text-muted">{{ 'já existe' if c.existe else 'novo' }}</td>
+    </tr>{% endfor %}</tbody>
+  </table></div>
+</section>
+
+<section class="fc-cartao mb-3" aria-labelledby="tit-rotas">
+  <h2 class="h6 fw-bold" id="tit-rotas"><i class="bi bi-signpost-split"></i> Rotas ({{ previa.rotas|length }})</h2>
+  {% for r in previa.rotas %}
+  <div class="border-top py-2">
+    <div class="fw-semibold">{{ r.nome }}{% if r.existe %} <span class="badge text-bg-warning">já existe</span>{% endif %}</div>
+    <div class="small text-muted">{{ r.turno }} · {{ r.hora_inicio }} às {{ r.hora_fim }}{% if r.intervalo_inicio %} · intervalo {{ r.intervalo_inicio }} às {{ r.intervalo_fim }}{% endif %} · {% for d in r.dias_semana %}{{ dias[d] }}{% if not loop.last %}, {% endif %}{% endfor %} · tolerância {{ r.tolerancia_min }} min{% if r.responsavel %} · <strong>Responsável: {{ r.responsavel }}</strong> (escalar depois){% endif %}</div>
+    <div class="table-responsive"><table class="table table-sm mb-1">
+      <thead><tr><th scope="col">#</th><th scope="col">Hora</th><th scope="col">Tempo</th><th scope="col">Bloco</th><th scope="col">Checklist</th><th scope="col">Dias</th></tr></thead>
+      <tbody>{% for it in r.itens %}<tr>
+        <td>{{ it.ordem }}</td><td>{{ it.horario }}</td><td>{{ it.tempo_previsto_min or '—' }} min</td>
+        <td>{{ it.bloco.rotulo }}</td><td class="small">{{ it.checklist.nome }}</td>
+        <td class="small text-muted">{% if it.dias_semana %}só {% for d in it.dias_semana %}{{ dias[d] }}{% if not loop.last %}, {% endif %}{% endfor %}{% else %}todos{% endif %}{% for d, h in it.horarios_por_dia.items() %} · {{ dias[d] }} às {{ h }}{% endfor %}</td>
+      </tr>{% endfor %}</tbody>
+    </table></div>
+    {% if r.observacoes %}<p class="small mb-0 fc-texto-livre"><strong>Observações:</strong> {{ r.observacoes }}</p>{% endif %}
+  </div>
+  {% endfor %}
+</section>
+
+<form method="post" action="{{ url_for('rotas.importar_plano_criar', cid=local.id) }}" class="fc-cartao">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="chave" value="{{ chave }}">
+  {% if ja_existem %}
+  <div class="alert alert-warning small">Já existe neste local: {{ ja_existem|join(', ') }}. Marque abaixo para trocar pelo plano novo (a rota antiga é desativada e o histórico fica).</div>
+  <div class="form-check mb-2"><input class="form-check-input" type="checkbox" id="subst" name="substituir" value="1"><label class="form-check-label" for="subst">Substituir as rotas que já existem</label></div>
+  {% endif %}
+  <p class="small text-muted">A escala (quem faz cada rota) não vem da planilha: depois de criar, escale as pessoas em cada rota. A confirmação de presença começa desligada.</p>
+  <button class="btn btn-primary fw-bold" type="submit"><i class="bi bi-check2-circle" aria-hidden="true"></i> Criar blocos, checklists e rotas neste local</button>
+</form>
+{% endif %}
+{% endblock %}
