@@ -29,9 +29,9 @@ from facilities.rotas.models import (MOTIVOS_NAO_REALIZADA, SITUACOES, TIPOS_DE_
                                      ChecklistModelo, Execucao, ExecucaoFoto, NaoConformidade,
                                      Rota, RotaEscala, RotaItem, TarefaDia)
 from facilities.rotas.servico import RegraDaRota
-from facilities.rotas import ocorrencias, presenca
-from facilities.rotas.models import (SITUACOES_OCORRENCIA, TIPOS_OCORRENCIA_PUBLICA,
-                                     OcorrenciaPublica)
+from facilities.rotas import chegadas, ocorrencias, presenca
+from facilities.rotas.models import (MOTIVOS_ATRASO, MOTIVOS_NAO_FEITO, SITUACOES_OCORRENCIA,
+                                     TIPOS_OCORRENCIA_PUBLICA, OcorrenciaPublica)
 
 bp = Blueprint('rotas', __name__)
 
@@ -126,7 +126,8 @@ LINHAS_EM_BRANCO_ROTA = 3
 
 
 def _linhas_do_formulario(form):
-    campos = ('setor', 'ambiente', 'checklist_id', 'horarios', 'quantidade')
+    campos = ('setor', 'ambiente', 'checklist_id', 'horarios', 'quantidade',
+              'tempo_previsto_min')
     listas = {c: form.getlist(c) for c in campos}
     n = len(listas['ambiente'])
     return [{c: (listas[c][i] if i < len(listas[c]) else '') for c in campos}
@@ -154,7 +155,8 @@ def rota_pronta(rmid=None):
         raise Forbidden('A biblioteca da Trino é mantida pelo administrador.')
     m = _rota_pronta(rmid) if rmid else None
     linhas = [{'setor': it.setor, 'ambiente': it.ambiente, 'checklist_id': it.checklist_id,
-               'horarios': it.horarios, 'quantidade': it.quantidade}
+               'horarios': it.horarios, 'quantidade': it.quantidade,
+               'tempo_previsto_min': it.tempo_previsto_min or ''}
               for it in (m.itens if m else [])]
     return render_template('rotas/rota_pronta.html', modelo=m,
                            linhas=linhas + [{}] * LINHAS_EM_BRANCO_ROTA,
@@ -322,7 +324,7 @@ def modelo(mid):
 
 def _itens_do_formulario(form, arquivos=None, modelo=None):
     campos = ('texto', 'tipo', 'opcoes', 'minimo', 'maximo', 'problema_se', 'mostrar_se',
-              'codigo', 'ordem', 'como_fazer', 'foto_ref')
+              'codigo', 'ordem', 'como_fazer', 'foto_ref', 'problema')
     linhas = []
     n = len(form.getlist('texto'))
     for i in range(n):
@@ -569,7 +571,36 @@ def dia(cid):
                            situacoes_ocorrencia=SITUACOES_OCORRENCIA,
                            atrasada=ocorrencias.atrasada,
                            presencas=presenca.da_rota_no_dia(loc.id, d),
+                           chegadas=chegadas.do_dia(loc.id, d),
+                           entrada=chegadas.ponto_de_entrada(loc.id),
                            pode_atender=_perfil() in servico.PERFIS_QUE_EXECUTAM)
+
+
+@bp.post('/rotas/locais/<int:cid>/chegadas')
+@login_required
+def liberar_chegada(cid):
+    """A gestão libera a chegada de alguém no dia (o QR da entrada não pôde
+    ser lido). Formulário: ``user_id`` e ``data`` (opcional, hoje)."""
+    loc = _local(cid, montar=True)
+    dados = request.form if request.form else (request.get_json(silent=True) or {})
+    try:
+        uid = int(str(dados.get('user_id') or '').strip() or 0)
+        dia = datetime.strptime(str(dados.get('data') or ''), '%Y-%m-%d').date() \
+            if dados.get('data') else None
+    except ValueError:
+        uid, dia = 0, None
+    destino = url_for('rotas.dia', cid=loc.id, data=dia.isoformat() if dia else None)
+    try:
+        c, nova = chegadas.liberar(current_user, uid, loc, dia)
+        db.session.commit()
+    except RegraDaRota as erro:
+        db.session.rollback()
+        flash(erro.mensagem, 'danger')
+        return redirect(destino)
+    flash(f'Chegada de {c.pessoa.name} liberada para {c.data.strftime("%d/%m/%Y")}.' if nova
+          else f'{c.pessoa.name} já tinha chegada registrada em {c.data.strftime("%d/%m/%Y")}.',
+          'success')
+    return redirect(destino)
 
 
 def _execucao(eid):
@@ -734,6 +765,13 @@ def _dados_do_turno(locais):
                    for codigo, p in pontos.items()},
         'preventivas': preventivas,
         'motivos': MOTIVOS_NAO_REALIZADA,
+        'motivos_atraso': MOTIVOS_ATRASO,
+        'motivos_nao_feito': MOTIVOS_NAO_FEITO,
+        'tolerancia_atraso_min': servico.TOLERANCIA_ATRASO_MIN,
+        # O QR da entrada de cada local da carteira e se a chegada de hoje já foi feita.
+        'entradas': {str(c.id): {'ponto': (e.codigo_qr if e else None),
+                                 'chegada': chegadas.de_hoje(current_user, c.id) is not None}
+                     for c in locais for e in [chegadas.ponto_de_entrada(c.id)]},
         'situacoes': SITUACOES,
         # Fase 4B: o que o público avisou pelo QR e ainda não foi resolvido.
         'ocorrencias': [{
@@ -791,7 +829,45 @@ def turno():
 
 def _api_erro(erro):
     db.session.rollback()
-    return jsonify({'error': erro.mensagem}), erro.codigo
+    return jsonify(erro.como_json()), erro.codigo
+
+
+@bp.post('/app/api/chegada')
+@login_required
+def api_chegada():
+    """A pessoa leu o QR da ENTRADA do local: registra a chegada do dia
+    (idempotente). ``{'ponto': <QR>, 'selo_leitura': <opcional>}``."""
+    dados = request.get_json(silent=True) or {}
+    ponto = PontoInspecao.query.filter_by(codigo_qr=str(dados.get('ponto') or '')[:32]).first()
+    if ponto is None:
+        return jsonify({'error': 'QR não reconhecido.'}), 404
+    require_client(ponto.client_id)
+    lido = servico._hora_da_leitura(dados.get('selo_leitura'), current_user, ponto)
+    try:
+        c, nova = chegadas.registrar(current_user, ponto, lido or datetime.utcnow(),
+                                     com_camera=dados.get('com_camera', True))
+        db.session.commit()
+    except RegraDaRota as erro:
+        return _api_erro(erro)
+    return jsonify({'ok': True, 'nova': nova,
+                    'chegada': {'id': c.id, 'local': c.client_id, 'data': c.data.isoformat(),
+                                'hora': tempo.fmt(c.chegou_em, '%H:%M'),
+                                'com_camera': c.com_camera}}), 201 if nova else 200
+
+
+@bp.get('/app/api/turno')
+@login_required
+def api_turno():
+    """O turno de hoje da pessoa no local ``?local=<id>`` (o do QR lido)."""
+    bruto = str(request.args.get('local') or request.args.get('client_id') or '').strip()
+    if not bruto.isdigit():
+        return jsonify({'error': 'Diga o local (?local=<id>).'}), 400
+    try:
+        dados = servico.turno_de_hoje(current_user, int(bruto))
+        db.session.commit()
+    except RegraDaRota as erro:
+        return _api_erro(erro)
+    return jsonify(dados)
 
 
 @bp.post('/app/api/leitura')
@@ -825,6 +901,8 @@ def api_execucao():
         return _api_erro(erro)
     t = ex.tarefa
     return jsonify({'id': ex.id, 'nova': nova, 'status': t.status if t else 'extra',
+                    'duracao_min': ex.duracao_min, 'motivo_atraso': ex.motivo_atraso,
+                    'pedidos_insumo': [p.id for p in getattr(ex, 'pedidos_de_insumo', ())],
                     'situacao': SITUACOES.get(t.status) if t else (
                         'Preventiva feita — a ordem ficou resolvida' if ex.chamado_id
                         else f'Registrada como atividade extra ({ex.virou_extra})'

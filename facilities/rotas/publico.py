@@ -8,6 +8,8 @@
 * ``/app/api/ocorrencias/<id>/<atender|resolver>`` e a versão do site.
 * ``/app/api/push`` (inscrever/sair) e ``/app/api/push/chave``.
 * ``/app/api/presenca`` e ``/app/api/presenca/<id>`` (confirmar).
+* Bloco do técnico (22/10/2026): o POST da ocorrência aceita ``itens`` (os
+  problemas marcados do checklist do ponto) e registra o autor logado.
 """
 import io
 
@@ -37,7 +39,8 @@ def _ponto_ativo(codigo):
 
 def pagina_publica(ponto, erro=None, status=200):
     return render_template('publico/ocorrencia.html', ponto=ponto,
-                           tipos=TIPOS_OCORRENCIA_PUBLICA, erro=erro), status
+                           tipos=TIPOS_OCORRENCIA_PUBLICA, erro=erro,
+                           itens_reportaveis=ocorrencias.itens_reportaveis(ponto)), status
 
 
 def _chave_do_qr():
@@ -55,7 +58,8 @@ def abrir_ocorrencia(codigo):
         return pagina_publica(ponto, 'Não foi possível enviar.', 400)
     try:
         oc = ocorrencias.abrir(ponto, request.form.get('tipo'), request.form.get('texto'),
-                               request.files.get('foto'))
+                               request.files.get('foto'), itens=request.form.getlist('itens'),
+                               autor=current_user)
         db.session.commit()
     except RegraDaRota as erro:
         db.session.rollback()

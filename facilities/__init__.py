@@ -47,7 +47,11 @@ _LIVRES_SEM_SEGUNDA_ETAPA = {'auth.logout', 'auth.trocar_senha', 'auth.seguranca
                              'app_instalavel.service_worker', 'app_instalavel.manifesto',
                              'app_instalavel.versao', 'app_instalavel.sessao'}
 _LIVRES_DO_CLIENTE = _LIVRES_SEM_SEGUNDA_ETAPA | {'core.avisos', 'core.abrir_aviso',
-                                                 'core.ler_todos'}
+                                                 'core.ler_todos',
+                                                 # O QR público (D47) é de qualquer pessoa no
+                                                 # local; o cliente logado abre e fica como autor.
+                                                 'cadastros.qr', 'publico.abrir_ocorrencia',
+                                                 'publico.acompanhar'}
 MSG_SO_DA_EQUIPE = 'Esta parte do sistema é da equipe da Trino. Use o portal do cliente.'
 
 
