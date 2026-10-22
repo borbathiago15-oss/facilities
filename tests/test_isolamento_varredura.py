@@ -224,7 +224,13 @@ def _rotas_de_a(app_module, a, ids):
         {'setor': 'Sanitários', 'ambiente': 'Banheiro', 'checklist_id': str(lib.id),
          'horarios': '08:00', 'quantidade': '1'}])
     db.session.commit()
-    return {'rota_pronta': pronta.id, 'documento': doc.id, 'mes_relatorio': mes_rel.strftime('%Y-%m'), 'cobranca': cob.id, 'cliente_a': cli_a, 'foto_visita': foto_visita, 'material': material.id, 'pedido': pedido.id, 'chave': chave.id,'ocorrencia_publica': oc.id, 'presenca': pres.id, 'plano': plano.id,
+    # Bloco do técnico: o ponto de A é a ENTRADA do local, com a chegada de hoje do dono.
+    from facilities.rotas import chegadas
+    p_a = db.session.get(PontoInspecao, ids['ponto'])
+    p_a.entrada_do_local = True
+    chegadas.registrar(db.session.get(User, dono), p_a)
+    db.session.commit()
+    return {'dono': dono, 'rota_pronta': pronta.id, 'documento': doc.id, 'mes_relatorio': mes_rel.strftime('%Y-%m'), 'cobranca': cob.id, 'cliente_a': cli_a, 'foto_visita': foto_visita, 'material': material.id, 'pedido': pedido.id, 'chave': chave.id,'ocorrencia_publica': oc.id, 'presenca': pres.id, 'plano': plano.id,
             'funcionario': func.id, 'posto': posto.id, 'escala_trabalho': esc.id,
             'falta': falta.id, 'programada': prog.id,
             'visita': Visita.query.filter_by(programada_id=prog.id).one().id,
@@ -387,6 +393,11 @@ def _varrer(app_module, local_a, c, papel):
              'autorizar_negativo': '1',
              # Fase 9B: a cobrança (prazo) e o comentário de quem confirma.
              'prazo': (tempo.hoje() + timedelta(days=3)).isoformat(),
+             # Bloco do técnico: o QR de A na chegada, o local de A no turno, a
+             # pessoa de A na liberação da chegada e os itens do QR público.
+             'local': local_a['local'], 'user_id': local_a['dono'], 'itens': ['pergunta'],
+             'motivos': {'pergunta': {'motivo': 'faltou_material',
+                                      'material_id': local_a['material']}},
              'corpo': json.dumps({'envio_id': f'invasao-{papel}-0001', 'ponto': local_a['qr'],
                                   'tarefa_id': local_a['tarefa_rota'], 'respostas': {},
                                   'sem_sinal': True,
