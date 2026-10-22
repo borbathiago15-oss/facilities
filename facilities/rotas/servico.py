@@ -597,6 +597,8 @@ def rodar(origem='comando', agora_utc=None):
         from facilities.chamados.servico import lembrar_confirmacao
         lembrar_confirmacao(agora_utc)
         reg.tarefas_perdidas = fechar_perdidas(agora_utc)
+        from facilities.core import retencao
+        retencao.aplicar(agora_utc)
         reg.ok = True
     except Exception as erro:
         db.session.rollback()

@@ -13,21 +13,24 @@ ENV TZ=America/Sao_Paulo \
     PORT=8080 \
     EXIGIR_DATABASE_URL=1
 
-RUN apt-get update && apt-get install -y --no-install-recommends tzdata curl \
+# gosu: o contêiner começa como root só para acertar o dono do volume dos
+# anexos e, em seguida, larga o privilégio (docker-entrypoint.sh). O app em
+# si nunca roda como root (auditoria SEC-008 / N-05).
+RUN apt-get update && apt-get install -y --no-install-recommends tzdata curl gosu \
     && rm -rf /var/lib/apt/lists/* \
     && useradd -m facilities
 
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-# Já com o dono certo: o antigo "chown recursivo" numa camada própria
-# duplicava todos os bytes da imagem. O que NÃO entra (.env, instance/,
-# .venv, .git, testes) está no .dockerignore.
-COPY --chown=facilities . .
-# Só a pasta /app e a instance/ (anexos em disco, se STORAGE_BACKEND=local)
-# precisam ser graváveis: chown só delas, sem copiar arquivo nenhum.
-RUN chmod +x docker-entrypoint.sh && mkdir -p instance && chown facilities /app instance
-USER facilities
+# O código pertence ao root e é SÓ LEITURA para o app: quem conseguir
+# executar algo no processo não grava um .py que sobreviva até o próximo
+# deploy. O que NÃO entra (.env, instance/, .venv, .git, testes) está no
+# .dockerignore.
+COPY . .
+# Só a instance/ (anexos em disco quando não há volume) precisa ser
+# gravável. O volume (/data) é acertado no entrypoint, porque só existe lá.
+RUN chmod +x docker-entrypoint.sh && mkdir -p instance && chown facilities instance
 
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \

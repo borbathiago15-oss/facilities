@@ -104,6 +104,31 @@ def _saltos_de_proxy():
     return saltos
 
 
+def _conferir_limites_compartilhados(app):
+    """memory:// conta por processo: com N workers cada limite (login,
+    código, QR público, API) vale N vezes e zera a cada deploy (auditoria
+    SEC-004 / N-02). Na imagem de produção isso vira aviso no log — e recusa
+    de subir quando RATELIMIT_EXIGIR_COMPARTILHADO=1, depois de o Redis
+    existir no ambiente."""
+    uri = (app.config.get('RATELIMIT_STORAGE_URI') or 'memory://').strip()
+    if not uri.startswith('memory') or not app.config.get('RATELIMIT_ENABLED', True):
+        return
+    if not _flag('EXIGIR_DATABASE_URL', False):
+        return
+    try:
+        workers = int(os.environ.get('WEB_CONCURRENCY', '2') or 2)
+    except ValueError:
+        workers = 2
+    if workers <= 1:
+        return
+    aviso = (f'RATELIMIT_STORAGE_URI=memory:// com {workers} workers: cada limite de acesso '
+             f'vale {workers} vezes e zera a cada deploy. Aponte para um Redis '
+             '(RATELIMIT_STORAGE_URI=redis://...).')
+    if _flag('RATELIMIT_EXIGIR_COMPARTILHADO', False):
+        raise RuntimeError(aviso)
+    app.logger.warning(aviso)
+
+
 def _atras_de_proxy(app, saltos):
     if saltos:
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=saltos, x_proto=saltos)
@@ -193,6 +218,7 @@ def create_app(config=None):
 
     sqlite = _eh_sqlite(app.config['SQLALCHEMY_DATABASE_URI'])
     _garantir_segredo(app, sqlite)
+    _conferir_limites_compartilhados(app)
     # Antes das extensões: configuração recusada não toca em nada.
     storage = get_storage(app.config['UPLOAD_FOLDER'], local_implicito=sqlite)
     _atras_de_proxy(app, _saltos_de_proxy())
@@ -481,6 +507,22 @@ def _comandos(app):
             return
         click.echo(f'{reg.tarefas_geradas} tarefa(s) gerada(s), '
                    f'{reg.tarefas_perdidas} marcada(s) como perdida(s).')
+
+    @app.cli.group('anexos')
+    def anexos_cli():
+        """Os arquivos enviados (fotos, documentos)."""
+
+    @anexos_cli.command('espelhar')
+    def anexos_espelhar():
+        """Copia para o R2 o que está no disco (UPLOAD_FOLDER) e ainda não
+        está lá. Cópia de segurança dos anexos quando STORAGE_BACKEND=local:
+        o banco tem o pg_dump; as fotos só tinham o volume."""
+        from facilities.object_storage import espelhar_no_r2
+        n, ja, erros = espelhar_no_r2(app.config['UPLOAD_FOLDER'])
+        click.echo(f'anexos espelhar: {n} arquivo(s) copiado(s), {ja} já estavam no R2, '
+                   f'{erros} erro(s).')
+        if erros:
+            raise SystemExit(1)
 
     @app.cli.group('push')
     def push_cli():

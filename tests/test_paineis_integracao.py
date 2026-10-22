@@ -134,7 +134,9 @@ def test_sem_chave_ou_chave_errada_nao_entra_e_fica_registrado(app_module, cena)
     assert _get(app_module, 'locais').status_code == 401
     assert _get(app_module, 'locais', texto[:-2] + 'xx').status_code == 401
     assert _get(app_module, 'locais', 'fac_naoexiste_abc').status_code == 401
-    assert [a[2] for a in _acessos(app_module)] == [401, 401, 401]
+    # Um registro por endereço por hora: a tabela não cresce por tentativa
+    # (auditoria N-03); os três pedidos vieram do mesmo endereço.
+    assert [a[2] for a in _acessos(app_module)] == [401]
 
 
 def test_chave_de_um_local_nao_le_outro(app_module, cena):

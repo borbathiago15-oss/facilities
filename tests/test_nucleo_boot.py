@@ -237,9 +237,12 @@ def test_dockerignore_deixa_de_fora_segredo_dados_e_ambiente_local():
     assert not any(l.startswith('migrations') for l in linhas)
 
 
-def test_dockerfile_copia_ja_com_o_dono_certo():
-    """``chown -R`` numa camada própria duplicava todos os bytes da imagem."""
+def test_dockerfile_codigo_do_root_e_sem_chown_recursivo():
+    """O código pertence ao root e é só leitura para o app (auditoria
+    SEC-008); ``chown -R`` numa camada própria duplicava todos os bytes da
+    imagem. O dono do volume é acertado no entrypoint, não na imagem."""
     with open(os.path.join(RAIZ, 'Dockerfile'), encoding='utf-8') as f:
         texto = f.read()
-    assert 'COPY --chown=facilities . .' in texto
+    assert 'COPY . .' in texto and '--chown' not in texto
     assert 'chown -R' not in texto
+    assert 'chown facilities instance' in texto

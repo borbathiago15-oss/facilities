@@ -53,6 +53,28 @@ def imagem_aceitavel(dados, ext):
     return 0 < largura * altura <= PIXELS_MAX
 
 
+# Foto que chega do público pelo QR (sem login): reduzida no servidor para
+# este lado maior, para o armazenamento não ser enchido por quem não é da
+# equipe (auditoria N-06). Para a equipe, o aplicativo já reduz antes de
+# enviar (static/js/foto-leve.js).
+LADO_MAX_PUBLICO = 1600
+
+
+def reduzir_imagem(dados, ext, lado_max=LADO_MAX_PUBLICO):
+    """Devolve (dados, ext) com a imagem reduzida a ``lado_max`` pixels no
+    lado maior e regravada como JPEG. Quem chama já conferiu assinatura e
+    tamanho em pixels (``imagem_aceitavel``)."""
+    from PIL import Image, ImageOps
+    with Image.open(io.BytesIO(dados)) as im:
+        im = ImageOps.exif_transpose(im)
+        if im.mode not in ('RGB', 'L'):
+            im = im.convert('RGB')
+        im.thumbnail((lado_max, lado_max))
+        saida = io.BytesIO()
+        im.save(saida, format='JPEG', quality=82, optimize=True)
+    return saida.getvalue(), 'jpg'
+
+
 def storage():
     """O armazenamento do app (disco local ou R2), pendurado nas extensões."""
     return current_app.extensions['facilities_storage']

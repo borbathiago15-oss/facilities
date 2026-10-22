@@ -115,8 +115,10 @@ Passo a passo do Railway (a hospedagem escolhida): `docs/DEPLOY_RAILWAY.md`.
 - O limite de tentativas de login é por IP + e-mail (20 por minuto), além do
   bloqueio da conta após 5 senhas erradas. O contador padrão (`memory://`) é
   por processo: com `WEB_CONCURRENCY=2` o limite real dobra. Para um contador
-  único entre os processos, `RATELIMIT_STORAGE_URI=redis://host:6379/0` (pede
-  o pacote `redis` instalado).
+  único entre os processos, `RATELIMIT_STORAGE_URI=redis://host:6379/0` (o
+  pacote `redis` já vem na imagem). Na imagem de produção, `memory://` com
+  mais de um worker gera aviso no log; com `RATELIMIT_EXIGIR_COMPARTILHADO=1`
+  o app se recusa a subir sem Redis.
 - Cabeçalhos: HSTS (quando o acesso é https ou o cookie é Secure),
   Permissions-Policy (câmera só do próprio sistema), nosniff, X-Frame-Options.
   Content-Security-Policy com `script-src 'self'` (Fase 9A: nenhum script
