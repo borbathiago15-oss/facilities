@@ -31,10 +31,13 @@ def test_service_worker_trata_o_push_uma_vez_so():
 
 def test_fila_marca_enviada_so_a_tarefa_que_subiu():
     js = _arquivo('static', 'js', 'rotas-turno.js')
-    bloco = re.search(r"addEventListener\('trino-fila:enviado'.*?\}\);", js, re.S).group(0)
-    assert 'ev.detail.tarefa_id' in bloco
-    assert 'Object.keys(f).forEach' not in bloco
+    bloco = re.search(r"addEventListener\('trino-fila:enviado'.*?\n  \}\);", js, re.S).group(0)
+    assert "f[ev.detail.tarefa_id] = 'Enviada'" in bloco
+    # Item guardado por uma versão anterior (sem tarefa_id) não fica preso.
+    assert "f[k] === 'Guardada no aparelho'" in bloco
     assert "tarefa_id: it.tarefa_id" in _arquivo('static', 'js', 'fila-offline.js')
+    # E o servidor manda: tarefa já registrada apaga a marca local.
+    assert 'desmarcarFeita(t.id)' in js
 
 
 def test_chart_js_so_no_painel_da_passagem():
@@ -54,9 +57,10 @@ def test_encarregado_nao_recebe_link_que_da_403(app_module):
         fabrica.pessoa(app_module, 'sup.def@trino.com', 'supervisor', locais=['Shopping Centro'])
         cid = ids['local']
     enc = fabrica.entrar(app_module, 'enc.def@trino.com')
-    html = enc.get('/demandas/').get_data(as_text=True)
-    assert 'Banheiro masculino 2º andar' in html
-    assert f'/rotas/locais/{cid}/dia' not in html and 'href="/app/"' in html
+    for tela in ('/demandas/', '/'):
+        html = enc.get(tela).get_data(as_text=True)
+        assert 'Banheiro masculino 2º andar' in html, tela
+        assert f'/rotas/locais/{cid}/dia' not in html and 'href="/app/"' in html, tela
     sup = fabrica.entrar(app_module, 'sup.def@trino.com')
     html = sup.get(f'/rotas/locais/{cid}').get_data(as_text=True)
     assert 'Pontos e QR do local' not in html

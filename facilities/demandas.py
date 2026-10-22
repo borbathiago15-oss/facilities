@@ -112,11 +112,10 @@ def painel():
         ids = [cid]
     from facilities.visitas.servico import PERFIS_QUE_VISITAM
     from facilities.materiais.servico import ve_custo
+    from facilities.rotas.telas import _pode_acompanhar
     papel = current_user._effective_role()
     itens = demandas(ids, com_visitas=papel in PERFIS_QUE_VISITAM + ('visualizador',),
-                     com_pedidos=ve_custo(current_user),
-                     acompanha_rotas=current_user.e_gestao()
-                     or papel in ('supervisor', 'visualizador'))
+                     com_pedidos=ve_custo(current_user), acompanha_rotas=_pode_acompanhar())
     contagem = {s: sum(1 for i in itens if i['situacao'] == s) for s in SITUACOES}
     tipo = request.args.get('tipo') or ''
     situacao = request.args.get('situacao') or ''
