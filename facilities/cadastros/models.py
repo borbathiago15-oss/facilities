@@ -198,6 +198,12 @@ class PontoInspecao(db.Model):
     nome = db.Column(db.String(120), nullable=False)
     descricao = db.Column(db.String(300))
     codigo_qr = db.Column(db.String(32), nullable=False, unique=True, default=novo_codigo_qr)
+    # Bloco do técnico (22/10/2026): o QR da ENTRADA do local. A pessoa lê este
+    # ao chegar e a chegada do dia fica registrada; só então o app libera o
+    # checklist dos outros pontos. No máximo UM ponto de entrada ativo por
+    # local (``servico.salvar_ponto`` garante).
+    entrada_do_local = db.Column(db.Boolean, default=False, nullable=False,
+                                 server_default=db.false())
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 

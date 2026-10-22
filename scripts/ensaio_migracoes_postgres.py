@@ -212,6 +212,24 @@ SEMENTES = [
     "INSERT INTO rota_modelo_itens (rota_modelo_id,ordem,setor,ambiente,checklist_id,horarios,"
     "quantidade) SELECT r.id,0,'Sanitários','Banheiro masculino',m.id,'08:00, 10:00',2 "
     "FROM rota_modelos r, (SELECT min(id) AS id FROM checklist_modelos) m",
+    # Bloco do técnico, etapa 1: o ponto vira a entrada do local, o item da
+    # rota (e o da rota pronta) ganha tempo previsto, a execução tem motivo de
+    # atraso, a ocorrência pública tem itens marcados e autor, e há uma
+    # chegada registrada pela câmera e outra liberada pela gestão.
+    "UPDATE pontos_inspecao SET entrada_do_local=true WHERE codigo_qr='QR-ENSAIO-1'",
+    "UPDATE rota_itens SET tempo_previsto_min=30",
+    "UPDATE rota_modelo_itens SET tempo_previsto_min=30",
+    "UPDATE execucoes SET motivo_atraso='outro', motivo_atraso_texto='reunião no meio' "
+    "WHERE envio_id='envio-ensaio-1'",
+    "UPDATE ocorrencias_publicas SET itens_json='[\"papel\"]', autor_id=(SELECT id FROM users "
+    "WHERE email='cli@ensaio') WHERE token='tok-ensaio-1'",
+    "INSERT INTO chegadas (user_id,client_id,ponto_id,data,chegou_em,com_camera,created_at) "
+    "SELECT u.id,p.client_id,p.id,'2026-10-17','2026-10-17 10:02',true,now() "
+    "FROM users u, pontos_inspecao p WHERE u.email='sup@ensaio'",
+    "INSERT INTO chegadas (user_id,client_id,ponto_id,data,chegou_em,com_camera,liberada_por,"
+    "created_at) SELECT u.id,p.client_id,p.id,'2026-10-18','2026-10-18 10:30',false,g.id,now() "
+    "FROM users u, users g, pontos_inspecao p WHERE u.email='sup@ensaio' "
+    "AND g.email='gerente@ensaio'",
 ]
 
 
