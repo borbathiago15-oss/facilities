@@ -143,6 +143,13 @@ Onde os dados ficam, e o que apaga:
      `railway ssh --service web` e `flask --app facilities anexos espelhar`.
    Restaurar os anexos: copiar a árvore do bucket de volta para
    `/data/uploads` (ou trocar para `STORAGE_BACKEND=r2`, que lê do bucket).
+9c. **E-mail dos convites (opcional).** O assistente "Novo contrato"
+   convida as pessoas por link. Sem servidor de e-mail, a tela abre o
+   WhatsApp ou o e-mail do próprio aparelho com o texto pronto — funciona
+   sem configurar nada. Para o convite sair sozinho por e-mail, acrescente
+   no `web`: `SMTP_HOST`, `SMTP_PORT` (587), `SMTP_USUARIO`, `SMTP_SENHA` e
+   `SMTP_REMETENTE` (ex.: `Trino Facilities <nao-responda@grupotrino.com.br>`);
+   `SMTP_SSL=1` se o provedor usar a porta 465.
 10. **Conferir:**
     * abrir o domínio → tela de login;
     * entrar com o administrador, trocar a senha, ativar a segunda etapa;

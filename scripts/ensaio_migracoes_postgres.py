@@ -236,6 +236,18 @@ SEMENTES = [
     "UPDATE checklist_versoes SET materiais='Vassoura, pá, mop úmido', epi='Luva nitrílica'",
     "UPDATE rotas SET intervalo_inicio='11:00', intervalo_fim='12:00', "
     "observacoes='Manter as gaiolas conforme a identificação da câmara.'",
+    # Novo contrato: a logo do cliente e dois convites (um aberto, um aceito).
+    "UPDATE contratantes SET logo_key='logos/cliente-1-abc123.png'",
+    "INSERT INTO convites (token_hash,nome,email,telefone,role,superior_id,locais_json,"
+    "criado_por_id,criado_em,expira_em) SELECT 'hash-ensaio-1','Maria Convidada',"
+    "'maria@ensaio','5571999990000','encarregado',u.id,'[' || c.id || ']',u.id,now(),"
+    "now() + interval '7 days' FROM users u, clients c WHERE u.email='gerente@ensaio' "
+    "AND c.name='GL Armazém 1'",
+    "INSERT INTO convites (token_hash,nome,email,role,cliente_id,locais_json,criado_por_id,"
+    "criado_em,expira_em,aceito_em,usuario_id) SELECT 'hash-ensaio-2','Cliente Convidado',"
+    "'cli@ensaio','cliente',k.id,'[]',u.id,now(),now() + interval '7 days',now(),x.id "
+    "FROM users u, users x, contratantes k WHERE u.email='gerente@ensaio' "
+    "AND x.email='cli@ensaio'",
 ]
 
 

@@ -238,7 +238,13 @@ def _rotas_de_a(app_module, a, ids):
     p_a.entrada_do_local = True
     chegadas.registrar(db.session.get(User, dono), p_a)
     db.session.commit()
-    return {'dono': dono, 'rota_pronta': pronta.id, 'documento': doc.id, 'mes_relatorio': mes_rel.strftime('%Y-%m'), 'cobranca': cob.id, 'cliente_a': cli_a, 'foto_visita': foto_visita, 'material': material.id, 'pedido': pedido.id, 'chave': chave.id,'ocorrencia_publica': oc.id, 'presenca': pres.id, 'plano': plano.id,
+    # Novo contrato: um convite para A, criado pelo administrador.
+    from facilities.cadastros import montagem
+    convite, _token = montagem.criar_convite(gestor, {
+        'nome': f'Convidada {MARCA}', 'email': 'convidada.a@trino.com', 'role': 'encarregado',
+        'locais': [str(a)]})
+    db.session.commit()
+    return {'convite': convite.id, 'dono': dono, 'rota_pronta': pronta.id, 'documento': doc.id, 'mes_relatorio': mes_rel.strftime('%Y-%m'), 'cobranca': cob.id, 'cliente_a': cli_a, 'foto_visita': foto_visita, 'material': material.id, 'pedido': pedido.id, 'chave': chave.id,'ocorrencia_publica': oc.id, 'presenca': pres.id, 'plano': plano.id,
             'funcionario': func.id, 'posto': posto.id, 'escala_trabalho': esc.id,
             'falta': falta.id, 'programada': prog.id,
             'visita': Visita.query.filter_by(programada_id=prog.id).one().id,
@@ -323,6 +329,7 @@ def _valor_do_parametro(nome, ids, entidade=None, endpoint=''):
         'entidade': entidade or 'setor',
         'oid_ocorrencia': ids['ocorrencia_publica'], 'pid': ids['presenca'],
         'token': 'token-inventado', 'acao': 'resolver',
+        'ctid': ids['cliente'], 'conv_id': ids['convite'],
         'oid': ids.get(entidade or 'setor'),
     }
     return mapa.get(nome)

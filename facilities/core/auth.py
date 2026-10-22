@@ -223,7 +223,8 @@ def login():
             return redirect(url_for('auth.codigo'))
         return _concluir_login(u, bool(request.form.get('lembrar')),
                                _destino_seguro(request.args.get('next')))
-    return render_template('core/login.html', email='')
+    # O convite aceito volta para cá com o e-mail já preenchido.
+    return render_template('core/login.html', email=(request.args.get('email') or '')[:150])
 
 
 def _avisar_bloqueio(u):

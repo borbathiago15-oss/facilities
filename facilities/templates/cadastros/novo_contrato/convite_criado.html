@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block title %}Convite de {{ convite.nome }}{% endblock %}
+{% block content %}
+<h1 class="fc-titulo">Convite pronto</h1>
+{% if passos %}{% include 'cadastros/novo_contrato/_passos.html' %}{% endif %}
+<div class="fc-cartao mb-3">
+  <p class="mb-2"><strong>{{ convite.nome }}</strong> · {{ perfil }}{% if locais %} · {{ locais|map(attribute='name')|join(', ') }}{% endif %}</p>
+  {% if enviado %}
+  <div class="alert alert-success small"><i class="bi bi-envelope-check" aria-hidden="true"></i> O convite já foi enviado para {{ convite.email }}. Se preferir, mande também pelo WhatsApp.</div>
+  {% elif enviado is sameas false %}
+  <div class="alert alert-warning small">O e-mail não saiu agora. Mande pelo WhatsApp ou pelo botão de e-mail abaixo.</div>
+  {% endif %}
+  <p class="small text-muted mb-2">Mande o link para a pessoa. Ele vale 7 dias e funciona uma vez só. <strong>Este link não aparece de novo</strong>: se perder, gere um link novo em "Meus convites".</p>
+  <div class="d-flex flex-wrap gap-2 mb-3">
+    <a class="btn btn-success btn-lg fw-bold" href="{{ whatsapp }}" target="_blank" rel="noopener"><i class="bi bi-whatsapp" aria-hidden="true"></i> Enviar pelo WhatsApp</a>
+    <a class="btn btn-outline-secondary btn-lg fw-bold" href="{{ email }}"><i class="bi bi-envelope" aria-hidden="true"></i> Enviar por e-mail</a>
+  </div>
+  <label class="form-label small fw-semibold" for="link">Ou copie o link</label>
+  <input class="form-control fc-link-convite" id="link" value="{{ link }}" readonly>
+</div>
+<div class="d-flex flex-wrap gap-2">
+  {% if local %}<a class="btn btn-primary fw-bold" href="{{ url_for('montagem.equipe', cid=local.id) }}"><i class="bi bi-person-plus" aria-hidden="true"></i> Convidar outra pessoa</a>{% endif %}
+  <a class="btn btn-outline-secondary" href="{{ url_for('montagem.convites') }}">Meus convites</a>
+</div>
+{% endblock %}

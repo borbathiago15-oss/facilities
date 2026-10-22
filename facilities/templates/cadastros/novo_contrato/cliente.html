@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+{% block title %}Novo contrato{% endblock %}
+{% block content %}
+<h1 class="fc-titulo">Novo contrato</h1>
+<p class="fc-sub">Quatro passos: o cliente, o local, onde ficam os QR e quem trabalha lá. Cada passo fica salvo na hora: dá para parar e continuar depois por aqui.</p>
+{% include 'cadastros/novo_contrato/_passos.html' %}
+
+<div class="fc-cartao mb-3">
+  <h2 class="h6 fw-bold">De qual cliente é o local?</h2>
+  {% if clientes %}
+  <div class="list-group list-group-flush">
+    {% for c in clientes %}
+    <div class="list-group-item px-0">
+      <div class="d-flex flex-wrap align-items-center gap-2">
+        {% if c.logo_key %}<img class="fc-logo-cliente" src="{{ url_for('montagem.logo', ctid=c.id) }}" alt="Logo de {{ c.nome }}">{% endif %}
+        <strong>{{ c.nome }}</strong>
+        {% if c.centro_custo %}<span class="small text-muted">CC {{ c.centro_custo }}</span>{% endif %}
+        <a class="btn btn-primary btn-sm fw-bold ms-auto" href="{{ url_for('montagem.novo_local', ctid=c.id) }}"><i class="bi bi-plus-lg" aria-hidden="true"></i> Novo local deste cliente</a>
+      </div>
+      {% set locais = por_cliente.get(c.id, []) %}
+      {% if locais %}
+      <ul class="list-unstyled small mt-2 mb-0">
+        {% for l in locais %}{% set a = andamento(l) %}
+        <li class="d-flex flex-wrap gap-2 align-items-center py-1 border-top">
+          <span>{{ l.name }}</span>
+          <span class="text-muted">{{ a.pontos }} QR · {{ a.equipe }} pessoa(s){% if a.convites %} · {{ a.convites }} convite(s) aberto(s){% endif %}</span>
+          {% if not a.pontos %}<a class="ms-auto" href="{{ url_for('montagem.estrutura', cid=l.id) }}">Continuar: estrutura e QR</a>
+          {% elif not a.equipe and not a.convites %}<a class="ms-auto" href="{{ url_for('montagem.equipe', cid=l.id) }}">Continuar: equipe</a>
+          {% else %}<a class="ms-auto" href="{{ url_for('montagem.estrutura', cid=l.id) }}">Abrir</a>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="fc-vazio">{% if pode_criar %}Você ainda não tem cliente. Cadastre o primeiro logo abaixo.{% else %}O seu gerente ainda não tem cliente cadastrado. Peça a ele para cadastrar o cliente; depois você monta os locais aqui.{% endif %}</div>
+  {% endif %}
+</div>
+
+{% if pode_criar %}
+<details class="fc-cartao" {% if not clientes %}open{% endif %}>
+  <summary class="fw-bold">Cadastrar cliente novo</summary>
+  {% if not empresas %}
+  <div class="alert alert-warning small mt-3 mb-0">Ainda não há empresa do grupo cadastrada. Peça ao administrador para cadastrar em Cadastros › Empresas do grupo.</div>
+  {% else %}
+  <form method="post" action="{{ url_for('montagem.criar_cliente') }}" enctype="multipart/form-data" class="mt-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="row g-2">
+      <div class="col-md-6"><label class="form-label small fw-semibold" for="nome">Nome do cliente</label>
+        <input class="form-control" id="nome" name="nome" required maxlength="120" placeholder="Ex.: Trino Frio"></div>
+      <div class="col-md-3"><label class="form-label small fw-semibold" for="centro_custo">Centro de custo</label>
+        <input class="form-control" id="centro_custo" name="centro_custo" maxlength="50"></div>
+      <div class="col-md-3"><label class="form-label small fw-semibold" for="empresa_id">Empresa do grupo que atende</label>
+        <select class="form-select" id="empresa_id" name="empresa_id" required>
+          {% for e in empresas %}<option value="{{ e.id }}">{{ e.nome }}</option>{% endfor %}
+        </select></div>
+      <div class="col-12"><label class="form-label small fw-semibold" for="logo">Logo do cliente (opcional)</label>
+        <input class="form-control" id="logo" name="logo" type="file" accept="image/png,image/jpeg,image/webp">
+        <div class="form-text">PNG ou JPG até 2 MB. Ela sai nas etiquetas de QR; sem logo, sai o nome do cliente.</div></div>
+    </div>
+    <button class="btn btn-primary fw-bold mt-3" type="submit">Cadastrar e seguir para o local</button>
+  </form>
+  {% endif %}
+</details>
+{% endif %}
+{% endblock %}

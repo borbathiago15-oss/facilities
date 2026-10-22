@@ -4,6 +4,13 @@
 <h1 class="fc-titulo">Cadastros</h1>
 <p class="fc-sub">A estrutura de cada cliente: empresa do grupo, cliente, locais e, dentro de cada local, setores, ambientes, equipamentos e pontos com QR.</p>
 
+{% if current_user._effective_role() in ('master', 'gerente', 'pleno') %}
+<div class="fc-cartao mb-3 d-flex flex-wrap align-items-center gap-2">
+  <div><strong>Vai começar um contrato novo?</strong><br><span class="small text-muted">O assistente leva do cliente à equipe convidada, passo a passo.</span></div>
+  <a class="btn btn-primary fw-bold ms-auto" href="{{ url_for('montagem.inicio') }}"><i class="bi bi-magic" aria-hidden="true"></i> Novo contrato</a>
+</div>
+{% endif %}
+
 {% if e_admin %}
 <div class="fc-modulos mb-3">
   <a class="fc-cartao fc-modulo" href="{{ url_for('cadastros.empresas') }}">

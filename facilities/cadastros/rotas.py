@@ -264,11 +264,18 @@ def etiquetas(cid):
     if not pontos:
         flash('Não há ponto ativo para imprimir. Cadastre os pontos nos ambientes.', 'warning')
         return redirect(url_for('cadastros.local', cid=loc.id))
+    from facilities.cadastros.montagem import logo_de, numeros_dos_pontos
+    numeros = numeros_dos_pontos(loc.id)
+    # A entrada primeiro (é a primeira etiqueta a colar); depois, pelo número.
+    pontos.sort(key=lambda p: (not p.entrada_do_local, numeros.get(p.id, 0)))
     itens = [{'nome': p.nome, 'ambiente': p.ambiente.nome, 'setor': p.ambiente.setor.nome,
-              'codigo': p.codigo_qr,
+              'codigo': p.codigo_qr, 'numero': numeros.get(p.id),
+              'entrada': bool(p.entrada_do_local),
               'url': url_for('cadastros.qr', codigo=p.codigo_qr, _external=True)}
              for p in pontos]
-    pdf = gerar(loc.name, itens)
+    cliente = loc.contratante
+    pdf = gerar(loc.name, itens, cliente=cliente.nome if cliente else None,
+                logo_cliente=logo_de(cliente))
     return send_file(pdf, mimetype='application/pdf', as_attachment=False,
                      download_name=f'etiquetas-qr-local-{loc.id}.pdf')
 

@@ -1,0 +1,75 @@
+{% extends 'base.html' %}
+{% block title %}Estrutura e QR — {{ local.name }}{% endblock %}
+{% block content %}
+<h1 class="fc-titulo">Estrutura e QR</h1>
+<p class="fc-sub">Onde a equipe trabalha: cada ponto ganha um QR para colar na parede. O primeiro a colar é o da <strong>entrada</strong>: a pessoa lê ao chegar e o turno começa.</p>
+{% include 'cadastros/novo_contrato/_passos.html' %}
+
+<div class="fc-modulos mb-3">
+  <div class="fc-cartao">
+    <h2 class="h6 fw-bold"><i class="bi bi-file-earmark-spreadsheet" aria-hidden="true"></i> Tem a planilha do plano de limpeza?</h2>
+    <p class="small text-muted">O sistema lê a planilha e monta setores, QR, checklists e rotas de uma vez. Você confere antes de gravar.</p>
+    <a class="btn btn-primary fw-bold" href="{{ url_for('rotas.importar_plano', cid=local.id) }}">Importar a planilha</a>
+  </div>
+  <div class="fc-cartao">
+    <h2 class="h6 fw-bold"><i class="bi bi-printer" aria-hidden="true"></i> Etiquetas</h2>
+    <p class="small text-muted">{{ andamento.pontos }} QR neste local{% if not andamento.entrada %}, ainda sem o QR da entrada{% endif %}. A folha sai em A4, 8 etiquetas por página, com a logo do cliente.</p>
+    {% if andamento.pontos %}<a class="btn btn-outline-secondary fw-bold" href="{{ url_for('cadastros.etiquetas', cid=local.id) }}" target="_blank" rel="noopener">Imprimir etiquetas</a>
+    {% else %}<p class="small mb-0">Cadastre os pontos primeiro.</p>{% endif %}
+  </div>
+</div>
+
+<div class="fc-cartao mb-3">
+  <h2 class="h6 fw-bold">Cadastrar um ambiente com os seus QR</h2>
+  <p class="small text-muted">Ex.: setor "Administrativo", ambiente "Banheiro masculino", pontos "Pias" e "Vasos". Sem pontos, o próprio ambiente vira o QR.</p>
+  <form method="post" action="{{ url_for('montagem.criar_estrutura', cid=local.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="row g-2">
+      <div class="col-md-4"><label class="form-label small fw-semibold" for="setor_id">Setor</label>
+        <select class="form-select" id="setor_id" name="setor_id">
+          <option value="">Setor novo (escreva ao lado)</option>
+          {% for s in setores %}<option value="{{ s.id }}">{{ s.nome }}</option>{% endfor %}
+        </select></div>
+      <div class="col-md-4"><label class="form-label small fw-semibold" for="setor_nome">Nome do setor novo</label>
+        <input class="form-control" id="setor_nome" name="setor_nome" maxlength="120" placeholder="Ex.: Administrativo"></div>
+      <div class="col-md-4"><label class="form-label small fw-semibold" for="ambiente_nome">Ambiente</label>
+        <input class="form-control" id="ambiente_nome" name="ambiente_nome" required maxlength="120" placeholder="Ex.: Banheiro masculino"></div>
+      <div class="col-12"><label class="form-label small fw-semibold" for="pontos">Pontos com QR (um por linha, opcional)</label>
+        <textarea class="form-control" id="pontos" name="pontos" rows="3" placeholder="Pias&#10;Vasos"></textarea></div>
+      {% if not andamento.entrada %}
+      <div class="col-12"><div class="form-check">
+        <input class="form-check-input" type="checkbox" id="entrada" name="entrada" value="1">
+        <label class="form-check-label" for="entrada">O primeiro ponto é a <strong>entrada do local</strong> (o QR que a equipe lê ao chegar)</label>
+      </div></div>
+      {% endif %}
+    </div>
+    <button class="btn btn-primary fw-bold mt-3" type="submit">Cadastrar</button>
+  </form>
+</div>
+
+<div class="fc-cartao p-0 mb-3">
+  <div class="px-3 pt-3 d-flex flex-wrap align-items-center gap-2">
+    <h2 class="h6 fw-bold mb-0">O que já está cadastrado</h2>
+    <a class="small ms-auto" href="{{ url_for('cadastros.local', cid=local.id) }}">Editar a estrutura completa</a>
+  </div>
+  {% for s in setores %}
+  <div class="border-top px-3 py-2">
+    <strong>{{ s.nome }}</strong>
+    <ul class="list-unstyled small mb-0">
+      {% for a in s.ambientes if a.is_active %}
+      <li class="mt-1">{{ a.nome }}:
+        {% for p in a.pontos|sort(attribute='id') if p.is_active %}<span class="badge text-bg-light">QR {{ '%03d' % numeros.get(p.id, 0) }} · {{ p.nome }}{% if p.entrada_do_local %} · entrada{% endif %}</span> {% else %}<span class="text-muted">sem QR</span>{% endfor %}
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% else %}
+  <div class="fc-vazio">Nada cadastrado ainda. Importe a planilha ou cadastre o primeiro ambiente acima.</div>
+  {% endfor %}
+</div>
+
+<div class="d-flex flex-wrap gap-2">
+  <a class="btn btn-primary btn-lg fw-bold" href="{{ url_for('montagem.equipe', cid=local.id) }}">Seguir para a equipe <i class="bi bi-arrow-right" aria-hidden="true"></i></a>
+  {% if andamento.rotas %}<a class="btn btn-outline-secondary btn-lg" href="{{ url_for('rotas.local', cid=local.id) }}">Ver as {{ andamento.rotas }} rota(s) do local</a>{% endif %}
+</div>
+{% endblock %}

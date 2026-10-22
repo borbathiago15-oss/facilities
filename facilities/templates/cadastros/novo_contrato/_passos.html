@@ -1,0 +1,25 @@
+{#- Os quatro passos do assistente. Passo com endereço vira link (dá para
+    voltar a qualquer um); o atual fica em bordô. -#}
+{% set p = passos %}
+{% set loc = p.local %}
+{% set cli = p.cliente %}
+{% set etapas = [
+  (1, 'Cliente', url_for('montagem.inicio')),
+  (2, 'Local', url_for('montagem.novo_local', ctid=cli.id) if cli and not loc else none),
+  (3, 'Estrutura e QR', url_for('montagem.estrutura', cid=loc.id) if loc else none),
+  (4, 'Equipe', url_for('montagem.equipe', cid=loc.id) if loc else none),
+] %}
+<nav aria-label="Passos do novo contrato">
+  <ol class="fc-passos">
+    {% for n, rotulo, url in etapas %}
+    <li class="{% if n == p.atual %}atual{% elif n < p.atual %}feito{% endif %}">
+      {% if url and n != p.atual %}<a href="{{ url }}">{% else %}<span{% if n == p.atual %} aria-current="step"{% endif %}>{% endif %}
+        <span class="n">{% if n < p.atual %}<i class="bi bi-check-lg" aria-hidden="true"></i><span class="visually-hidden">feito:</span>{% else %}{{ n }}{% endif %}</span>
+        {{ rotulo }}
+      {% if url and n != p.atual %}</a>{% else %}</span>{% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+</nav>
+{% if loc %}<p class="small text-muted mb-3"><i class="bi bi-geo-alt" aria-hidden="true"></i> {{ cli.nome if cli else '' }}{% if cli %} › {% endif %}<strong>{{ loc.name }}</strong></p>
+{% elif cli %}<p class="small text-muted mb-3"><i class="bi bi-briefcase" aria-hidden="true"></i> {{ cli.nome }}</p>{% endif %}

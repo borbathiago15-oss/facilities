@@ -1,0 +1,38 @@
+{% extends 'core/_porta.html' %}
+{% block aba %}Convite{% endblock %}
+{% block formulario %}
+{% if convite is none %}
+<h1 class="fc-porta-h1">Convite fora do prazo</h1>
+<p class="fc-porta-sub">Este link já foi usado, venceu (vale 7 dias) ou foi cancelado. Peça um link novo a quem convidou você.</p>
+<a class="btn btn-outline-secondary w-100" href="{{ url_for('auth.login') }}">Ir para a tela de entrar</a>
+{% else %}
+<h1 class="fc-porta-h1">Bem-vindo, {{ convite.nome.split(' ')[0] }}</h1>
+<p class="fc-porta-sub">{{ convite.criado_por.name }} convidou você como <strong>{{ perfil }}</strong>{% if locais %} em {{ locais|map(attribute='name')|join(', ') }}{% elif convite.cliente %} de {{ convite.cliente.nome }}{% endif %}. Crie a sua senha para entrar.</p>
+{% if current_user.is_authenticated %}
+<div class="alert alert-warning small">Este aparelho está conectado como {{ current_user.name }}. A conta nova é de {{ convite.email }}: depois de criar, saia e entre com ela.</div>
+{% endif %}
+<form method="post" data-porta>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label class="form-label fw-semibold" for="email">E-mail</label>
+  <div class="fc-campo mb-3">
+    <i class="bi bi-envelope" aria-hidden="true"></i>
+    <input class="form-control" id="email" type="email" value="{{ convite.email }}" autocomplete="username" readonly>
+  </div>
+  <label class="form-label fw-semibold" for="senha">Crie uma senha (mínimo 8 caracteres)</label>
+  <div class="fc-campo mb-3">
+    <i class="bi bi-lock" aria-hidden="true"></i>
+    <input class="form-control" id="senha" name="senha" type="password" minlength="8" autocomplete="new-password" required>
+    <button class="fc-ver-senha" type="button" data-ver-senha="senha" aria-label="Mostrar a senha" aria-pressed="false">
+      <i class="bi bi-eye" aria-hidden="true"></i>
+    </button>
+  </div>
+  <label class="form-label fw-semibold" for="confirma">Repita a senha</label>
+  <div class="fc-campo mb-3">
+    <i class="bi bi-lock" aria-hidden="true"></i>
+    <input class="form-control" id="confirma" name="confirma" type="password" minlength="8" autocomplete="new-password" required>
+  </div>
+  <button class="btn btn-primary btn-lg w-100 fw-bold" type="submit" data-enviando="Criando a conta…">Criar minha conta</button>
+</form>
+<p class="fc-porta-ajuda"><i class="bi bi-shield-lock" aria-hidden="true"></i> A senha é só sua: ninguém da Trino vai pedir por ela.</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,34 @@
+{% extends 'base.html' %}
+{% block title %}Convites{% endblock %}
+{% block content %}
+<h1 class="fc-titulo">Convites</h1>
+<p class="fc-sub">Quem você convidou e se já criou a conta. Link perdido ou vencido? Gere um link novo: o anterior deixa de valer.</p>
+<div class="fc-cartao p-0">
+  {% for c in convites %}{% set sit = c.situacao() %}
+  <div class="border-top px-3 py-2">
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+      <strong>{{ c.nome }}</strong>
+      <span class="small text-muted">{{ c.email }} · {{ perfis_nome.get(c.role, c.role) }}</span>
+      <span class="badge {% if sit == 'aceito' %}text-bg-success{% elif sit == 'pendente' %}text-bg-warning{% else %}text-bg-secondary{% endif %} ms-auto">{{ {'aceito': 'aceito', 'pendente': 'aguardando', 'vencido': 'vencido', 'cancelado': 'cancelado'}[sit] }}</span>
+    </div>
+    <div class="small text-muted">{{ locais_do(c)|map(attribute='name')|join(', ') or (c.cliente.nome if c.cliente else '') }} · convidado por {{ c.criado_por.name }} em {{ c.criado_em|hora_local('%d/%m/%Y %H:%M') }}</div>
+    {% if sit != 'aceito' %}
+    <div class="d-flex flex-wrap gap-2 mt-2">
+      <form method="post" action="{{ url_for('montagem.novo_link', conv_id=c.id) }}" class="m-0">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-outline-secondary btn-sm fw-bold" type="submit"><i class="bi bi-link-45deg" aria-hidden="true"></i> Gerar link novo</button>
+      </form>
+      {% if sit == 'pendente' %}
+      <form method="post" action="{{ url_for('montagem.cancelar_convite', conv_id=c.id) }}" class="m-0">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-outline-danger btn-sm" type="submit">Cancelar convite</button>
+      </form>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+  {% else %}
+  <div class="fc-vazio">Nenhum convite ainda. Os convites saem do passo "Equipe" do novo contrato.</div>
+  {% endfor %}
+</div>
+{% endblock %}
