@@ -89,7 +89,7 @@ def inicio():
         com_visitas = r in PERFIS_QUE_VISITAM + ('visualizador',)
         com_pedidos = ve_custo(current_user)
         itens = demandas.demandas(allowed_client_ids_or_none(), com_visitas=com_visitas,
-                                  com_pedidos=com_pedidos)
+                                  com_pedidos=com_pedidos, acompanha_rotas=_pode_acompanhar())
         def conta(**f):
             return sum(1 for i in itens if all(i[k] == v for k, v in f.items()))
         numeros = [

@@ -37,7 +37,7 @@ def _situacao(prazo, agora, parada=False):
     return 'no_prazo'
 
 
-def demandas(client_ids, agora=None, com_visitas=True, com_pedidos=True):
+def demandas(client_ids, agora=None, com_visitas=True, com_pedidos=True, acompanha_rotas=True):
     from facilities.chamados.models import (AGUARDANDO, ORIGEM_PREVENTIVA, STATUS_EM_ABERTO,
                                             Chamado)
     from facilities.rotas.models import TIPOS_OCORRENCIA_PUBLICA, SITUACOES_OCORRENCIA
@@ -66,7 +66,9 @@ def demandas(client_ids, agora=None, com_visitas=True, com_pedidos=True):
             'responsavel': oc.quem_atendeu.name if oc.quem_atendeu else '',
             'prazo': oc.prazo, 'estado': SITUACOES_OCORRENCIA[oc.status],
             'situacao': _situacao(oc.prazo, agora),
-            'link': f'/rotas/locais/{oc.client_id}/dia'})
+            # Quem não acompanha as rotas (encarregado, técnico) atende o
+            # aviso no aplicativo; a tela "Hoje" do local é da gestão.
+            'link': f'/rotas/locais/{oc.client_id}/dia' if acompanha_rotas else '/app/'})
     # Fase 6: as visitas de supervisão ainda não feitas.
     from facilities.visitas import servico as visitas
     for v in (visitas.abertas(ids) if com_visitas else []):
@@ -110,8 +112,10 @@ def painel():
         ids = [cid]
     from facilities.visitas.servico import PERFIS_QUE_VISITAM
     from facilities.materiais.servico import ve_custo
-    itens = demandas(ids, com_visitas=current_user._effective_role() in PERFIS_QUE_VISITAM
-                     + ('visualizador',), com_pedidos=ve_custo(current_user))
+    from facilities.rotas.telas import _pode_acompanhar
+    papel = current_user._effective_role()
+    itens = demandas(ids, com_visitas=papel in PERFIS_QUE_VISITAM + ('visualizador',),
+                     com_pedidos=ve_custo(current_user), acompanha_rotas=_pode_acompanhar())
     contagem = {s: sum(1 for i in itens if i['situacao'] == s) for s in SITUACOES}
     tipo = request.args.get('tipo') or ''
     situacao = request.args.get('situacao') or ''

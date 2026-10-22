@@ -23,7 +23,7 @@
 // Trocar VERSAO força o navegador a instalar a versão nova e apagar a antiga.
 // v4: identidade nova — ícone e página "Sem conexão" guardados de novo.
 // v6: cópia por TELA (a mais recente), com idade máxima e tempo-limite de rede.
-const VERSAO = 'facilities-app-v6';
+const VERSAO = 'facilities-app-v7';
 const TELAS = 'trino-telas';
 const ESTATICOS = 'trino-estaticos-v3';
 const OFFLINE = '/static/pwa/offline.html';
@@ -155,45 +155,6 @@ self.addEventListener('fetch', (evento) => {
     evento.respondWith(estatico(pedido));
   }
   // Chamadas de API e o resto: do navegador, como sempre foi.
-});
-
-// ── Fase 2: notificação no celular ───────────────────────────────────────
-// A mensagem chega cifrada do servidor (RFC 8291) e o navegador já a entrega
-// aberta aqui. Ela traz título, texto e o caminho da tela que a explica.
-self.addEventListener('push', (evento) => {
-  let dados = {};
-  try {
-    dados = evento.data ? evento.data.json() : {};
-  } catch (e) {
-    dados = {};
-  }
-  const titulo = dados.titulo || 'Trino Facilities';
-  evento.waitUntil(self.registration.showNotification(titulo, {
-    body: dados.corpo || '',
-    icon: '/static/pwa/icone-192.png',
-    badge: '/static/pwa/icone-192.png',
-    tag: dados.tag || undefined,
-    data: { url: dados.url || '/avisos' },
-    lang: 'pt-BR',
-  }));
-});
-
-self.addEventListener('notificationclick', (evento) => {
-  evento.notification.close();
-  const pedido = (evento.notification.data && evento.notification.data.url) || '/avisos';
-  // Só caminho do próprio sistema: uma URL de fora nunca vira destino de toque.
-  const destino = (typeof pedido === 'string' && pedido.startsWith('/') && !pedido.startsWith('//'))
-    ? pedido : '/avisos';
-  evento.waitUntil((async () => {
-    const janelas = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-    for (const j of janelas) {
-      if (new URL(j.url).origin === self.location.origin && 'focus' in j) {
-        await j.focus();
-        return j.navigate(destino);
-      }
-    }
-    return self.clients.openWindow(destino);
-  })());
 });
 
 // ── Avisos no celular (Web Push, Fase 4B) ──────────────────────────────

@@ -11,7 +11,7 @@
   <div class="col-md-3"><label class="form-label small fw-semibold" for="rtol">Tolerância (minutos)</label>
     <input class="form-control" id="rtol" name="tolerancia_min" type="number" min="0" max="240" value="{{ r.tolerancia_min if r else 15 }}"></div>
   <div class="col-6 col-md-2"><label class="form-label small fw-semibold" for="rpres">Presença por turno</label>
-    <input class="form-control" id="rpres" name="presencas_por_turno" type="number" min="0" max="6" value="{{ r.presencas_por_turno if r else 2 }}"></div>
+    <input class="form-control" id="rpres" name="presencas_por_turno" type="number" min="0" max="6" value="{{ r.presencas_por_turno if r else 0 }}"></div>
   <div class="col-6 col-md-2"><label class="form-label small fw-semibold" for="rpprazo">Minutos para confirmar</label>
     <input class="form-control" id="rpprazo" name="presenca_prazo_min" type="number" min="5" max="60" value="{{ r.presenca_prazo_min if r else 10 }}"></div>
   <fieldset class="col-md-5"><legend class="form-label small fw-semibold mb-1">Dias da semana</legend>

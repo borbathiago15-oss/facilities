@@ -26,6 +26,7 @@ from facilities.materiais.models import (AJUSTE, CONSUMO, ENTRADA, PEDIDO_ABERTO
 PERFIS_QUE_VEEM_CUSTO = ('master', 'gerente', 'pleno', 'supervisor', 'visualizador')
 PERFIS_QUE_CONSOMEM = ('encarregado', 'tecnico', 'supervisor', 'pleno', 'gerente', 'master')
 PRAZO_PEDIDO_PADRAO_H = 48
+JANELA_DE_REENVIO = timedelta(minutes=2)   # o mesmo pedido de novo é o mesmo pedido
 CENTAVO = Decimal('0.01')
 MILESIMO = Decimal('0.001')
 MAX_QTD = Decimal('999999999.999')
@@ -236,6 +237,19 @@ def pedir(user, local, dados, foto=None, agora_utc=None):
     texto = (dados.get('texto') or '').strip()[:300] or None
     if mat is None and not texto:
         raise RegraDoMaterial('Diga o que está faltando: escolha o material ou escreva.')
+    # O mesmo toque em "Pedir" chegando duas vezes (sinal fraco, dois cliques)
+    # não abre dois pedidos nem avisa o gestor em dobro: com a linha do local
+    # travada, o pedido igual da mesma pessoa nos últimos minutos é devolvido.
+    _travar(local.id)
+    repetido = (PedidoInsumo.query
+                .filter(PedidoInsumo.client_id == local.id, PedidoInsumo.user_id == user.id,
+                        PedidoInsumo.status == PEDIDO_ABERTO,
+                        PedidoInsumo.material_id == (mat.id if mat else None),
+                        PedidoInsumo.texto == texto,
+                        PedidoInsumo.criado_em >= agora_utc - JANELA_DE_REENVIO)
+                .order_by(PedidoInsumo.id.desc()).first())
+    if repetido is not None:
+        return repetido
     p = PedidoInsumo(client_id=local.id, material_id=mat.id if mat else None, quantidade=qtd,
                      texto=texto, user_id=user.id, criado_em=agora_utc, status=PEDIDO_ABERTO,
                      prazo=agora_utc + timedelta(hours=prazo_do_pedido_h(local.id)))

@@ -7,8 +7,9 @@ Flask-Login==0.6.3
 Flask-Migrate==4.0.7
 Flask-WTF==1.2.1
 Flask-Limiter==3.8.0
-Werkzeug==3.1.6
+Werkzeug==3.1.9
 reportlab==4.4.1
+pillow==13.0.0
 # Relatório do cliente em Excel (licença MIT).
 openpyxl==3.1.5
 gunicorn==23.0.0
@@ -16,5 +17,5 @@ psycopg2-binary==2.9.9
 boto3==1.34.145
 # Aviso no celular (Web Push, Fase 4B): assinatura VAPID e cifra do corpo.
 # Licenças: cryptography Apache-2.0/BSD; http-ece MIT.
-cryptography==46.0.3
+cryptography==50.0.2
 http-ece==1.2.1

@@ -236,3 +236,28 @@ def test_rota_pronta_desativada_nao_aparece_nem_aplica(app_module, auth_client, 
     base = f"/rotas/locais/{cena['local']}/rota-pronta"
     assert 'turno A (manhã)' not in c.get(base).get_data(as_text=True)
     assert c.post(f"{base}/{cena['cd']}", data={}).status_code == 404
+
+
+def test_aplicar_reaproveita_setor_e_ambiente_sem_olhar_maiusculas(app_module, cena):
+    """Defeito corrigido (21/10/2026): o cadastro recusa "administrativo" quando
+    já existe "Administrativo"; a rota pronta precisa reaproveitar, não falhar."""
+    from app import db
+    from facilities.cadastros import servico as cad
+    from facilities.cadastros.models import Ambiente, Setor
+    from facilities.rotas.models import Rota
+    with app_module.app.app_context():
+        loc = fabrica.local()
+        s = cad.salvar_setor(loc, None, {'nome': 'ADMINISTRATIVO'}, None)
+        db.session.flush()
+        cad.salvar_ambiente(loc, None, {'nome': 'copa', 'setor_id': s.id}, None)
+        db.session.commit()
+    c = fabrica.entrar(app_module, 'coord.rp@trino.com')
+    base = f"/rotas/locais/{cena['local']}/rota-pronta"
+    dados = _form_da_previa(c.get(f"{base}?modelo={cena['escritorio']}").get_data(as_text=True))
+    r = c.post(f"{base}/{cena['escritorio']}", data=dados, follow_redirects=True)
+    assert 'alert-danger' not in r.get_data(as_text=True)
+    with app_module.app.app_context():
+        assert Rota.query.filter_by(client_id=cena['local']).count() == 1
+        assert Setor.query.filter(Setor.client_id == cena['local'],
+                                  db.func.lower(Setor.nome) == 'administrativo').count() == 1
+        assert Ambiente.query.filter(db.func.lower(Ambiente.nome) == 'copa').count() == 1

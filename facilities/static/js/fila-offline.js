@@ -154,7 +154,8 @@
     try {
       window.dispatchEvent(new CustomEvent('trino-fila:enviado', {detail: {
         id: it.id, tipo: it.tipo, rotulo: it.rotulo || '',
-        turno_id: it.turno_id || null, estado: estado, mensagem: mensagem || ''
+        turno_id: it.turno_id || null, tarefa_id: it.tarefa_id || null,
+        estado: estado, mensagem: mensagem || ''
       }}));
     } catch (e) { /* navegador sem CustomEvent: só a tela não se atualiza */ }
   }

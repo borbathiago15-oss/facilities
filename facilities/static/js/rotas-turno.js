@@ -65,12 +65,23 @@
     f[id] = rotulo;
     try { localStorage.setItem(CHAVE_LOCAL, JSON.stringify(f)); } catch (e) {}
   }
+  function desmarcarFeita(id) {
+    var f = feitasNoAparelho();
+    if (!(id in f)) return;
+    delete f[id];
+    try { localStorage.setItem(CHAVE_LOCAL, JSON.stringify(f)); } catch (e) {}
+  }
 
   // A situação AGORA (a do servidor envelhece com a tela aberta).
   function situacao(t) {
+    // O servidor é a verdade: quando ele já registrou a tarefa, a marca local
+    // ("guardada" ou "enviada") perdeu a razão de existir e some.
+    if (t.status !== 'prevista') {
+      desmarcarFeita(t.id);
+      return {cod: t.status, rotulo: dados.situacoes[t.status]};
+    }
     var guardada = feitasNoAparelho()[t.id];
     if (guardada) return {cod: 'guardada', rotulo: guardada};
-    if (t.status !== 'prevista') return {cod: t.status, rotulo: dados.situacoes[t.status]};
     var agora = Date.now();
     var prev = Date.parse(t.previsto);
     var tol = t.tolerancia * 60000;
@@ -499,6 +510,7 @@
       corpo.sem_sinal = true;
       window.TrinoFila.guardar({tipo: 'execucao', rotulo: (tarefa ? tarefa.hora + ' · ' : '') +
                                  (dados.pontos[codigo] || {}).nome,
+                                tarefa_id: tarefa ? tarefa.id : null,
                                 corpo: corpo, fotos: fotos}).then(function () {
         if (tarefa) marcarFeita(tarefa.id, 'Guardada no aparelho');
         tirarPreventiva();
@@ -569,11 +581,19 @@
     secExec.appendChild(form);
   }
 
-  // A fila subiu uma execução guardada: some o "guardada no aparelho".
+  // A fila subiu uma execução guardada: só AQUELA tarefa deixa de ser
+  // "guardada no aparelho" — as outras ainda estão na fila.
   window.addEventListener('trino-fila:enviado', function (ev) {
     if (!ev.detail || ev.detail.tipo !== 'execucao') return;
     var f = feitasNoAparelho();
-    Object.keys(f).forEach(function (k) { f[k] = 'Enviada'; });
+    if (ev.detail.tarefa_id) {
+      if (!(ev.detail.tarefa_id in f)) return;
+      f[ev.detail.tarefa_id] = 'Enviada';
+    } else {
+      // Item guardado por uma versão anterior do app, sem tarefa_id: não dá
+      // para saber qual foi, então as guardadas viram "Enviada" como antes.
+      Object.keys(f).forEach(function (k) { if (f[k] === 'Guardada no aparelho') f[k] = 'Enviada'; });
+    }
     try { localStorage.setItem(CHAVE_LOCAL, JSON.stringify(f)); } catch (e) {}
   });
 

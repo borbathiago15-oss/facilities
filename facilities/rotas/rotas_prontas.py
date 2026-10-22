@@ -108,7 +108,11 @@ def linhas_da_previa(modelo):
 def _setor(local, nome, autor):
     from facilities.cadastros import servico as cad
     from facilities.cadastros.models import Setor
-    s = Setor.query.filter_by(client_id=local.id, nome=nome).first()
+    # Igual ao cadastro: o mesmo nome sem olhar maiúsculas é o mesmo setor.
+    # (Nome exato primeiro: o lower() do SQLite não conhece acento.)
+    s = (Setor.query.filter_by(client_id=local.id, nome=nome).first()
+         or Setor.query.filter(Setor.client_id == local.id,
+                               db.func.lower(Setor.nome) == nome.lower()).first())
     if s is not None:
         if not s.is_active:
             raise RegraDaRota(f'O setor "{nome}" está desativado neste local. Reative-o ou '
@@ -122,7 +126,9 @@ def _setor(local, nome, autor):
 def _ambiente(local, setor, nome, autor):
     from facilities.cadastros import servico as cad
     from facilities.cadastros.models import Ambiente
-    a = Ambiente.query.filter_by(setor_id=setor.id, nome=nome).first()
+    a = (Ambiente.query.filter_by(setor_id=setor.id, nome=nome).first()
+         or Ambiente.query.filter(Ambiente.setor_id == setor.id,
+                                  db.func.lower(Ambiente.nome) == nome.lower()).first())
     if a is not None:
         if not a.is_active:
             raise RegraDaRota(f'O ambiente "{nome}" está desativado neste local. Reative-o ou '

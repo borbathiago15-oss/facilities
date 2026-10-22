@@ -147,7 +147,10 @@ class Rota(db.Model):
     dias_semana = db.Column(db.String(7), nullable=False, default='1234567')
     # Confirmação de presença em horário aleatório (D48, Q4): quantas por
     # turno (0 desliga) e quantos minutos a pessoa tem para responder.
-    presencas_por_turno = db.Column(db.Integer, nullable=False, default=2,
+    # Padrão DESLIGADO: só liga depois da validação de RH e jurídico (D48;
+    # decisão do dono em 21/10/2026). O server_default fica em '2' para não
+    # exigir migração; linhas novas sempre passam pelo default do modelo.
+    presencas_por_turno = db.Column(db.Integer, nullable=False, default=0,
                                     server_default='2')
     presenca_prazo_min = db.Column(db.Integer, nullable=False, default=10,
                                    server_default='10')
