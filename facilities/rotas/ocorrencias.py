@@ -79,7 +79,7 @@ def abrir(ponto, tipo, texto, foto=None, agora_utc=None):
     db.session.flush()
     na_rota, acompanham = _destinatarios(ponto, agora_utc)
     titulo = f'Ocorrência: {TIPOS_OCORRENCIA_PUBLICA[tipo]}'
-    onde = f'{ponto.ambiente.nome} · {ponto.nome}'
+    onde = f'{ponto.ambiente.setor.local.name} · {ponto.ambiente.nome} · {ponto.nome}'
     link_campo = f'/app/turno?ponto={ponto.codigo_qr}'
     link_gestao = f'/rotas/locais/{ponto.client_id}/dia'
     if na_rota:
