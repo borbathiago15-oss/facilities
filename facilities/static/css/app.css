@@ -863,3 +863,19 @@ body.dark .page-title, body.dark .pg-titulo, body.dark .pg-num-v, body.dark .pg-
   border-radius: var(--radius-sm); cursor: pointer; }
 .fc-rel-opcao:has(input:checked) { border-color: var(--marca); background: var(--blue-50); }
 .fc-rel-opcao img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 6px; }
+
+/* ── Assistente "Novo contrato": os quatro passos ─────────────────────── */
+.fc-passos { display: flex; gap: 6px; list-style: none; padding: 0; margin: 0 0 16px;
+  counter-reset: passo; flex-wrap: wrap; }
+.fc-passos li { flex: 1 1 140px; }
+.fc-passos a, .fc-passos span { display: flex; align-items: center; gap: 8px; min-height: 44px;
+  padding: 8px 12px; border-radius: 10px; background: var(--gray-100, #f3f4f6);
+  color: var(--gray-600, #4b5563); text-decoration: none; font-weight: 600; font-size: .9rem; }
+.fc-passos .n { display: inline-flex; width: 26px; height: 26px; border-radius: 50%;
+  align-items: center; justify-content: center; background: #fff; font-weight: 800;
+  flex: none; }
+.fc-passos .atual a, .fc-passos .atual span { background: var(--marca); color: #fff; }
+.fc-passos .atual .n { color: var(--marca); }
+.fc-passos .feito .n { background: var(--ok); color: #fff; }
+.fc-logo-cliente { max-height: 48px; max-width: 180px; object-fit: contain; }
+.fc-link-convite { font-family: ui-monospace, monospace; font-size: .85rem; word-break: break-all; }

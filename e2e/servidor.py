@@ -184,6 +184,12 @@ def montar(caminho_db):
         servico.vincular_local(local, {'contratante_id': gl.id,
                                        'estado_id': Estado.query.filter_by(sigla='BA').one().id},
                                admin)
+        # Novo contrato: o gerente responsável pelo Grupo GL.
+        ger = User(name='Gustavo Gerente', email='gerente@e2e.test', role='gerente')
+        ger.set_password(SENHA)
+        db.session.add(ger)
+        db.session.flush()
+        gl.gerente_id = ger.id
         cli = User(name='Cláudia do Cliente', email='cliente@e2e.test', role='cliente',
                    cliente_id=gl.id)
         cli.set_password(SENHA)

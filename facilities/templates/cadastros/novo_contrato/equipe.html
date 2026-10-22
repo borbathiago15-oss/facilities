@@ -1,0 +1,85 @@
+{% extends 'base.html' %}
+{% block title %}Equipe — {{ local.name }}{% endblock %}
+{% block content %}
+<h1 class="fc-titulo">Equipe</h1>
+<p class="fc-sub">Convide quem vai trabalhar neste local. A pessoa recebe um link pelo WhatsApp ou por e-mail, cria a própria senha e já entra no lugar certo. O link vale 7 dias e funciona uma vez só.</p>
+{% include 'cadastros/novo_contrato/_passos.html' %}
+
+<div class="fc-cartao mb-3">
+  <h2 class="h6 fw-bold">Convidar uma pessoa</h2>
+  <form method="post" action="{{ url_for('montagem.convidar', cid=local.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="row g-2">
+      <div class="col-md-4"><label class="form-label small fw-semibold" for="nome">Nome</label>
+        <input class="form-control" id="nome" name="nome" required maxlength="100" value="{{ dados.get('nome', '') }}"></div>
+      <div class="col-md-4"><label class="form-label small fw-semibold" for="email">E-mail (é com ele que a pessoa entra)</label>
+        <input class="form-control" id="email" name="email" type="email" required maxlength="150" inputmode="email" value="{{ dados.get('email', '') }}"></div>
+      <div class="col-md-4"><label class="form-label small fw-semibold" for="telefone">Celular com DDD (para o WhatsApp)</label>
+        <input class="form-control" id="telefone" name="telefone" inputmode="tel" maxlength="20" placeholder="71 99999-0000" value="{{ dados.get('telefone', '') }}"></div>
+      <div class="col-md-4"><label class="form-label small fw-semibold" for="role">Função</label>
+        <select class="form-select" id="role" name="role" required>
+          {% for valor, rotulo in perfis %}<option value="{{ valor }}" {% if dados.get('role') == valor or (not dados.get('role') and valor == 'encarregado') %}selected{% endif %}>{{ rotulo }}</option>{% endfor %}
+        </select></div>
+      <div class="col-md-4" data-so-equipe><label class="form-label small fw-semibold" for="superior_id">Responde a</label>
+        <select class="form-select" id="superior_id" name="superior_id">
+          <option value="">{% if current_user._effective_role() != 'master' %}Você ({{ current_user.name }}){% else %}Ninguém (fora da cadeia){% endif %}</option>
+          {% for s in superiores if s.id != current_user.id %}<option value="{{ s.id }}" {% if dados.get('superior_id') == s.id|string %}selected{% endif %}>{{ s.name }} — {{ s.perfil_rotulo }}</option>{% endfor %}
+        </select></div>
+      {% if 'cliente' in perfis|map('first') and clientes %}
+      <div class="col-md-4" data-so-cliente><label class="form-label small fw-semibold" for="cliente_id">De qual cliente</label>
+        <select class="form-select" id="cliente_id" name="cliente_id">
+          {% for c in clientes %}<option value="{{ c.id }}" {% if local.contratante_id == c.id %}selected{% endif %}>{{ c.nome }}</option>{% endfor %}
+        </select></div>
+      {% endif %}
+      <div class="col-12" data-so-equipe>
+        <fieldset>
+          <legend class="form-label small fw-semibold">Locais que a pessoa vai ver</legend>
+          <div class="d-flex flex-wrap gap-3">
+            {% set marcados = dados.getlist('locais') if dados.getlist is defined else [local.id|string] %}
+            {% for l in locais %}
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="locais" value="{{ l.id }}" id="loc{{ l.id }}" {% if l.id|string in marcados or (not marcados and l.id == local.id) %}checked{% endif %}>
+              <label class="form-check-label" for="loc{{ l.id }}">{{ l.name }}</label>
+            </div>
+            {% endfor %}
+          </div>
+        </fieldset>
+      </div>
+    </div>
+    <button class="btn btn-primary fw-bold mt-3" type="submit"><i class="bi bi-send" aria-hidden="true"></i> Criar convite</button>
+  </form>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-6">
+    <div class="fc-cartao p-0 h-100">
+      <h2 class="h6 fw-bold px-3 pt-3">Quem já trabalha aqui</h2>
+      {% for u in equipe %}
+      <div class="border-top px-3 py-2 d-flex flex-wrap gap-2"><strong>{{ u.name }}</strong><span class="small text-muted">{{ u.perfil_rotulo }}</span></div>
+      {% else %}
+      <div class="fc-vazio">Ninguém ainda.</div>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="fc-cartao p-0 h-100">
+      <div class="px-3 pt-3 d-flex align-items-center gap-2"><h2 class="h6 fw-bold mb-0">Convites deste local</h2>
+        <a class="small ms-auto" href="{{ url_for('montagem.convites') }}">Todos os meus convites</a></div>
+      {% for c in convites %}{% set sit = c.situacao() %}
+      <div class="border-top px-3 py-2 d-flex flex-wrap gap-2 align-items-center">
+        <strong>{{ c.nome }}</strong><span class="small text-muted">{{ perfis_nome.get(c.role, c.role) }}</span>
+        <span class="badge {% if sit == 'aceito' %}text-bg-success{% elif sit == 'pendente' %}text-bg-warning{% else %}text-bg-secondary{% endif %} ms-auto">{{ {'aceito': 'aceito', 'pendente': 'aguardando', 'vencido': 'vencido', 'cancelado': 'cancelado'}[sit] }}</span>
+      </div>
+      {% else %}
+      <div class="fc-vazio">Nenhum convite ainda.</div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<div class="d-flex flex-wrap gap-2 mt-3">
+  <a class="btn btn-outline-secondary btn-lg" href="{{ url_for('montagem.estrutura', cid=local.id) }}"><i class="bi bi-arrow-left" aria-hidden="true"></i> Estrutura e QR</a>
+  <a class="btn btn-primary btn-lg fw-bold" href="{{ url_for('rotas.local', cid=local.id) }}">Concluir: ver a rotina do local</a>
+</div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/novo-contrato.js') }}"></script>{% endblock %}

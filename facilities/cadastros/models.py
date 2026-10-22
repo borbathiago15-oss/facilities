@@ -122,6 +122,9 @@ class Contratante(db.Model):
     # depois do aval do jurídico (D25).
     mostrar_nome_executor = db.Column(db.Boolean, default=False, nullable=False,
                                       server_default=db.false())
+    # A logo do cliente (assistente "Novo contrato", 22/10/2026): PNG reduzido
+    # guardado no armazenamento; vai na etiqueta do QR. Vazio = o nome em texto.
+    logo_key = db.Column(db.String(200))
 
     empresa = db.relationship('Empresa')
     gerente = db.relationship('User', foreign_keys=[gerente_id])
@@ -248,6 +251,51 @@ class CadastroEvento(db.Model):
     )
 
 
+class Convite(db.Model):
+    """O convite para entrar no sistema (assistente "Novo contrato").
+
+    Quem convida (administrador, gerente ou coordenador) escolhe o perfil, o
+    superior e os locais; a pessoa abre o link, cria a própria senha e já
+    entra no lugar certo. Só o HASH do link fica no banco: quem lê o banco
+    não consegue usar convite nenhum. O link vale 7 dias e uma vez só.
+    """
+    __tablename__ = 'convites'
+    id = db.Column(db.Integer, primary_key=True)
+    token_hash = db.Column(db.String(64), nullable=False, unique=True)
+    nome = db.Column(db.String(100), nullable=False)
+    email = db.Column(db.String(150), nullable=False, index=True)
+    telefone = db.Column(db.String(20))
+    role = db.Column(db.String(20), nullable=False)
+    superior_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='RESTRICT'),
+                            nullable=True)
+    cliente_id = db.Column(db.Integer, db.ForeignKey('contratantes.id', ondelete='RESTRICT'),
+                           nullable=True)
+    # Ids dos locais (``clients``) que a pessoa vai ver, em JSON.
+    locais_json = db.Column(db.Text, nullable=False, default='[]')
+    criado_por_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='RESTRICT'),
+                              nullable=False, index=True)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    expira_em = db.Column(db.DateTime, nullable=False)
+    aceito_em = db.Column(db.DateTime)
+    usuario_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='RESTRICT'),
+                           nullable=True)
+    cancelado_em = db.Column(db.DateTime)
+
+    criado_por = db.relationship('User', foreign_keys=[criado_por_id])
+    superior = db.relationship('User', foreign_keys=[superior_id])
+    usuario = db.relationship('User', foreign_keys=[usuario_id])
+    cliente = db.relationship('Contratante')
+
+    def situacao(self, agora=None):
+        if self.aceito_em:
+            return 'aceito'
+        if self.cancelado_em:
+            return 'cancelado'
+        if (agora or datetime.utcnow()) >= self.expira_em:
+            return 'vencido'
+        return 'pendente'
+
+
 # Ordem segura para limpar nos testes (filho antes do pai).
-MODELOS_EM_ORDEM_DE_LIMPEZA = (CadastroEvento, PontoInspecao, Equipamento, Ambiente,
+MODELOS_EM_ORDEM_DE_LIMPEZA = (Convite, CadastroEvento, PontoInspecao, Equipamento, Ambiente,
                                Setor, Contratante, Empresa)

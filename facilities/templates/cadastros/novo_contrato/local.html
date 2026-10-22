@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+{% block title %}Novo local — {{ cliente.nome }}{% endblock %}
+{% block content %}
+<h1 class="fc-titulo">Novo local</h1>
+<p class="fc-sub">O armazém, a loja ou a sede onde a equipe trabalha.</p>
+{% include 'cadastros/novo_contrato/_passos.html' %}
+
+<div class="fc-cartao mb-3">
+  <form method="post" action="{{ url_for('montagem.criar_local', ctid=cliente.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="row g-2">
+      <div class="col-md-6"><label class="form-label small fw-semibold" for="name">Nome do local</label>
+        <input class="form-control" id="name" name="name" required maxlength="120" placeholder="Ex.: {{ cliente.nome }} — Armazém 1 (Simões Filho)"></div>
+      <div class="col-md-3"><label class="form-label small fw-semibold" for="cost_center">Centro de custo do local</label>
+        <input class="form-control" id="cost_center" name="cost_center" maxlength="50"></div>
+      <div class="col-md-3"><label class="form-label small fw-semibold" for="estado_id">Estado</label>
+        <select class="form-select" id="estado_id" name="estado_id" required>
+          <option value="">Escolha</option>
+          {% for e in estados %}<option value="{{ e.id }}">{{ e.nome }}</option>{% endfor %}
+        </select>
+        {% if not estados %}<div class="form-text text-danger">Nenhum estado em uso. Peça ao administrador para ativar em Cadastros › Estados em uso.</div>{% endif %}</div>
+      <div class="col-12"><label class="form-label small fw-semibold" for="endereco">Endereço</label>
+        <input class="form-control" id="endereco" name="endereco" maxlength="255"></div>
+    </div>
+    <button class="btn btn-primary fw-bold mt-3" type="submit">Cadastrar e seguir para a estrutura</button>
+  </form>
+</div>
+
+{% if pode_logo %}
+<details class="fc-cartao">
+  <summary class="fw-bold">{% if cliente.logo_key %}Trocar a logo de {{ cliente.nome }}{% else %}Enviar a logo de {{ cliente.nome }}{% endif %}</summary>
+  <form method="post" action="{{ url_for('montagem.trocar_logo', ctid=cliente.id) }}" enctype="multipart/form-data" class="mt-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% if cliente.logo_key %}<img class="fc-logo-cliente mb-2" src="{{ url_for('montagem.logo', ctid=cliente.id) }}" alt="Logo atual de {{ cliente.nome }}">{% endif %}
+    <label class="visually-hidden" for="logo">Arquivo da logo</label>
+    <input class="form-control" id="logo" name="logo" type="file" accept="image/png,image/jpeg,image/webp" required>
+    <div class="form-text">PNG ou JPG até 2 MB. Sai nas etiquetas de QR de todos os locais deste cliente.</div>
+    <button class="btn btn-outline-secondary fw-bold mt-2" type="submit">Salvar logo</button>
+  </form>
+</details>
+{% endif %}
+{% endblock %}

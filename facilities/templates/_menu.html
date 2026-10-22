@@ -15,7 +15,7 @@
 {% set ve_cadastros = current_user.e_gestao() or r == 'visualizador' %}
 {% set na_rotina = ep.startswith(('rotas.', 'preventiva.', 'equipes.', 'visitas.')) %}
 {% set na_config = ep.startswith(('cadastros.', 'admin.', 'integracao.')) %}
-{% set na_cadastro = ep.startswith(('cadastros.', 'admin.')) or ep in ('rotas.biblioteca', 'rotas.modelo') %}
+{% set na_cadastro = ep.startswith(('cadastros.', 'admin.', 'montagem.')) or ep in ('rotas.biblioteca', 'rotas.modelo') %}
 
 {% macro item(endpoint, rotulo, icone, ativo=none, url=none) -%}
 {%- set aceso = ativo if ativo is not none else ep == endpoint -%}
@@ -68,6 +68,10 @@
         estados → locais → estrutura e QR → pessoas → checklists). -#}
     <details class="fc-lat-grupo" open>
       <summary class="fc-lat-titulo">Cadastros</summary>
+      {% if r in ('master', 'gerente', 'pleno') %}
+      {{ item('montagem.inicio', 'Novo contrato', 'bi-magic', ep.startswith('montagem.') and ep not in ('montagem.convites',)) }}
+      {{ item('montagem.convites', 'Convites', 'bi-person-plus') }}
+      {% endif %}
       {% if r == 'master' %}
       {{ item('cadastros.empresas', 'Empresas do grupo', 'bi-building') }}
       {{ item('cadastros.clientes', 'Clientes', 'bi-briefcase') }}
