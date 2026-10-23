@@ -96,8 +96,16 @@ def _gravar(funcao, *args, sucesso=None, destino, replanejar=None):
 def _replanejar(rota):
     """Depois de mudar a rota pela tela: a agenda de hoje e amanhã é refeita
     (``servico.replanejar``) e a tela diz o que mudou."""
-    removidas, atualizadas, criadas = servico.replanejar(rota)
-    db.session.commit()
+    try:
+        removidas, atualizadas, criadas = servico.replanejar(rota)
+        db.session.commit()
+    except Exception:                       # noqa: BLE001 — a mudança da rota já valeu
+        db.session.rollback()
+        current_app.logger.exception('replanejar a rota %s falhou', rota.id)
+        flash('A rota foi salva, mas a agenda de hoje não pôde ser refeita agora (alguém '
+              'pode estar registrando uma tarefa). Abra a rota de novo em instantes e salve '
+              'outra vez.', 'warning')
+        return
     partes = []
     if removidas:
         partes.append(f'{removidas} tarefa(s) que ainda não tinham começado saíram')

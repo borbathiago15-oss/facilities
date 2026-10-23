@@ -314,3 +314,19 @@ def test_tarefas_perdidas_vao_para_o_sino_agrupadas(app_module, rota_do_dia):
         assert len(da_ana) == 1 and len(do_sup) == 1
         assert '3 tarefa(s) não feita(s)' in da_ana[0].title
         assert 'Ana Fluxo' in do_sup[0].message and '/dia?data=2026-11-03' in do_sup[0].link
+
+
+def test_falha_ao_refazer_a_agenda_nao_perde_a_mudanca(app_module, rota_do_dia, auth_client,
+                                                       monkeypatch):
+    from app import db
+    from facilities.rotas.models import RotaItem
+
+    def quebra(*_a, **_k):
+        raise RuntimeError('concorrência')
+    monkeypatch.setattr('facilities.rotas.servico.replanejar', quebra)
+    r = auth_client.post(f"/rotas/{rota_do_dia['rota']}/itens/{rota_do_dia['item']}",
+                         data={'ativo': '0'}, follow_redirects=True)
+    assert r.status_code == 200 and 'a agenda de hoje não pôde ser refeita' in \
+        r.get_data(as_text=True)
+    with app_module.app.app_context():
+        assert db.session.get(RotaItem, rota_do_dia['item']).is_active is False
