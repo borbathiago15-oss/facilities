@@ -43,6 +43,17 @@ def liberado(app=None):
     return bool((app or current_app).config.get('CLIENTE_EXTERNO_LIBERADO'))
 
 
+def cliente_ativo(user):
+    """A conta de cliente aponta para um cliente (contratante) ATIVO. Cliente
+    desativado (contrato encerrado) derruba o acesso ao portal na hora: na
+    próxima tela, a sessão cai; no login, a resposta é a de senha errada."""
+    from facilities.cadastros.models import Contratante
+    if not user.cliente_id:
+        return False
+    c = db.session.get(Contratante, user.cliente_id)
+    return c is not None and bool(c.is_active)
+
+
 def e_cliente(user):
     return user._effective_role() == PERFIL_CLIENTE
 

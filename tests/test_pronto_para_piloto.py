@@ -82,19 +82,23 @@ def test_codigo_invalido_vira_mensagem_e_nao_erro(app_module, cena):
 
 # ── Agendador ─────────────────────────────────────────────────────────────
 
-def test_rodada_que_falha_fica_registrada(app_module, cena, monkeypatch):
+def test_rodada_que_falha_fica_registrada_e_o_resto_segue(app_module, cena, monkeypatch):
+    """Ajustes de fluxo (23/10/2026): uma etapa com erro não para a rodada. Ela
+    é desfeita e fica no registro (``ok=False``); as outras etapas valem —
+    as tarefas do dia continuam sendo geradas."""
     from app import db
-    from facilities.rotas.models import AgendadorExecucao
+    from facilities.rotas.models import AgendadorExecucao, TarefaDia
 
     def quebra(*_a, **_k):
         raise RuntimeError('falha de teste')
     monkeypatch.setattr('facilities.rotas.servico.avisar_tarefas', quebra)
     with app_module.app.app_context():
-        with pytest.raises(RuntimeError):
-            _s().rodar(agora_utc=utc(SEGUNDA, '06:00'))
-        db.session.rollback()               # o que quem chama faria
-        reg = AgendadorExecucao.query.order_by(AgendadorExecucao.id.desc()).first()
-        assert reg is not None and reg.ok is False and 'falha de teste' in reg.erro
+        reg = _s().rodar(agora_utc=utc(SEGUNDA, '06:00'))
+        db.session.commit()                 # o que quem chama faz
+        reg = db.session.get(AgendadorExecucao, reg.id)
+        assert reg.ok is False and 'avisos das tarefas' in reg.erro \
+            and 'falha de teste' in reg.erro
+        assert reg.tarefas_geradas > 0 and TarefaDia.query.count() == reg.tarefas_geradas
         AgendadorExecucao.query.delete()
         db.session.commit()
 

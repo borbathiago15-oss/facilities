@@ -244,7 +244,13 @@ def _rotas_de_a(app_module, a, ids):
         'nome': f'Convidada {MARCA}', 'email': 'convidada.a@trino.com', 'role': 'encarregado',
         'locais': [str(a)]})
     db.session.commit()
-    return {'convite': convite.id, 'dono': dono, 'rota_pronta': pronta.id, 'documento': doc.id, 'mes_relatorio': mes_rel.strftime('%Y-%m'), 'cobranca': cob.id, 'cliente_a': cli_a, 'foto_visita': foto_visita, 'material': material.id, 'pedido': pedido.id, 'chave': chave.id,'ocorrencia_publica': oc.id, 'presenca': pres.id, 'plano': plano.id,
+    # Ajustes de fluxo: um feriado do local A.
+    from datetime import date
+    from facilities.rotas import feriados
+    feriado = feriados.cadastrar(loc, {'data': date(tempo.hoje().year, 7, 2).isoformat(),
+                                       'nome': f'Feriado {MARCA}'}, gestor)
+    db.session.commit()
+    return {'feriado': feriado.id, 'convite': convite.id, 'dono': dono, 'rota_pronta': pronta.id, 'documento': doc.id, 'mes_relatorio': mes_rel.strftime('%Y-%m'), 'cobranca': cob.id, 'cliente_a': cli_a, 'foto_visita': foto_visita, 'material': material.id, 'pedido': pedido.id, 'chave': chave.id,'ocorrencia_publica': oc.id, 'presenca': pres.id, 'plano': plano.id,
             'funcionario': func.id, 'posto': posto.id, 'escala_trabalho': esc.id,
             'falta': falta.id, 'programada': prog.id,
             'visita': Visita.query.filter_by(programada_id=prog.id).one().id,
@@ -301,6 +307,8 @@ def _valor_do_parametro(nome, ids, entidade=None, endpoint=''):
                       'vfid': ids['foto_visita']}
         if nome in por_visita:
             return por_visita[nome]
+    if endpoint == 'rotas.remover_feriado' and nome == 'fid':
+        return ids['feriado']
     if endpoint.startswith('rotas.'):
         por_rota = {'eid': ids['escala'] if 'escala' in endpoint else ids['execucao'],
                     'rid': ids['rota'], 'iid': ids['item'], 'mid': ids['modelo'],

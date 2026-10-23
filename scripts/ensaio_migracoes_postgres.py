@@ -248,6 +248,13 @@ SEMENTES = [
     "'cli@ensaio','cliente',k.id,'[]',u.id,now(),now() + interval '7 days',now(),x.id "
     "FROM users u, users x, contratantes k WHERE u.email='gerente@ensaio' "
     "AND x.email='cli@ensaio'",
+    # Ajustes de fluxo: um feriado do local, uma rota que para no feriado e
+    # mudou à tarde, e um relatório liberado congelado.
+    "INSERT INTO feriados (client_id,data,nome,criado_por,criado_em) SELECT c.id,'2026-07-02',"
+    "'Independência da Bahia',u.id,now() FROM clients c, users u "
+    "WHERE c.name='GL Armazém 1' AND u.email='gerente@ensaio'",
+    "UPDATE rotas SET funciona_em_feriado=false, vale_a_partir='2026-10-23 17:00'",
+    "UPDATE relatorios_cliente SET congelado_json='{\"dados\": {}, \"fotos\": []}'",
 ]
 
 

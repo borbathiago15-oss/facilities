@@ -208,7 +208,7 @@ def login():
         # A resposta é a mesma de senha errada: dizer "o portal ainda não foi
         # liberado" só depois da senha certa confirmaria o par e-mail/senha
         # a quem está tentando (auditoria N-17).
-        if u.role in PERFIS_SEM_LOGIN and not (_portal_liberado() and u.cliente_id):
+        if u.role in PERFIS_SEM_LOGIN and not (_portal_liberado() and _cliente_ativo(u)):
             flash(MSG_LOGIN_RECUSADO, 'danger')
             return render_template('core/login.html', email=email), 401
         u.failed_login_count = 0
@@ -257,6 +257,11 @@ def _avisar_bloqueio(u):
 def _portal_liberado():
     from facilities.portal.servico import liberado
     return liberado()
+
+
+def _cliente_ativo(u):
+    from facilities.portal.servico import cliente_ativo
+    return cliente_ativo(u)
 
 
 def _concluir_login(u, lembrar, destino):
