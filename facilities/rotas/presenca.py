@@ -47,18 +47,36 @@ def horarios_sorteados(rota, dia, user_id):
     return [de + timedelta(minutes=i * faixa + sorteio.randrange(faixa)) for i in range(n)]
 
 
-def gerar(rota, dia, user_id, agora_utc=None):
+def pedidos_do_dia(rota_ids, dia):
+    """{(rota_id, user_id): {pedido_em, ...}} do dia, numa consulta só (o
+    agendador gera muitas rotas de uma vez)."""
+    saida = {}
+    if not rota_ids:
+        return saida
+    for rota_id, user_id, pedido in db.session.query(
+            ConfirmacaoPresenca.rota_id, ConfirmacaoPresenca.user_id,
+            ConfirmacaoPresenca.pedido_em).filter(
+            ConfirmacaoPresenca.rota_id.in_(list(rota_ids)), ConfirmacaoPresenca.data == dia):
+        saida.setdefault((rota_id, user_id), set()).add(pedido)
+    return saida
+
+
+def gerar(rota, dia, user_id, agora_utc=None, existentes=None):
     """Cria os pedidos do dia. Horário que JÁ PASSOU não vira pedido (rota
     criada ou cobertura lançada no meio do turno): ninguém pode responder a um
     pedido que nunca chegou."""
     if not user_id:
         return 0
+    horarios = horarios_sorteados(rota, dia, user_id)
+    if not horarios:
+        return 0      # rota sem confirmação de presença: nem consulta o banco
     agora_utc = agora_utc or datetime.utcnow()
     criados = 0
-    existentes = {c.pedido_em for c in ConfirmacaoPresenca.query.filter_by(
-        rota_id=rota.id, user_id=user_id, data=dia)}
+    if existentes is None:
+        existentes = {c.pedido_em for c in ConfirmacaoPresenca.query.filter_by(
+            rota_id=rota.id, user_id=user_id, data=dia)}
     prazo = timedelta(minutes=rota.presenca_prazo_min or 10)
-    for m in horarios_sorteados(rota, dia, user_id):
+    for m in horarios:
         pedido = tempo.para_utc(m.date(), m.time())
         if pedido in existentes or pedido < agora_utc:
             continue

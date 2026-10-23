@@ -361,6 +361,29 @@ def reescalar_rota(presenca, quem_cobre, agora_utc=None):
     return n
 
 
+def substitutos_do_dia(rota_ids, dia):
+    """{(rota_id, user_id que faltou): user_id de quem cobriu} do dia, numa
+    consulta só (o agendador gera muitas rotas de uma vez)."""
+    if not rota_ids:
+        return {}
+    from sqlalchemy.orm import aliased
+    falta = aliased(Funcionario)
+    cobre = aliased(Funcionario)
+    linhas = (db.session.query(Posto.rota_id, falta.user_id, cobre.user_id)
+              .select_from(Cobertura)
+              .join(Presenca, Presenca.id == Cobertura.presenca_id)
+              .join(Posto, Posto.id == Presenca.posto_id)
+              .join(falta, falta.id == Presenca.funcionario_id)
+              .join(cobre, cobre.id == Cobertura.funcionario_id)
+              .filter(Posto.rota_id.in_(list(rota_ids)), Presenca.data == dia,
+                      falta.user_id.isnot(None))
+              .order_by(Cobertura.id).all())
+    saida = {}
+    for rota_id, faltou, cobriu in linhas:
+        saida.setdefault((rota_id, faltou), cobriu)
+    return saida
+
+
 def substituto(rota, dia, user_id):
     """Para o agendador da rota: se ``user_id`` faltou e alguém cobriu, a
     tarefa nasce com quem cobriu."""

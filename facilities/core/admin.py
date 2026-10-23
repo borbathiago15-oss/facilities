@@ -31,7 +31,9 @@ def _senha_temporaria():
 def usuarios():
     from facilities.cadastros.models import Contratante
     from facilities.core.hierarquia import cadeia_acima, superiores_possiveis
+    from sqlalchemy.orm import selectinload
     pessoas = (User.query.filter(User.is_deleted.is_(False))
+               .options(selectinload(User.clients))
                .order_by(User.is_active.desc(), User.name).all())
     contratos = Client.query.filter(Client.is_deleted.is_(False)).order_by(Client.name).all()
     return render_template('core/usuarios.html', pessoas=pessoas, contratos=contratos,
