@@ -11,5 +11,5 @@
   <a class="btn btn-primary" href="{{ url_for('portal.relatorio_arquivo', cid=d.local.id, mes=mes, formato='pdf') }}"><i class="bi bi-file-earmark-pdf" aria-hidden="true"></i> Baixar PDF</a>
   <a class="btn btn-outline-primary" href="{{ url_for('portal.relatorio_arquivo', cid=d.local.id, mes=mes, formato='xlsx') }}"><i class="bi bi-file-earmark-spreadsheet" aria-hidden="true"></i> Excel</a>
 </div></div>
-{{ corpo(d, fotos, url_da_foto, portal, registro.recado if registro else None) }}
+{{ corpo(d, fotos, url_da_foto, portal, recado) }}
 {% endblock %}

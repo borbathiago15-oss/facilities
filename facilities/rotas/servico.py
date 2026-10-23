@@ -356,6 +356,10 @@ def salvar_rota(local, rota, dados):
                           'para responder.')
     intervalo = _intervalo(dados, inicio, fim, rota)
     rota = rota or Rota(client_id=local.id)
+    # Feriado: só mexe quando o formulário trouxe a opção (a marca escondida
+    # ``feriado_no_form``): rota pronta e planilha não desligam sem querer.
+    if dados.get('feriado_no_form'):
+        rota.funciona_em_feriado = bool(dados.get('funciona_em_feriado'))
     rota.nome, rota.turno = nome, turno
     rota.hora_inicio, rota.hora_fim = inicio, fim
     rota.tolerancia_min = tolerancia
@@ -672,17 +676,13 @@ def horarios_do_item(rota, item, dia):
     return sorted(momentos)
 
 
-def gerar(dia, client_ids=None, agora_utc=None):
-    """Cria as tarefas do turno que começa em ``dia``. Devolve quantas criou.
-
-    Roda no agendador E nas telas do turno (``garantir_hoje``), então carrega
-    tudo de uma vez: as rotas com itens, checklists, pontos e escalas, as
-    coberturas do dia e as tarefas que já existem. O custo é um punhado de
-    consultas, não uma por item (eram 8 mil para um gerente com 50 locais)."""
+def _rotas_do_dia(dia, client_ids=None, rota_ids=None):
+    """As rotas ativas que trabalham em ``dia``, com tudo o que a geração lê,
+    carregado de uma vez; as de local em feriado ficam de fora quando a rota
+    não funciona em feriado."""
     from sqlalchemy.orm import selectinload
     from facilities.core.models import Client
-    from facilities.equipes.servico import substitutos_do_dia
-    from facilities.rotas import presenca
+    from facilities.rotas import feriados
     dia_semana = str(dia.isoweekday())
     q = (Rota.query.join(Client, Client.id == Rota.client_id)
          .filter(Rota.is_active.is_(True), Client.is_active.is_(True),
@@ -693,7 +693,46 @@ def gerar(dia, client_ids=None, agora_utc=None):
                   selectinload(Rota.escalas).selectinload(RotaEscala.pessoa)))
     if client_ids is not None:
         q = q.filter(Rota.client_id.in_(list(client_ids) or [-1]))
+    if rota_ids is not None:
+        q = q.filter(Rota.id.in_(list(rota_ids) or [-1]))
     rotas = [r for r in q.all() if dia_semana in r.dias_semana]
+    em_feriado = feriados.locais_em_feriado({r.client_id for r in rotas}, dia)
+    return [r for r in rotas if r.funciona_em_feriado or r.client_id not in em_feriado]
+
+
+def _previstas(rota, dia):
+    """[(item, versão, previsto em UTC)] que a rota pede no turno de ``dia``.
+
+    Horário que já tinha acabado (com a tolerância) quando a gestão mudou a
+    rota não entra: a tarefa nasceria atrasada sem ninguém ter falhado."""
+    saida = []
+    for item in rota.itens:
+        versao = item.modelo.versao_atual if item.modelo else None
+        if (not item.is_active or versao is None or not item.modelo.is_active
+                or item.ponto is None or not item.ponto.is_active):
+            continue
+        for m in horarios_do_item(rota, item, dia):
+            previsto = tempo.para_utc(m.date(), m.time())
+            if rota.vale_a_partir and \
+                    previsto + timedelta(minutes=rota.tolerancia_min) < rota.vale_a_partir:
+                continue
+            saida.append((item, versao, previsto))
+    return saida
+
+
+def gerar(dia, client_ids=None, agora_utc=None, erros=None):
+    """Cria as tarefas do turno que começa em ``dia``. Devolve quantas criou.
+
+    Roda no agendador E nas telas do turno (``garantir_hoje``), então carrega
+    tudo de uma vez: as rotas com itens, checklists, pontos e escalas, as
+    coberturas do dia e as tarefas que já existem. O custo é um punhado de
+    consultas, não uma por item (eram 8 mil para um gerente com 50 locais).
+
+    Uma rota com problema não derruba as outras: o erro dela vai para
+    ``erros`` (quando a lista é passada) e a geração segue."""
+    from facilities.equipes.servico import substitutos_do_dia
+    from facilities.rotas import presenca
+    rotas = _rotas_do_dia(dia, client_ids)
     if not rotas:
         return 0
     ids = [r.id for r in rotas]
@@ -703,47 +742,140 @@ def gerar(dia, client_ids=None, agora_utc=None):
     cobertos = substitutos_do_dia(ids, dia)
     criadas = 0
     for rota in rotas:
-        _ini, fim = _janela(rota, dia)
-        fim_utc = tempo.para_utc(fim.date(), fim.time())
-        pessoa = escalado(rota, dia)
-        # Fase 6: faltou e alguém cobriu? A tarefa nasce com quem cobriu.
-        pessoa = cobertos.get((rota.id, pessoa), pessoa) if pessoa else pessoa
-        presenca.gerar(rota, dia, pessoa, agora_utc,
-                       existentes=pedidos.get((rota.id, pessoa), set()))
-        for item in rota.itens:
-            versao = item.modelo.versao_atual if item.modelo else None
-            if (not item.is_active or versao is None or not item.modelo.is_active
-                    or item.ponto is None or not item.ponto.is_active):
-                continue
-            for m in horarios_do_item(rota, item, dia):
-                previsto = tempo.para_utc(m.date(), m.time())
-                if (item.id, previsto) in existentes:
-                    continue
-                t = TarefaDia(rota_id=rota.id, rota_item_id=item.id, client_id=rota.client_id,
-                              ponto_id=item.ponto_id, versao_id=versao.id, user_id=pessoa,
-                              data=dia, previsto_para=previsto, fim_do_turno=fim_utc,
-                              tolerancia_min=rota.tolerancia_min, status=PREVISTA)
-                try:
-                    with db.session.begin_nested():
-                        db.session.add(t)
-                    criadas += 1
-                    existentes.add((item.id, previsto))
-                except IntegrityError:
-                    # Outra rodada ao mesmo tempo já criou este horário.
-                    pass
+        try:
+            with db.session.begin_nested():
+                criadas += _gerar_rota(rota, dia, agora_utc, existentes, pedidos, cobertos)
+        except Exception as erro:          # noqa: BLE001 — a rota quebrada fica registrada
+            if erros is None:
+                raise
+            current_app.logger.exception('rota %s: geração falhou', rota.id)
+            erros.append(f'rota {rota.id} ({rota.nome}): {type(erro).__name__}: {erro}')
     return criadas
 
 
+def _pessoa_do_dia(rota, dia, cobertos):
+    pessoa = escalado(rota, dia)
+    # Fase 6: faltou e alguém cobriu? A tarefa nasce com quem cobriu.
+    return cobertos.get((rota.id, pessoa), pessoa) if pessoa else pessoa
+
+
+def _gerar_rota(rota, dia, agora_utc, existentes, pedidos, cobertos):
+    from facilities.rotas import presenca
+    _ini, fim = _janela(rota, dia)
+    fim_utc = tempo.para_utc(fim.date(), fim.time())
+    pessoa = _pessoa_do_dia(rota, dia, cobertos)
+    presenca.gerar(rota, dia, pessoa, agora_utc,
+                   existentes=pedidos.get((rota.id, pessoa), set()))
+    criadas = 0
+    for item, versao, previsto in _previstas(rota, dia):
+        if (item.id, previsto) in existentes:
+            continue
+        t = TarefaDia(rota_id=rota.id, rota_item_id=item.id, client_id=rota.client_id,
+                      ponto_id=item.ponto_id, versao_id=versao.id, user_id=pessoa,
+                      data=dia, previsto_para=previsto, fim_do_turno=fim_utc,
+                      tolerancia_min=rota.tolerancia_min, status=PREVISTA)
+        try:
+            with db.session.begin_nested():
+                db.session.add(t)
+            criadas += 1
+            existentes.add((item.id, previsto))
+        except IntegrityError:
+            # Outra rodada ao mesmo tempo já criou este horário.
+            pass
+    return criadas
+
+
+def replanejar(rota, agora_utc=None):
+    """A gestão mudou a rota (horário, dias, item, checklist, escala, ativa
+    ou não): refaz as tarefas que AINDA NÃO começaram.
+
+    * Tarefa já feita, encerrada ou com o prazo (horário + tolerância) já
+      vencido: fica como está.
+    * Tarefa em aberto que a rota não pede mais (item tirado, horário mudado,
+      rota desativada, feriado): sai. Ela ainda não existia de fato — é só a
+      agenda — e não tem registro nenhum ligado a ela.
+    * Tarefa em aberto que continua: ganha a pessoa, o checklist, o ponto, a
+      tolerância e o fim do turno de agora (o aviso volta a valer).
+    * O que faltar é gerado (hoje e amanhã, como o agendador).
+
+    Devolve (removidas, atualizadas, criadas). O commit é de quem chama."""
+    from facilities.equipes.servico import substitutos_do_dia
+    agora_utc = agora_utc or datetime.utcnow()
+    rota.vale_a_partir = agora_utc
+    db.session.flush()
+    hoje = tempo.local(agora_utc).date()
+    removidas = atualizadas = 0
+    for dia in (hoje - timedelta(days=1), hoje, hoje + timedelta(days=1)):
+        ativas = {r.id: r for r in _rotas_do_dia(dia, rota_ids=[rota.id])}
+        r = ativas.get(rota.id)
+        pedidas, pessoa, fim_utc = {}, None, None
+        if r is not None:
+            pessoa = _pessoa_do_dia(r, dia, substitutos_do_dia([r.id], dia))
+            _ini, fim = _janela(r, dia)
+            fim_utc = tempo.para_utc(fim.date(), fim.time())
+            pedidas = {(it.id, prev): (it, v) for it, v, prev in _previstas(r, dia)}
+        abertas = (TarefaDia.query.filter(TarefaDia.rota_id == rota.id, TarefaDia.data == dia,
+                                          TarefaDia.status == PREVISTA)
+                   .filter(~TarefaDia.execucoes.any()).all())
+        for t in abertas:
+            if t.previsto_para + timedelta(minutes=t.tolerancia_min) <= agora_utc:
+                continue                     # o prazo dela já acabou: fica como está
+            alvo = pedidas.get((t.rota_item_id, t.previsto_para))
+            if alvo is None:
+                db.session.delete(t)
+                removidas += 1
+                continue
+            item, versao = alvo
+            novo = {'user_id': pessoa, 'versao_id': versao.id, 'ponto_id': item.ponto_id,
+                    'tolerancia_min': r.tolerancia_min, 'fim_do_turno': fim_utc}
+            if any(getattr(t, k) != v for k, v in novo.items()):
+                if t.user_id != pessoa:
+                    t.avisada_em = None
+                for k, v in novo.items():
+                    setattr(t, k, v)
+                atualizadas += 1
+    db.session.flush()
+    criadas = gerar(hoje, [rota.client_id], agora_utc) + \
+        gerar(hoje + timedelta(days=1), [rota.client_id], agora_utc)
+    return removidas, atualizadas, criadas
+
+
 def fechar_perdidas(agora_utc):
-    """Turno terminado sem nada registrado → PERDIDA."""
+    """Turno terminado sem nada registrado → PERDIDA. E fica no sino
+    (decisão do dono, 23/10/2026): um aviso por pessoa, rota e dia — não um por
+    tarefa — para quem estava escalado e para o superior dele (sem superior,
+    o gestor responsável pelo local)."""
     q = TarefaDia.query.filter(TarefaDia.status == PREVISTA,
                                TarefaDia.fim_do_turno < agora_utc)
-    n = 0
+    grupos = {}
     for t in q.all():
         t.status = PERDIDA
         t.encerrada_em = agora_utc
-        n += 1
-    return n
+        grupos.setdefault((t.user_id, t.rota_id, t.data), []).append(t)
+    for (user_id, _rota_id, dia), tarefas in grupos.items():
+        _avisar_perdidas(user_id, tarefas[0].rota, dia, len(tarefas))
+    return sum(len(v) for v in grupos.values())
+
+
+def _avisar_perdidas(user_id, rota, dia, n):
+    from facilities.core.models import Notification
+    titulo = (f'{n} tarefa(s) não feita(s) — {rota.nome}' if n > 1
+              else f'Tarefa não feita — {rota.nome}')[:150]
+    texto = f'{dia.strftime("%d/%m")} · {rota.local.name}. O turno acabou sem o registro.'
+    pessoa = db.session.get(User, user_id) if user_id else None
+    if pessoa is not None and pessoa.is_active and not pessoa.is_deleted:
+        db.session.add(Notification(user_id=pessoa.id, notification_type='tarefa_perdida',
+                                    title=titulo, message=texto, link='/app/'))
+    chefe = pessoa.superior if pessoa is not None else None
+    if chefe is None or not chefe.is_active or chefe.is_deleted:
+        chefe = rota.local.responsavel
+    if chefe is not None and chefe.is_active and not chefe.is_deleted and \
+            (pessoa is None or chefe.id != pessoa.id):
+        quem = pessoa.name if pessoa is not None else 'sem ninguém escalado'
+        db.session.add(Notification(
+            user_id=chefe.id, notification_type='tarefa_perdida', title=titulo,
+            message=f'{texto} Escala: {quem}.',
+            link=f'/rotas/locais/{rota.client_id}/dia?data={dia.isoformat()}'))
 
 
 def avisar_tarefas(agora_utc):
@@ -787,42 +919,54 @@ def rodar(origem='comando', agora_utc=None):
     perdidas e presenças vencidas fechadas. Fica registrada.
 
     Devolve ``None`` se outra rodada já está em andamento (não faz nada).
-    Se falhar, desfaz o que fez, GRAVA o registro da falha (com o erro) e
-    repassa a exceção — antes a falha sumia junto com o desfazer."""
+
+    Cada etapa roda separada (ponto de salvamento próprio): se uma falha, ela
+    é desfeita, o erro fica no registro (``ok=False``, ``erro``) e as OUTRAS
+    seguem — antes, um erro numa rota ou num aviso parava a geração de todos
+    os locais. Uma rota com problema também não para as outras rotas."""
     agora_utc = agora_utc or datetime.utcnow()
     if _outra_rodada_em_andamento():
         return None
     hoje = tempo.local(agora_utc).date()
-    iniciada = datetime.utcnow()
-    reg = AgendadorExecucao(origem=origem, iniciada_em=iniciada)
+    reg = AgendadorExecucao(origem=origem, iniciada_em=datetime.utcnow(), ok=False)
     db.session.add(reg)
     db.session.flush()
-    try:
-        from facilities.chamados.servico import avisar_prazos
-        from facilities.preventiva.servico import gerar_ordens
-        from facilities.rotas import presenca
-        reg.tarefas_geradas = (gerar(hoje, agora_utc=agora_utc)
-                               + gerar(hoje + timedelta(days=1), agora_utc=agora_utc))
-        gerar_ordens(hoje, agora_utc)
-        from facilities.visitas.servico import fechar_vencidas, gerar_visitas
-        gerar_visitas(hoje, agora_utc)
-        fechar_vencidas(agora_utc)
-        avisar_tarefas(agora_utc)
-        presenca.avisar_e_fechar(agora_utc)
-        avisar_prazos(agora_utc)
-        from facilities.chamados.servico import lembrar_confirmacao
-        lembrar_confirmacao(agora_utc)
+    from facilities.chamados.servico import avisar_prazos, lembrar_confirmacao
+    from facilities.core import retencao
+    from facilities.preventiva.servico import gerar_ordens
+    from facilities.rotas import presenca
+    from facilities.visitas.servico import fechar_vencidas, gerar_visitas
+    erros = []
+
+    def _gerar():
+        reg.tarefas_geradas = (gerar(hoje, agora_utc=agora_utc, erros=erros)
+                               + gerar(hoje + timedelta(days=1), agora_utc=agora_utc,
+                                       erros=erros))
+
+    def _perdidas():
         reg.tarefas_perdidas = fechar_perdidas(agora_utc)
-        from facilities.core import retencao
-        retencao.aplicar(agora_utc)
-        reg.ok = True
-    except Exception as erro:
-        db.session.rollback()
-        db.session.add(AgendadorExecucao(origem=origem, iniciada_em=iniciada,
-                                         concluida_em=datetime.utcnow(), ok=False,
-                                         erro=f'{type(erro).__name__}: {erro}'[:2000]))
-        db.session.commit()
-        raise
+
+    etapas = (
+        ('tarefas', _gerar),
+        ('preventivas', lambda: gerar_ordens(hoje, agora_utc)),
+        ('visitas', lambda: gerar_visitas(hoje, agora_utc)),
+        ('visitas vencidas', lambda: fechar_vencidas(agora_utc)),
+        ('avisos das tarefas', lambda: avisar_tarefas(agora_utc)),
+        ('presença', lambda: presenca.avisar_e_fechar(agora_utc)),
+        ('prazos dos chamados', lambda: avisar_prazos(agora_utc)),
+        ('confirmação dos chamados', lambda: lembrar_confirmacao(agora_utc)),
+        ('tarefas perdidas', _perdidas),
+        ('retenção', lambda: retencao.aplicar(agora_utc)),
+    )
+    for nome, etapa in etapas:
+        try:
+            with db.session.begin_nested():
+                etapa()
+        except Exception as erro:          # noqa: BLE001 — registrada e a rodada segue
+            current_app.logger.exception('agendador: etapa %s falhou', nome)
+            erros.append(f'{nome}: {type(erro).__name__}: {erro}')
+    reg.ok = not erros
+    reg.erro = '\n'.join(erros)[:2000] or None
     reg.concluida_em = datetime.utcnow()
     return reg
 

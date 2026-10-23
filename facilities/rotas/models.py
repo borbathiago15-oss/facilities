@@ -189,6 +189,15 @@ class Rota(db.Model):
     intervalo_inicio = db.Column(db.Time)
     intervalo_fim = db.Column(db.Time)
     observacoes = db.Column(db.Text)
+    # Feriados (decisão do dono, 23/10/2026): cada rota diz se funciona em
+    # feriado. Desligada, não gera tarefa no feriado nacional nem no do local
+    # (``rotas/feriados.py``). Padrão: funciona (como era antes).
+    funciona_em_feriado = db.Column(db.Boolean, default=True, nullable=False,
+                                    server_default=db.true())
+    # Quando a gestão mudou a rota pela última vez (tela). O agendador não
+    # cria tarefa cujo horário já tinha passado nesse momento: mudar a rota às
+    # 14h não faz nascer atrasada a tarefa das 8h (``servico.replanejar``).
+    vale_a_partir = db.Column(db.DateTime)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -442,6 +451,22 @@ class ExecucaoCorrecao(db.Model):
     autor = db.relationship('User')
 
 
+class Feriado(db.Model):
+    """Feriado de um LOCAL (estadual, municipal, ponto facultativo do
+    cliente). Os nacionais não ficam aqui: saem de ``feriados.nacionais``,
+    sempre iguais para todos."""
+    __tablename__ = 'feriados'
+    id = db.Column(db.Integer, primary_key=True)
+    client_id = db.Column(db.Integer, db.ForeignKey('clients.id', ondelete='RESTRICT'),
+                          nullable=False, index=True)
+    data = db.Column(db.Date, nullable=False)
+    nome = db.Column(db.String(80), nullable=False)
+    criado_por = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='RESTRICT'))
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (db.UniqueConstraint('client_id', 'data', name='uq_feriados_local_data'),)
+
+
 class AgendadorExecucao(db.Model):
     """Cada rodada do agendador: quando, quanto gerou, se deu certo."""
     __tablename__ = 'agendador_execucoes'
@@ -592,7 +617,7 @@ class Chegada(db.Model):
     )
 
 
-MODELOS_EM_ORDEM_DE_LIMPEZA = (Chegada, ConfirmacaoPresenca, OcorrenciaPublica, ExecucaoCorrecao,
+MODELOS_EM_ORDEM_DE_LIMPEZA = (Feriado, Chegada, ConfirmacaoPresenca, OcorrenciaPublica, ExecucaoCorrecao,
                                NaoConformidade, ExecucaoFoto, Execucao, TarefaDia, RotaEscala,
                                RotaItem, Rota, RotaModeloItem, RotaModelo,
                                ChecklistDocumento, ChecklistVersao,

@@ -78,7 +78,7 @@ def _rota(rid, montar=False):
     return r
 
 
-def _gravar(funcao, *args, sucesso=None, destino):
+def _gravar(funcao, *args, sucesso=None, destino, replanejar=None):
     try:
         obj = funcao(*args)
         db.session.commit()
@@ -88,7 +88,34 @@ def _gravar(funcao, *args, sucesso=None, destino):
         return redirect(destino)
     if sucesso:
         flash(sucesso(obj) if callable(sucesso) else sucesso, 'success')
+    if replanejar is not None:
+        _replanejar(replanejar)
     return redirect(destino)
+
+
+def _replanejar(rota):
+    """Depois de mudar a rota pela tela: a agenda de hoje e amanhã é refeita
+    (``servico.replanejar``) e a tela diz o que mudou."""
+    try:
+        removidas, atualizadas, criadas = servico.replanejar(rota)
+        db.session.commit()
+    except Exception:                       # noqa: BLE001 — a mudança da rota já valeu
+        db.session.rollback()
+        current_app.logger.exception('replanejar a rota %s falhou', rota.id)
+        flash('A rota foi salva, mas a agenda de hoje não pôde ser refeita agora (alguém '
+              'pode estar registrando uma tarefa). Abra a rota de novo em instantes e salve '
+              'outra vez.', 'warning')
+        return
+    partes = []
+    if removidas:
+        partes.append(f'{removidas} tarefa(s) que ainda não tinham começado saíram')
+    if atualizadas:
+        partes.append(f'{atualizadas} foram ajustadas')
+    if criadas:
+        partes.append(f'{criadas} nova(s)')
+    if partes:
+        flash('Agenda de hoje e amanhã refeita: ' + ', '.join(partes) + '. O que já foi '
+              'feito ficou como estava.', 'info')
 
 
 # ── Início e local ────────────────────────────────────────────────────────
@@ -229,6 +256,8 @@ def aplicar_rota_pronta_post(cid, rmid):
     try:
         rota, r = rotas_prontas.aplicar(m, loc, _com_dias(request.form), linhas, current_user)
         db.session.commit()
+        servico.replanejar(rota)
+        db.session.commit()
     except RegraDaRota as erro:
         db.session.rollback()
         flash(erro.mensagem, 'danger')
@@ -276,8 +305,13 @@ def importar_plano_criar(cid):
     try:
         plano = plano_limpeza.ler_guardada(loc, request.form.get('chave'))
         previa = plano_limpeza.planejar(plano, loc)
+        inicio = datetime.utcnow()
         resumo = plano_limpeza.aplicar(previa, loc, current_user,
                                        substituir=request.form.get('substituir') == '1')
+        db.session.commit()
+        # As rotas novas começam a valer agora (sem tarefa nascendo atrasada).
+        for nova in Rota.query.filter(Rota.client_id == loc.id, Rota.created_at >= inicio):
+            servico.replanejar(nova)
         db.session.commit()
     except RegraDaRota as erro:
         db.session.rollback()
@@ -476,6 +510,68 @@ def documento(did):
     return enviar_documento(doc)
 
 
+# ── Feriados do local ─────────────────────────────────────────────────────
+
+@bp.get('/rotas/locais/<int:cid>/feriados')
+@login_required
+def feriados(cid):
+    from facilities.rotas import feriados as fer
+    loc = _local(cid)
+    try:
+        ano = int(request.args.get('ano') or tempo.hoje().year)
+    except ValueError:
+        ano = tempo.hoje().year
+    ano = min(max(ano, 2000), 2100)
+    rotas_param = (Rota.query.filter_by(client_id=loc.id, is_active=True,
+                                        funciona_em_feriado=False).order_by(Rota.nome).all())
+    return render_template('rotas/feriados.html', local=loc, ano=ano,
+                           lista=fer.do_ano(loc.id, ano), hoje=tempo.hoje(),
+                           rotas_param=rotas_param, pode_montar=_pode_montar())
+
+
+@bp.post('/rotas/locais/<int:cid>/feriados')
+@login_required
+def criar_feriado(cid):
+    from facilities.rotas import feriados as fer
+    loc = _local(cid, montar=True)
+    try:
+        f = fer.cadastrar(loc, request.form, current_user)
+        db.session.commit()
+    except fer.FeriadoInvalido as erro:
+        db.session.rollback()
+        flash(str(erro), 'danger')
+        return redirect(url_for('rotas.feriados', cid=loc.id))
+    flash(f'{f.nome} ({f.data.strftime("%d/%m/%Y")}) cadastrado. As rotas que não funcionam em '
+          'feriado não geram tarefa nesse dia.', 'success')
+    _replanejar_local(loc)
+    return redirect(url_for('rotas.feriados', cid=loc.id, ano=f.data.year))
+
+
+@bp.post('/rotas/locais/<int:cid>/feriados/<int:fid>/remover')
+@login_required
+def remover_feriado(cid, fid):
+    from facilities.rotas import feriados as fer
+    loc = _local(cid, montar=True)
+    try:
+        f = fer.remover(loc, fid)
+        ano = f.data.year
+        db.session.commit()
+    except fer.FeriadoInvalido as erro:
+        db.session.rollback()
+        flash(str(erro), 'danger')
+        return redirect(url_for('rotas.feriados', cid=loc.id))
+    flash('Feriado removido.', 'success')
+    _replanejar_local(loc)
+    return redirect(url_for('rotas.feriados', cid=loc.id, ano=ano))
+
+
+def _replanejar_local(loc):
+    """Feriado novo (ou tirado) hoje ou amanhã muda a agenda já gerada."""
+    for r in Rota.query.filter_by(client_id=loc.id, funciona_em_feriado=False):
+        servico.replanejar(r)
+    db.session.commit()
+
+
 # ── Rotas, itens e escala ─────────────────────────────────────────────────
 
 @bp.post('/rotas/locais/<int:cid>/rotas')
@@ -489,6 +585,8 @@ def criar_rota(cid):
         db.session.rollback()
         flash(erro.mensagem, 'danger')
         return redirect(url_for('rotas.local', cid=loc.id))
+    servico.replanejar(r)
+    db.session.commit()
     flash('Rota criada. Agora inclua as atividades (ponto, checklist e horários) e escale '
           'quem executa.', 'success')
     return redirect(url_for('rotas.rota', rid=r.id))
@@ -521,8 +619,8 @@ def rota(rid):
 def editar_rota(rid):
     r = _rota(rid, montar=True)
     return _gravar(servico.salvar_rota, r.local, r, _com_dias(request.form),
-                   sucesso='Rota atualizada. Vale para as tarefas geradas daqui em diante.',
-                   destino=url_for('rotas.rota', rid=r.id))
+                   sucesso='Rota atualizada. Vale a partir de agora.',
+                   destino=url_for('rotas.rota', rid=r.id), replanejar=r)
 
 
 @bp.post('/rotas/<int:rid>/ativo')
@@ -533,6 +631,7 @@ def ativo_rota(rid):
     db.session.commit()
     flash('Rota reativada.' if r.is_active else
           'Rota desativada: não gera mais tarefas (o histórico fica).', 'success')
+    _replanejar(r)
     return redirect(url_for('rotas.rota', rid=r.id))
 
 
@@ -545,9 +644,10 @@ def criar_item(rid):
         return _gravar(servico.salvar_itens_em_lote, r, ids, _com_dias(request.form),
                        sucesso=f'{len(ids)} pontos incluídos na rota, com o mesmo checklist e '
                                'os mesmos horários.',
-                       destino=url_for('rotas.rota', rid=r.id))
+                       destino=url_for('rotas.rota', rid=r.id), replanejar=r)
     return _gravar(servico.salvar_item, r, None, _com_dias(request.form),
-                   sucesso='Atividade incluída na rota.', destino=url_for('rotas.rota', rid=r.id))
+                   sucesso='Atividade incluída na rota.', destino=url_for('rotas.rota', rid=r.id),
+                   replanejar=r)
 
 
 @bp.post('/rotas/<int:rid>/itens/<int:iid>')
@@ -561,9 +661,11 @@ def editar_item(rid, iid):
         it.is_active = request.form.get('ativo') == '1'
         db.session.commit()
         flash('Atividade reativada.' if it.is_active else 'Atividade tirada da rota.', 'success')
+        _replanejar(r)
         return redirect(url_for('rotas.rota', rid=r.id))
     return _gravar(servico.salvar_item, r, it, _com_dias(request.form),
-                   sucesso='Atividade atualizada.', destino=url_for('rotas.rota', rid=r.id))
+                   sucesso='Atividade atualizada.', destino=url_for('rotas.rota', rid=r.id),
+                   replanejar=r)
 
 
 @bp.post('/rotas/<int:rid>/escalas')
@@ -572,7 +674,7 @@ def criar_escala(rid):
     r = _rota(rid, montar=True)
     return _gravar(servico.salvar_escala, r, _com_dias(request.form),
                    sucesso=lambda e: f'{e.pessoa.name} escalado(a) nesta rota.',
-                   destino=url_for('rotas.rota', rid=r.id))
+                   destino=url_for('rotas.rota', rid=r.id), replanejar=r)
 
 
 @bp.post('/rotas/<int:rid>/escalas/<int:eid>/encerrar')
@@ -584,8 +686,9 @@ def encerrar_escala(rid, eid):
         abort(404)
     e.is_active = False
     db.session.commit()
-    flash(f'Escala de {e.pessoa.name} encerrada. As tarefas já geradas continuam com o nome '
-          'dela; as próximas seguem a escala atual.', 'success')
+    flash(f'Escala de {e.pessoa.name} encerrada. O que ela já fez continua com o nome dela; '
+          'as tarefas que ainda não começaram passam para a escala atual.', 'success')
+    _replanejar(r)
     return redirect(url_for('rotas.rota', rid=r.id))
 
 
@@ -738,8 +841,10 @@ def agendador_http():
         return jsonify({'ok': False}), 500
     if reg is None:
         return jsonify({'ok': True, 'pulada': 'outra rodada em andamento'})
-    return jsonify({'ok': True, 'geradas': reg.tarefas_geradas,
-                    'perdidas': reg.tarefas_perdidas})
+    # Etapa com erro: o resto da rodada valeu (está gravado), mas o 500 avisa o
+    # monitor do serviço de que algo precisa de olho.
+    return jsonify({'ok': reg.ok, 'geradas': reg.tarefas_geradas,
+                    'perdidas': reg.tarefas_perdidas}), 200 if reg.ok else 500
 
 
 # ── Aplicativo: o turno de quem está no posto ─────────────────────────────

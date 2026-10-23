@@ -189,11 +189,12 @@ def _relatorio_liberado(cid, mes):
 @bp.get('/relatorios/<int:cid>/<mes>')
 @login_required
 def relatorio(cid, mes):
-    from facilities.relatorios.telas import montar, url_da_foto
+    from facilities.relatorios.telas import montar, recado_do, url_da_foto
     _so_cliente()
     loc, primeiro = _relatorio_liberado(cid, mes)
-    d, registro, _todas, fotos, _auto = montar(loc, primeiro)
+    d, registro, _todas, fotos, _auto = montar(loc, primeiro, liberado=True)
     return render_template('portal/relatorio.html', d=d, registro=registro, fotos=fotos,
+                           recado=recado_do(registro, liberado=True),
                            url_da_foto=url_da_foto, portal=True, mes=primeiro.strftime('%Y-%m'))
 
 

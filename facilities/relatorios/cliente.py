@@ -323,14 +323,25 @@ def salvar_recado(local_id, primeiro, texto, user):
 
 
 def liberar(local_id, primeiro, user, agora=None):
-    """O cliente passa a ver o relatório deste mês no portal. Só mês fechado."""
+    """O cliente passa a ver o relatório deste mês no portal. Só mês fechado.
+
+    Os números, as fotos e o recado ficam CONGELADOS no que o cliente recebe
+    (decisão do dono, 23/10/2026). Liberar de novo troca pela versão de agora."""
+    from facilities.core.models import Client
     if not user.e_gestao():
         raise RegraDoRelatorio('Quem libera o relatório para o cliente é a gestão.', 403)
     if fim_do_mes(primeiro) >= tempo.hoje():
         raise RegraDoRelatorio('O mês ainda não acabou: libere a partir do dia 1º do mês '
                                'seguinte.')
+    agora = agora or datetime.utcnow()
     rel = relatorio_do_mes(local_id, primeiro, criar=True)
-    rel.liberado_em = agora or datetime.utcnow()
+    local = db.session.get(Client, local_id)
+    d = dados(local, primeiro, agora)
+    fotos, _auto = fotos_do_relatorio(rel, candidatas(local_id, primeiro))
+    rel.congelado_json = json.dumps({'dados': _para_json(d),
+                                     'fotos': [f['ref'] for f in fotos],
+                                     'recado': rel.recado}, ensure_ascii=False)
+    rel.liberado_em = agora
     rel.liberado_por = user.id
     return rel
 
@@ -342,7 +353,80 @@ def recolher(local_id, primeiro, user):
     if rel is not None:
         rel.liberado_em = None
         rel.liberado_por = None
+        rel.congelado_json = None
     return rel
+
+
+# ── A versão congelada ────────────────────────────────────────────────────
+
+def _para_json(v):
+    """Os dados do relatório num formato que volta igual (datas marcadas; o
+    local vira id e nome; tuplas viram listas)."""
+    from facilities.core.models import Client
+    if isinstance(v, Client):
+        return {'__local': True, 'id': v.id, 'name': v.name}
+    if isinstance(v, datetime):
+        return {'__dt': v.isoformat()}
+    if isinstance(v, date):
+        return {'__d': v.isoformat()}
+    if isinstance(v, dict):
+        return {str(k): _para_json(x) for k, x in v.items()}
+    if isinstance(v, (list, tuple)):
+        return [_para_json(x) for x in v]
+    return v
+
+
+class _LocalCongelado(dict):
+    """O local da versão congelada: ``.id`` e ``.name`` como no objeto."""
+    __getattr__ = dict.get
+
+
+def _de_json(v):
+    if isinstance(v, dict):
+        if '__dt' in v:
+            return datetime.fromisoformat(v['__dt'])
+        if '__d' in v:
+            return date.fromisoformat(v['__d'])
+        if v.get('__local'):
+            return _LocalCongelado(id=v['id'], name=v['name'])
+        return {k: _de_json(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return [_de_json(x) for x in v]
+    return v
+
+
+def congelado(rel):
+    """``(dados, refs das fotos, recado)`` do que o cliente recebeu, ou None
+    (relatório liberado antes do congelamento: o portal recalcula)."""
+    if rel is None or not rel.congelado_json:
+        return None
+    bruto = json.loads(rel.congelado_json)
+    return _de_json(bruto['dados']), bruto.get('fotos') or [], bruto.get('recado')
+
+
+def mudancas(rel, atual):
+    """O que mudou nos números desde a liberação: [(o quê, antes, agora)].
+    Vazio = o cliente vê o mesmo que a tela da gestão."""
+    from facilities.paineis.servico import INDICADORES
+    versao = congelado(rel)
+    if versao is None:
+        return []
+    antes = versao[0]
+    linhas = [('Nota do mês', antes['nota']['nota'], atual['nota']['nota'])]
+    for chave, rotulo in INDICADORES.items():
+        linhas.append((rotulo, antes['nota']['indicadores'][chave]['pct'],
+                       atual['nota']['indicadores'][chave]['pct']))
+    linhas += [
+        ('Tarefas previstas', sum(r['previstas'] for r in antes['rotinas']),
+         sum(r['previstas'] for r in atual['rotinas'])),
+        ('Chamados abertos', antes['chamados']['abertos'], atual['chamados']['abertos']),
+        ('Chamados resolvidos', antes['chamados']['resolvidos'],
+         atual['chamados']['resolvidos']),
+        ('Não conformidades', antes['ncs']['total'], atual['ncs']['total']),
+        ('Avisos do público', antes['ocorrencias']['total'], atual['ocorrencias']['total']),
+        ('Visitas feitas', antes['visitas']['feitas'], atual['visitas']['feitas']),
+    ]
+    return [(o, a, b) for o, a, b in linhas if a != b]
 
 
 def liberados(local_ids):

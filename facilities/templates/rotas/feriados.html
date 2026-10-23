@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+{% block title %}Feriados — {{ local.name }}{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item"><a href="{{ url_for('rotas.inicio') }}">Rotas</a></li><li class="breadcrumb-item"><a href="{{ url_for('rotas.local', cid=local.id) }}">{{ local.name }}</a></li><li class="breadcrumb-item active" aria-current="page">Feriados</li>{% endblock %}
+{% block content %}
+<h1 class="fc-titulo">Feriados de {{ ano }}</h1>
+<p class="fc-sub">Nos feriados, a rota que <strong>não funciona em feriado</strong> não gera tarefa. Os nacionais já vêm prontos; cadastre aqui os do estado, da cidade e os dias em que o cliente fecha.</p>
+
+<div class="d-flex flex-wrap gap-2 mb-3">
+  <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('rotas.feriados', cid=local.id, ano=ano - 1) }}"><i class="bi bi-chevron-left" aria-hidden="true"></i> {{ ano - 1 }}</a>
+  <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('rotas.feriados', cid=local.id, ano=ano + 1) }}">{{ ano + 1 }} <i class="bi bi-chevron-right" aria-hidden="true"></i></a>
+</div>
+
+<div class="fc-cartao mb-3">
+  <h2 class="h6 fw-bold">Rotas que param nos feriados</h2>
+  {% if rotas_param %}
+  <p class="small mb-0">{{ rotas_param|map(attribute='nome')|join(', ') }}.</p>
+  {% else %}
+  <p class="small text-muted mb-0">Todas as rotas deste local funcionam em feriado. Para uma rota parar, desmarque "Funciona em feriado" na tela da rota.</p>
+  {% endif %}
+</div>
+
+{% if pode_montar %}
+<div class="fc-cartao mb-3">
+  <h2 class="h6 fw-bold">Cadastrar feriado do local</h2>
+  <form method="post" action="{{ url_for('rotas.criar_feriado', cid=local.id) }}" class="row g-2 align-items-end">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="col-sm-4"><label class="form-label small fw-semibold" for="fdata">Data</label>
+      <input class="form-control" id="fdata" name="data" type="date" required></div>
+    <div class="col-sm-5"><label class="form-label small fw-semibold" for="fnome">Nome</label>
+      <input class="form-control" id="fnome" name="nome" required maxlength="80" placeholder="Ex.: Independência da Bahia"></div>
+    <div class="col-sm-3"><button class="btn btn-primary fw-bold w-100" type="submit">Cadastrar</button></div>
+  </form>
+</div>
+{% endif %}
+
+<div class="fc-cartao p-0">
+  {% for data, nome, f in lista %}
+  <div class="border-top px-3 py-2 d-flex flex-wrap gap-2 align-items-center{% if data < hoje %} text-muted{% endif %}">
+    <strong class="nx-num">{{ data.strftime('%d/%m') }}</strong>
+    <span>{{ nome }}</span>
+    <span class="badge {% if f %}text-bg-light{% else %}text-bg-secondary{% endif %}">{{ 'deste local' if f else 'nacional' }}</span>
+    {% if f and pode_montar %}
+    <form method="post" action="{{ url_for('rotas.remover_feriado', cid=local.id, fid=f.id) }}" class="ms-auto m-0">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-outline-danger btn-sm" type="submit">Remover</button>
+    </form>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

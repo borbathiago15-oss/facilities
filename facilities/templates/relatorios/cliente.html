@@ -25,6 +25,14 @@
   {% if mes_fechado %}
   <div class="d-flex flex-wrap gap-2">
     {% if registro and registro.liberado_em %}
+    {% if mudou %}
+    <div class="alert alert-warning small w-100 mb-0">
+      <strong>Os números mudaram depois da liberação.</strong> O cliente continua vendo a versão de {{ registro.liberado_em|hora_local }}.
+      <ul class="mb-1">{% for o_que, antes, agora in mudou %}<li>{{ o_que }}: {{ antes if antes is not none else '—' }} → {{ agora if agora is not none else '—' }}</li>{% endfor %}</ul>
+      Se a correção deve chegar ao cliente, libere de novo.
+    </div>
+    <form method="post" action="{{ url_for('relatorios.agir', cid=d.local.id, mes=mes, acao='liberar') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-primary fw-bold" type="submit"><i class="bi bi-send-check" aria-hidden="true"></i> Liberar a versão atual</button></form>
+    {% endif %}
     <form method="post" action="{{ url_for('relatorios.agir', cid=d.local.id, mes=mes, acao='recolher') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-outline-danger" type="submit">Recolher do portal</button></form>
     {% else %}
     <form method="post" action="{{ url_for('relatorios.agir', cid=d.local.id, mes=mes, acao='liberar') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-primary fw-bold" type="submit"><i class="bi bi-send-check" aria-hidden="true"></i> Liberar para o cliente</button></form>

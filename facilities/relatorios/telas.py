@@ -65,24 +65,40 @@ def carregar_foto(f):
         return None
 
 
-def montar(local, primeiro):
-    """Os números, as fotos escolhidas (ou a amostra) e o registro do mês."""
-    d = rel.dados(local, primeiro)
+def montar(local, primeiro, liberado=False):
+    """Os números, as fotos escolhidas (ou a amostra) e o registro do mês.
+
+    ``liberado=True`` (o portal): a versão que o cliente recebeu, congelada
+    na liberação — números, fotos e recado não mudam depois."""
     registro = rel.relatorio_do_mes(local.id, primeiro)
     todas = rel.candidatas(local.id, primeiro)
+    versao = rel.congelado(registro) if liberado else None
+    if versao is not None:
+        d, refs, _recado = versao
+        por_ref = {f['ref']: f for f in todas}
+        return d, registro, todas, [por_ref[r] for r in refs if r in por_ref], False
+    d = rel.dados(local, primeiro)
     fotos, automatica = rel.fotos_do_relatorio(registro, todas)
     return d, registro, todas, fotos, automatica
 
 
+def recado_do(registro, liberado=False):
+    """O recado que vai junto: o congelado (portal) ou o de agora (gestão)."""
+    versao = rel.congelado(registro) if liberado else None
+    if versao is not None:
+        return versao[2]
+    return registro.recado if registro else None
+
+
 def arquivo(local, primeiro, formato, so_liberado=False):
     from facilities.relatorios import arquivos
-    d, registro, _todas, fotos, _auto = montar(local, primeiro)
+    d, registro, _todas, fotos, _auto = montar(local, primeiro, liberado=so_liberado)
     if so_liberado and (registro is None or registro.liberado_em is None):
         abort(404)
     nome = f'relatorio-{local.name}-{primeiro.strftime("%Y-%m")}'
     nome = ''.join(ch if ch.isalnum() or ch in '-_' else '-' for ch in nome).lower()
     if formato == 'pdf':
-        corpo = arquivos.pdf(d, fotos, carregar_foto, registro.recado if registro else None)
+        corpo = arquivos.pdf(d, fotos, carregar_foto, recado_do(registro, so_liberado))
         tipo, ext = 'application/pdf', 'pdf'
     elif formato == 'xlsx':
         corpo = arquivos.excel(d)
@@ -122,11 +138,12 @@ def cliente(cid, mes):
     primeiro = rel.mes_de(mes)
     d, registro, todas, fotos, automatica = montar(loc, primeiro)
     escolhidas = {f['ref'] for f in fotos}
+    mudou = rel.mudancas(registro, d) if registro and registro.liberado_em else []
     return render_template('relatorios/cliente.html', d=d, registro=registro, todas=todas,
                            fotos=fotos, automatica=automatica, escolhidas=escolhidas,
                            url_da_foto=url_da_foto, portal=False, mes=primeiro.strftime('%Y-%m'),
                            pode_gerir=current_user.e_gestao(), fotos_max=rel.FOTOS_MAX,
-                           mes_fechado=rel.fim_do_mes(primeiro) < tempo.hoje())
+                           mes_fechado=rel.fim_do_mes(primeiro) < tempo.hoje(), mudou=mudou)
 
 
 @bp.post('/cliente/<int:cid>/<mes>/<acao>')
@@ -144,7 +161,7 @@ def agir(cid, mes, acao):
         'recado': (lambda: rel.salvar_recado(loc.id, primeiro, request.form.get('recado'),
                                              current_user), 'Recado salvo.'),
         'liberar': (lambda: rel.liberar(loc.id, primeiro, current_user),
-                    'Relatório liberado: o cliente já vê no portal.'),
+                    'Relatório liberado: o cliente já vê no portal, nesta versão.'),
         'recolher': (lambda: rel.recolher(loc.id, primeiro, current_user),
                      'Relatório recolhido: o cliente deixa de ver até liberar de novo.'),
     }

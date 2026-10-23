@@ -324,9 +324,9 @@ def _sessao(app):
         if not current_user.is_authenticated or current_user._effective_role() != 'cliente':
             return None
         from facilities.core.auth import MSG_CLIENTE_SEM_ACESSO
-        from facilities.portal.servico import liberado
+        from facilities.portal.servico import cliente_ativo, liberado
         quer_json = request.is_json or request.method != 'GET'
-        if not liberado() or not current_user.cliente_id:
+        if not liberado() or not cliente_ativo(current_user):
             logout_user()
             session.clear()
             if quer_json:
@@ -512,6 +512,10 @@ def _comandos(app):
             return
         click.echo(f'{reg.tarefas_geradas} tarefa(s) gerada(s), '
                    f'{reg.tarefas_perdidas} marcada(s) como perdida(s).')
+        if not reg.ok:
+            # O resto da rodada valeu; o código de saída avisa o cron.
+            click.echo(f'Com erro:\n{reg.erro}', err=True)
+            raise SystemExit(1)
 
     @app.cli.group('anexos')
     def anexos_cli():
