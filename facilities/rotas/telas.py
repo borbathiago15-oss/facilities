@@ -748,8 +748,7 @@ def _dados_do_turno(locais):
     """Tudo que a tela "Meu turno" precisa, também SEM internet: as tarefas
     de hoje, os checklists delas e os pontos (pelo código do QR)."""
     ids = [c.id for c in locais]
-    servico.garantir_hoje(ids)
-    db.session.commit()
+    servico.garantir_hoje_e_gravar(locais)
     hoje = tempo.hoje()
     tarefas = []
     for d in (hoje - timedelta(days=1), hoje):
@@ -759,11 +758,20 @@ def _dados_do_turno(locais):
     versoes, pontos = {}, {}
     for t in vivas:
         versoes[t.versao_id] = t.versao
-    for p in PontoInspecao.query.filter(PontoInspecao.client_id.in_(ids or [-1]),
-                                        PontoInspecao.is_active.is_(True)):
+    from sqlalchemy.orm import selectinload
+    from facilities.cadastros.models import Ambiente, Setor
+    for p in (PontoInspecao.query.filter(PontoInspecao.client_id.in_(ids or [-1]),
+                                         PontoInspecao.is_active.is_(True))
+              .options(selectinload(PontoInspecao.ambiente).selectinload(Ambiente.setor)
+                       .selectinload(Setor.local))):
         pontos[p.codigo_qr] = p
     modelos = (ChecklistModelo.query.filter(ChecklistModelo.client_id.in_(ids or [-1]),
-                                            ChecklistModelo.is_active.is_(True)).all())
+                                            ChecklistModelo.is_active.is_(True))
+               .options(selectinload(ChecklistModelo.versoes)).all())
+    extras_do_local = {}
+    for m in modelos:
+        if m.versao_atual:
+            extras_do_local.setdefault(m.client_id, []).append(m.versao_atual.id)
     for m in modelos:
         if m.versao_atual:
             versoes[m.versao_atual.id] = m.versao_atual
@@ -789,12 +797,22 @@ def _dados_do_turno(locais):
             'vence': ordem.vencimento.strftime('%d/%m'),
             'atrasada': ch.atrasado(agora), 'minha': ch.responsavel_id == current_user.id})
 
+    # Os documentos de todos os checklists que vão na tela, numa consulta só.
+    from facilities.rotas.models import ChecklistDocumento
+    ids_modelos = {v.modelo_id for v in versoes.values()}
+    docs = {}
+    for d in (ChecklistDocumento.query.filter(ChecklistDocumento.modelo_id.in_(ids_modelos or
+                                                                                 [-1]),
+                                              ChecklistDocumento.is_active.is_(True))
+              .order_by(ChecklistDocumento.id)):
+        docs.setdefault(d.modelo_id, []).append(d)
+
     def v_json(v):
         return {'id': v.id, 'modelo': v.modelo.nome, 'numero': v.numero,
                 'procedimento': v.modelo.descricao or '', 'itens': _itens_com_referencia(v),
                 'materiais': v.materiais or '', 'epi': v.epi or '',
                 'documentos': [{'nome': d.nome, 'url': url_for('rotas.documento', did=d.id)}
-                               for d in servico.documentos_ativos(v.modelo)],
+                               for d in docs.get(v.modelo_id, [])],
                 'foto_antes': v.exige_foto_antes, 'foto_depois': v.exige_foto_depois}
     return {
         'usuario': current_user.id,
@@ -814,8 +832,7 @@ def _dados_do_turno(locais):
         'pontos': {codigo: {'id': p.id, 'nome': p.nome, 'ambiente': p.ambiente.nome,
                             'descricao': p.descricao or '', 'local': p.ambiente.setor.local.name,
                             'local_id': p.client_id, 'entrada': bool(p.entrada_do_local),
-                            'extras': [m.versao_atual.id for m in modelos
-                                       if m.client_id == p.client_id and m.versao_atual]}
+                            'extras': extras_do_local.get(p.client_id, [])}
                    for codigo, p in pontos.items()},
         'preventivas': preventivas,
         'motivos': MOTIVOS_NAO_REALIZADA,
@@ -842,10 +859,13 @@ def _dados_do_turno(locais):
 
 
 def _locais_json(locais):
+    """Um cartão por local. A entrada e a chegada de hoje de todos os locais
+    saem em duas consultas (o gerente tem dezenas de locais)."""
+    entradas, chegadas_hoje = chegadas.dos_locais(current_user, [c.id for c in locais])
     saida = []
     for c in locais:
-        entrada = chegadas.ponto_de_entrada(c.id)
-        chegada = chegadas.de_hoje(current_user, c.id)
+        entrada = entradas.get(c.id)
+        chegada = chegadas_hoje.get(c.id)
         saida.append({'id': c.id, 'nome': c.name,
                       'entrada': entrada.codigo_qr if entrada else None,
                       'entrada_nome': entrada.nome if entrada else None,

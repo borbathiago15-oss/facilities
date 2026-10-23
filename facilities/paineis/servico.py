@@ -48,65 +48,93 @@ def _utc(dia, h=time(0, 0)):
     return tempo.para_utc(dia, h)
 
 
-def _aderencia(client_id, de, ate, agora):
-    from facilities.rotas.models import TarefaDia
-    from facilities.rotas.servico import aderencia
-    tarefas = TarefaDia.query.filter(TarefaDia.client_id == client_id, TarefaDia.data >= de,
-                                     TarefaDia.data <= ate).all()
-    bom, base, _ = aderencia(tarefas, agora)
-    return bom, base
+# Cada indicador é calculado para TODOS os locais de uma vez, lendo só as
+# colunas da conta (sem montar objetos): o painel de 50 locais com um mês de
+# rotas eram 48 mil tarefas carregadas uma a uma. Devolve {local: (bom, base)}.
+
+def _aderencia(ids, de, ate, agora):
+    from facilities.extensions import db
+    from facilities.rotas.models import CONCLUIDA_NO_PRAZO, ENCERRADAS, TarefaDia
+    contas = {}
+    for cid, status, previsto, tol in db.session.query(
+            TarefaDia.client_id, TarefaDia.status, TarefaDia.previsto_para,
+            TarefaDia.tolerancia_min).filter(TarefaDia.client_id.in_(ids), TarefaDia.data >= de,
+                                             TarefaDia.data <= ate):
+        # A mesma conta de ``rotas.servico.aderencia``.
+        if status in ENCERRADAS or agora > previsto + timedelta(minutes=tol):
+            bom, base = contas.get(cid, (0, 0))
+            contas[cid] = (bom + (status == CONCLUIDA_NO_PRAZO), base + 1)
+    return contas
 
 
-def _ocorrencias(client_id, de, ate, agora):
-    from facilities.rotas.models import OCORRENCIA_RESOLVIDA, OcorrenciaPublica
-    lista = OcorrenciaPublica.query.filter(
-        OcorrenciaPublica.client_id == client_id, OcorrenciaPublica.prazo.isnot(None),
-        OcorrenciaPublica.criada_em >= _utc(de),
-        OcorrenciaPublica.criada_em < _utc(ate + timedelta(days=1))).all()
-    base = [o for o in lista if o.status == OCORRENCIA_RESOLVIDA or agora > o.prazo]
-    bom = sum(1 for o in base if o.status == OCORRENCIA_RESOLVIDA and o.resolvida_em
-              and o.resolvida_em <= o.prazo)
-    return bom, len(base)
+def _ocorrencias(ids, de, ate, agora):
+    from facilities.extensions import db
+    from facilities.rotas.models import OCORRENCIA_RESOLVIDA, OcorrenciaPublica as O
+    contas = {}
+    for cid, status, prazo, resolvida in db.session.query(
+            O.client_id, O.status, O.prazo, O.resolvida_em).filter(
+            O.client_id.in_(ids), O.prazo.isnot(None), O.criada_em >= _utc(de),
+            O.criada_em < _utc(ate + timedelta(days=1))):
+        if status == OCORRENCIA_RESOLVIDA or agora > prazo:
+            bom, base = contas.get(cid, (0, 0))
+            ok = status == OCORRENCIA_RESOLVIDA and resolvida and resolvida <= prazo
+            contas[cid] = (bom + bool(ok), base + 1)
+    return contas
 
 
-def _visitas(client_id, de, ate, agora):
+def _visitas(ids, de, ate, agora):
+    from facilities.extensions import db
     from facilities.visitas.models import FEITA, Visita
-    from facilities.visitas.servico import prazo
-    lista = Visita.query.filter(Visita.client_id == client_id, Visita.vencimento >= de,
-                                Visita.vencimento <= ate).all()
-    base = [v for v in lista if v.status == FEITA or agora > prazo(v)]
-    bom = sum(1 for v in base if v.status == FEITA and not v.n_nao_conformes)
-    return bom, len(base)
+    contas = {}
+    for cid, status, vencimento, nc in db.session.query(
+            Visita.client_id, Visita.status, Visita.vencimento, Visita.n_nao_conformes).filter(
+            Visita.client_id.in_(ids), Visita.vencimento >= de, Visita.vencimento <= ate):
+        # O prazo da visita é o fim do dia do vencimento (``visitas.servico.prazo``).
+        if status == FEITA or agora > _utc(vencimento, time(23, 59)):
+            bom, base = contas.get(cid, (0, 0))
+            contas[cid] = (bom + (status == FEITA and not nc), base + 1)
+    return contas
 
 
-def _chamados(client_id, de, ate, agora):
+def _chamados(ids, de, ate, agora):
     from facilities.chamados.models import Chamado
-    lista = Chamado.query.filter(Chamado.client_id == client_id,
-                                 Chamado.resolvido_em.isnot(None),
-                                 Chamado.resolvido_em >= _utc(de),
-                                 Chamado.resolvido_em < _utc(ate + timedelta(days=1))).all()
-    bom = sum(1 for c in lista if c.prazo is None or c.resolvido_em <= c.prazo)
-    return bom, len(lista)
+    from facilities.extensions import db
+    contas = {}
+    for cid, prazo, resolvido in db.session.query(
+            Chamado.client_id, Chamado.prazo, Chamado.resolvido_em).filter(
+            Chamado.client_id.in_(ids), Chamado.resolvido_em.isnot(None),
+            Chamado.resolvido_em >= _utc(de),
+            Chamado.resolvido_em < _utc(ate + timedelta(days=1))):
+        bom, base = contas.get(cid, (0, 0))
+        contas[cid] = (bom + (prazo is None or resolvido <= prazo), base + 1)
+    return contas
 
 
 CALCULO = {'aderencia': _aderencia, 'ocorrencias': _ocorrencias, 'visitas': _visitas,
            'chamados': _chamados}
 
 
-def nota_do_local(local, de, ate, agora=None):
-    agora = agora or datetime.utcnow()
+def _linha(local, contas):
     indicadores = {}
-    for chave, conta in CALCULO.items():
-        bom, base = conta(local.id, de, ate, agora)
+    for chave in CALCULO:
+        bom, base = contas[chave].get(local.id, (0, 0))
         indicadores[chave] = {'bom': bom, 'base': base, 'pct': _pct(bom, base)}
     validos = [i['pct'] for i in indicadores.values() if i['pct'] is not None]
     nota = round(sum(validos) / len(validos), 1) if validos else None
     return {'local': local, 'indicadores': indicadores, 'nota': nota, 'faixa': faixa(nota)}
 
 
+def nota_do_local(local, de, ate, agora=None):
+    return notas([local], de, ate, agora)[0]
+
+
 def notas(locais, de, ate, agora=None):
     agora = agora or datetime.utcnow()
-    linhas = [nota_do_local(loc, de, ate, agora) for loc in locais]
+    if not locais:
+        return []
+    ids = [loc.id for loc in locais]
+    contas = {chave: conta(ids, de, ate, agora) for chave, conta in CALCULO.items()}
+    linhas = [_linha(loc, contas) for loc in locais]
     return sorted(linhas, key=lambda x: (x['nota'] is None, x['nota'] if x['nota'] is not None
                                          else 0, x['local'].name))
 

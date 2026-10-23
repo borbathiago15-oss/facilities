@@ -582,16 +582,31 @@ def salvar_itens_em_lote(rota, ponto_ids, dados):
 
 
 def pessoas_escalaveis(local_id):
-    from facilities.core.hierarquia import carteira
+    """Quem pode ser escalado no local: as pessoas do posto que têm o local na
+    carteira (``hierarquia.carteira``). A carteira de quem é do posto é o que
+    está ligado a ela ou a alguém abaixo dela: em vez de montar a carteira de
+    cada uma, sobe a cadeia a partir de quem está ligado ao local."""
+    from facilities.core.models import user_clients
     pessoas = (User.query.filter(User.is_active.is_(True), User.is_deleted.is_(False),
                                  User.role.in_(PERFIS_ESCALAVEIS))
                .order_by(User.name).all())
-    saida = []
-    for p in pessoas:
-        c = carteira(p)
-        if c is None or local_id in c:
-            saida.append(p)
-    return saida
+    ligados = {uid for (uid,) in db.session.query(user_clients.c.user_id).filter(
+        user_clients.c.client_id == local_id)}
+    superior = dict(db.session.query(User.id, User.superior_id).filter(
+        User.is_deleted.is_(False)))
+    ativo = dict(db.session.query(User.id, User.is_active).filter(User.is_deleted.is_(False)))
+    com_o_local = set()
+    for uid in ligados:
+        # Quem está acima vê o que a pessoa ATIVA abaixo vê (a busca atravessa
+        # quem está desativado, como ``hierarquia.subordinados``).
+        if not ativo.get(uid):
+            continue
+        atual, vistos = uid, set()
+        while atual is not None and atual not in vistos:
+            com_o_local.add(atual)
+            vistos.add(atual)
+            atual = superior.get(atual)
+    return [p for p in pessoas if p.all_clients or p.id in com_o_local]
 
 
 def salvar_escala(rota, dados):
@@ -658,34 +673,51 @@ def horarios_do_item(rota, item, dia):
 
 
 def gerar(dia, client_ids=None, agora_utc=None):
-    """Cria as tarefas do turno que começa em ``dia``. Devolve quantas criou."""
+    """Cria as tarefas do turno que começa em ``dia``. Devolve quantas criou.
+
+    Roda no agendador E nas telas do turno (``garantir_hoje``), então carrega
+    tudo de uma vez: as rotas com itens, checklists, pontos e escalas, as
+    coberturas do dia e as tarefas que já existem. O custo é um punhado de
+    consultas, não uma por item (eram 8 mil para um gerente com 50 locais)."""
+    from sqlalchemy.orm import selectinload
     from facilities.core.models import Client
-    q = Rota.query.join(Client, Client.id == Rota.client_id).filter(
-        Rota.is_active.is_(True), Client.is_active.is_(True), Client.is_deleted.is_(False))
+    from facilities.equipes.servico import substitutos_do_dia
+    from facilities.rotas import presenca
+    dia_semana = str(dia.isoweekday())
+    q = (Rota.query.join(Client, Client.id == Rota.client_id)
+         .filter(Rota.is_active.is_(True), Client.is_active.is_(True),
+                 Client.is_deleted.is_(False))
+         .options(selectinload(Rota.itens).selectinload(RotaItem.modelo)
+                  .selectinload(ChecklistModelo.versoes),
+                  selectinload(Rota.itens).selectinload(RotaItem.ponto),
+                  selectinload(Rota.escalas).selectinload(RotaEscala.pessoa)))
     if client_ids is not None:
         q = q.filter(Rota.client_id.in_(list(client_ids) or [-1]))
+    rotas = [r for r in q.all() if dia_semana in r.dias_semana]
+    if not rotas:
+        return 0
+    ids = [r.id for r in rotas]
+    existentes = set(db.session.query(TarefaDia.rota_item_id, TarefaDia.previsto_para)
+                     .filter(TarefaDia.rota_id.in_(ids), TarefaDia.data == dia))
+    pedidos = presenca.pedidos_do_dia(ids, dia)
+    cobertos = substitutos_do_dia(ids, dia)
     criadas = 0
-    for rota in q.all():
-        if str(dia.isoweekday()) not in rota.dias_semana:
-            continue
+    for rota in rotas:
         _ini, fim = _janela(rota, dia)
         fim_utc = tempo.para_utc(fim.date(), fim.time())
         pessoa = escalado(rota, dia)
         # Fase 6: faltou e alguém cobriu? A tarefa nasce com quem cobriu.
-        from facilities.equipes.servico import substituto
-        pessoa = substituto(rota, dia, pessoa)
-        from facilities.rotas import presenca
-        presenca.gerar(rota, dia, pessoa, agora_utc)
+        pessoa = cobertos.get((rota.id, pessoa), pessoa) if pessoa else pessoa
+        presenca.gerar(rota, dia, pessoa, agora_utc,
+                       existentes=pedidos.get((rota.id, pessoa), set()))
         for item in rota.itens:
             versao = item.modelo.versao_atual if item.modelo else None
             if (not item.is_active or versao is None or not item.modelo.is_active
                     or item.ponto is None or not item.ponto.is_active):
                 continue
-            existentes = {t.previsto_para for t in TarefaDia.query.filter_by(
-                rota_item_id=item.id, data=dia)}
             for m in horarios_do_item(rota, item, dia):
                 previsto = tempo.para_utc(m.date(), m.time())
-                if previsto in existentes:
+                if (item.id, previsto) in existentes:
                     continue
                 t = TarefaDia(rota_id=rota.id, rota_item_id=item.id, client_id=rota.client_id,
                               ponto_id=item.ponto_id, versao_id=versao.id, user_id=pessoa,
@@ -695,6 +727,7 @@ def gerar(dia, client_ids=None, agora_utc=None):
                     with db.session.begin_nested():
                         db.session.add(t)
                     criadas += 1
+                    existentes.add((item.id, previsto))
                 except IntegrityError:
                     # Outra rodada ao mesmo tempo já criou este horário.
                     pass
@@ -803,6 +836,20 @@ def garantir_hoje(client_ids):
         if client_ids else 0
 
 
+def garantir_hoje_e_gravar(locais):
+    """``garantir_hoje`` + commit, para as telas. O commit expira os objetos
+    da sessão: os locais da tela são relidos numa consulta só (sem isso, cada
+    ``local.id`` depois do commit vira uma consulta)."""
+    from facilities.core.models import Client
+    ids = [c.id for c in locais]
+    if not ids:
+        return 0
+    n = garantir_hoje(ids)
+    db.session.commit()
+    Client.query.filter(Client.id.in_(ids)).all()
+    return n
+
+
 # ── Situação e acompanhamento ─────────────────────────────────────────────
 
 def situacao(tarefa, agora_utc=None):
@@ -829,8 +876,16 @@ def aderencia(tarefas, agora_utc=None):
 
 
 def tarefas_do_dia(client_ids, dia, user=None):
+    from sqlalchemy.orm import selectinload
+    from facilities.cadastros.models import Ambiente
     q = TarefaDia.query.filter(TarefaDia.client_id.in_(list(client_ids) or [-1]),
-                               TarefaDia.data == dia)
+                               TarefaDia.data == dia).options(
+        # As telas do turno leem tudo isto de cada tarefa: em lote, não uma a uma.
+        selectinload(TarefaDia.ponto).selectinload(PontoInspecao.ambiente)
+        .selectinload(Ambiente.setor),
+        selectinload(TarefaDia.rota).selectinload(Rota.local),
+        selectinload(TarefaDia.item), selectinload(TarefaDia.pessoa),
+        selectinload(TarefaDia.versao).selectinload(ChecklistVersao.modelo))
     if user is not None:
         q = q.filter(db.or_(TarefaDia.user_id == user.id, TarefaDia.user_id.is_(None)))
     return q.order_by(TarefaDia.previsto_para, TarefaDia.id).all()

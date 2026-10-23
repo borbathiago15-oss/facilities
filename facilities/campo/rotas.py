@@ -60,22 +60,20 @@ def _turno_por_local(locais):
     """Um cartão por local (etapa 2 do bloco do técnico): o local tem QR de
     entrada? A pessoa já chegou hoje (hora)? Quantas tarefas da rota ela tem
     lá hoje? A lista do turno só abre depois de escolher o local."""
-    from facilities.extensions import db
     from facilities.rotas import chegadas, servico
     ids = [c.id for c in locais]
-    if ids:
-        servico.garantir_hoje(ids)
-        db.session.commit()
+    servico.garantir_hoje_e_gravar(locais)
     hoje = tempo.hoje()
     por_local = {}
     for t in servico.tarefas_do_dia(ids, hoje, user=current_user):
         n = por_local.setdefault(t.client_id, {'total': 0, 'abertas': 0})
         n['total'] += 1
         n['abertas'] += t.status == 'prevista'
+    entradas, de_hoje = chegadas.dos_locais(current_user, ids)
     saida = []
     for c in locais:
-        entrada = chegadas.ponto_de_entrada(c.id)
-        chegada = chegadas.de_hoje(current_user, c.id)
+        entrada = entradas.get(c.id)
+        chegada = de_hoje.get(c.id)
         saida.append({'local': c, 'entrada': entrada, 'chegada': chegada,
                       'tarefas': por_local.get(c.id, {'total': 0, 'abertas': 0})})
     return saida

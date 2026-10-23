@@ -41,6 +41,24 @@ def de_hoje(user, client_id, agora_utc=None):
     return no_dia(user, client_id, dia)
 
 
+def dos_locais(user, client_ids, agora_utc=None):
+    """Para a tela com vários locais: ``({local: ponto de entrada},
+    {local: chegada de hoje da pessoa})`` em duas consultas."""
+    from facilities.cadastros.models import PontoInspecao
+    ids = list(client_ids) or [-1]
+    entradas = {}
+    for p in (PontoInspecao.query.filter(PontoInspecao.client_id.in_(ids),
+                                         PontoInspecao.entrada_do_local.is_(True),
+                                         PontoInspecao.is_active.is_(True))
+              .order_by(PontoInspecao.id)):
+        entradas.setdefault(p.client_id, p)      # o mesmo de ``ponto_de_entrada``
+    dia = tempo.local(agora_utc or datetime.utcnow()).date()
+    uid = user if isinstance(user, int) else user.id
+    hoje = {ch.client_id: ch for ch in Chegada.query.filter(
+        Chegada.user_id == uid, Chegada.client_id.in_(ids), Chegada.data == dia)}
+    return entradas, hoje
+
+
 def no_dia(user, client_id, dia):
     uid = user if isinstance(user, int) else user.id
     return Chegada.query.filter_by(user_id=uid, client_id=client_id, data=dia).first()
