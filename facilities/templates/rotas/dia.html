@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% block title %}{{ local.name }} — {{ data.strftime('%d/%m') }}{% endblock %}
 {% block breadcrumb %}<li class="breadcrumb-item"><a href="{{ url_for('rotas.inicio') }}">Rotas</a></li><li class="breadcrumb-item"><a href="{{ url_for('rotas.local', cid=local.id) }}">{{ local.name }}</a></li><li class="breadcrumb-item active" aria-current="page">{{ data.strftime('%d/%m/%Y') }}</li>{% endblock %}
+{% macro selo_gps(r) %}{% if r.gps_situacao == 'fora' %}<span class="badge text-bg-danger" title="Precisão do celular: {{ r.gps_precisao_m or '?' }} m">{{ texto_gps(r.gps_situacao, r.gps_distancia_m) }}</span>{% elif r.gps_situacao == 'sem_gps' %}<span class="badge text-bg-warning">Sem GPS</span>{% endif %}{% endmacro %}
 {% block content %}
 <h1 class="fc-titulo">{{ local.name }} — {{ data.strftime('%d/%m/%Y') }}</h1>
 <form class="d-flex gap-2 mb-3" method="get">
@@ -23,7 +24,7 @@
     <span class="badge fc-sit fc-sit-{{ s }}">{{ situacoes.get(s, s) }}</span>
     <span class="small ms-auto">
       {% if t.execucoes %}{% set ex = t.execucoes[0] %}
-        <a href="{{ url_for('rotas.execucao', eid=ex.id) }}">{{ ex.pessoa.name }} · {{ ex.iniciada_em|hora_local('%H:%M') }}–{{ ex.concluida_em|hora_local('%H:%M') }}{% if ex.sem_sinal %} · hora do celular{% endif %}{% if ex.n_nao_conformes %} · {{ ex.n_nao_conformes }} não conforme(s){% endif %}</a>
+        <a href="{{ url_for('rotas.execucao', eid=ex.id) }}">{{ ex.pessoa.name }} · {{ ex.iniciada_em|hora_local('%H:%M') }}–{{ ex.concluida_em|hora_local('%H:%M') }}{% if ex.sem_sinal %} · hora do celular{% endif %}{% if ex.n_nao_conformes %} · {{ ex.n_nao_conformes }} não conforme(s){% endif %}</a> {{ selo_gps(ex) }}
         {% if ex.adiantada %}<span class="badge text-bg-info">Adiantada</span> <span class="text-muted">{{ motivos_troca.get(ex.motivo_troca, ex.motivo_troca) }}{% if ex.motivo_troca_texto %}: {{ ex.motivo_troca_texto }}{% endif %}</span>{% endif %}
       {% elif t.status == 'nao_realizada' %}
         {{ motivos.get(t.motivo, t.motivo) }}{% if t.motivo_texto %}: {{ t.motivo_texto }}{% endif %}{% if t.chamado_id %} · <a href="{{ url_for('chamados.ver', chamado_id=t.chamado_id) }}">chamado</a>{% endif %}
@@ -79,6 +80,19 @@
   {% endfor %}
 </div>
 
+{% if chegadas %}
+<h2 class="h6 fw-bold mt-3">Chegadas</h2>
+<div class="fc-cartao p-0 mb-3">
+  {% for c in chegadas %}
+  <div class="d-flex flex-wrap gap-2 align-items-center border-bottom px-3 py-2">
+    <span class="fw-bold">{{ c.chegou_em|hora_local('%H:%M') }}</span>
+    <span>{{ c.pessoa.name }}</span>
+    {% if not c.com_camera %}<span class="small text-muted">liberada pela gestão</span>{% endif %}
+    {{ selo_gps(c) }}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
 {% if presencas %}
 <h2 class="h6 fw-bold mt-3">Confirmações de presença</h2>
 <div class="fc-cartao p-0 mb-3">
@@ -97,7 +111,7 @@
 <div class="fc-cartao p-0">
   {% for ex in extras %}
   <a class="d-flex flex-wrap gap-2 border-bottom px-3 py-2 text-reset" href="{{ url_for('rotas.execucao', eid=ex.id) }}">
-    <span class="fw-bold">{{ ex.concluida_em|hora_local('%H:%M') }}</span><span>{{ ex.ponto.nome }}</span><span class="small text-muted">{{ ex.versao.modelo.nome }} · {{ ex.pessoa.name }}</span>{% if ex.motivo_troca %}<span class="small">Fora da rota · {{ motivos_troca.get(ex.motivo_troca, ex.motivo_troca) }}{% if ex.motivo_troca_texto %}: {{ ex.motivo_troca_texto }}{% endif %}</span>{% endif %}
+    <span class="fw-bold">{{ ex.concluida_em|hora_local('%H:%M') }}</span><span>{{ ex.ponto.nome }}</span><span class="small text-muted">{{ ex.versao.modelo.nome }} · {{ ex.pessoa.name }}</span>{{ selo_gps(ex) }}{% if ex.motivo_troca %}<span class="small">Fora da rota · {{ motivos_troca.get(ex.motivo_troca, ex.motivo_troca) }}{% if ex.motivo_troca_texto %}: {{ ex.motivo_troca_texto }}{% endif %}</span>{% endif %}
   </a>
   {% endfor %}
 </div>

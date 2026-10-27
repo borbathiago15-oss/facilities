@@ -402,6 +402,12 @@ class Execucao(db.Model):
     # ordem da rota (MOTIVOS_TROCA) — tarefa adiantada ou atividade extra.
     motivo_troca = db.Column(db.String(30))
     motivo_troca_texto = db.Column(db.String(300))
+    # GPS na leitura do QR (27/10/2026): só a SITUAÇÃO (``rotas.gps``), a
+    # distância até o local e a precisão do celular — a coordenada da pessoa
+    # não é guardada.
+    gps_situacao = db.Column(db.String(20))
+    gps_distancia_m = db.Column(db.Integer)
+    gps_precisao_m = db.Column(db.Integer)
 
     tarefa = db.relationship('TarefaDia', backref='execucoes')
 
@@ -674,6 +680,10 @@ class Chegada(db.Model):
     liberada_por = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='RESTRICT'),
                              nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    # GPS na leitura do QR da entrada (27/10/2026), como na execução.
+    gps_situacao = db.Column(db.String(20))
+    gps_distancia_m = db.Column(db.Integer)
+    gps_precisao_m = db.Column(db.Integer)
 
     pessoa = db.relationship('User', foreign_keys=[user_id])
     ponto = db.relationship('PontoInspecao')

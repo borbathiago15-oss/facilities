@@ -234,18 +234,30 @@ def semear_rotas():
 
 def semear(autor=None):
     """Instala na biblioteca os modelos que ainda não existem. → nomes criados."""
+    import json
     from facilities.rotas import servico
     criados = []
     for dados in MODELOS:
         # Nome exato: o lower() do SQLite não conhece acento ("Área").
-        if ChecklistModelo.query.filter(ChecklistModelo.client_id.is_(None),
-                                        ChecklistModelo.nome == dados['nome']).first():
+        existente = ChecklistModelo.query.filter(ChecklistModelo.client_id.is_(None),
+                                                 ChecklistModelo.nome == dados['nome']).first()
+        if existente is not None:
+            # 27/10/2026: os modelos de limpeza passam a pedir a foto de antes
+            # e a de depois. Na biblioteca já instalada sai uma VERSÃO nova (a
+            # antiga fica para o histórico); as cópias dos locais não mudam.
+            v = existente.versao_atual
+            if v is not None and not (v.exige_foto_antes and v.exige_foto_depois):
+                servico.publicar(existente, json.loads(v.itens_json),
+                                 {'exige_foto_antes': True, 'exige_foto_depois': True,
+                                  'materiais': v.materiais, 'epi': v.epi}, autor)
+                criados.append(f'{existente.nome} (agora com foto de antes e de depois)')
             continue
         m = servico.criar_modelo(None, {'nome': dados['nome'], 'descricao': dados['descricao']},
                                  autor)
         itens = servico.normalizar_itens(dados['itens'])
         servico.publicar(m, itens, {'descricao': dados['descricao'],
-                                    'exige_foto_depois': dados.get('exige_foto_depois')}, autor)
+                                    'exige_foto_antes': True, 'exige_foto_depois': True},
+                         autor)
         criados.append(m.nome)
     db.session.flush()
     return criados + semear_rotas()

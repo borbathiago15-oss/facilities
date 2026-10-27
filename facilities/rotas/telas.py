@@ -1070,7 +1070,8 @@ def api_chegada():
     lido = servico._hora_da_leitura(dados.get('selo_leitura'), current_user, ponto)
     try:
         c, nova = chegadas.registrar(current_user, ponto, lido or datetime.utcnow(),
-                                     com_camera=dados.get('com_camera', True))
+                                     com_camera=dados.get('com_camera', True),
+                                     gps_bruto=dados.get('gps'))
         db.session.commit()
     except RegraDaRota as erro:
         return _api_erro(erro)

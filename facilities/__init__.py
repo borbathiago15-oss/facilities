@@ -394,10 +394,10 @@ def _sessao(app):
         resp.headers.setdefault('X-Content-Type-Options', 'nosniff')
         resp.headers.setdefault('X-Frame-Options', 'SAMEORIGIN')
         resp.headers.setdefault('Referrer-Policy', 'same-origin')
-        # Câmera só para o próprio sistema (foto da passagem e do chamado);
-        # microfone e localização, para ninguém.
+        # Câmera e localização só para o próprio sistema (foto da passagem e
+        # do chamado; GPS na leitura do QR, 27/10/2026); microfone, ninguém.
         resp.headers.setdefault('Permissions-Policy',
-                                'camera=(self), microphone=(), geolocation=()')
+                                'camera=(self), microphone=(), geolocation=(self)')
         # HSTS: depois do primeiro acesso em https o navegador não tenta mais
         # http — onde o cookie "Manter conectado" iria em texto claro. Vai
         # também quando o https termina no proxy (cookie Secure ligado); o
@@ -432,6 +432,8 @@ def _jinja(app):
     app.jinja_env.filters['local'] = tempo.local
     app.jinja_env.globals['tempo'] = tempo
     app.jinja_env.globals['NOME_DO_SISTEMA'] = 'Trino Facilities'
+    from facilities.rotas.gps import texto as texto_gps
+    app.jinja_env.globals['texto_gps'] = texto_gps
 
 
 def _comandos(app):

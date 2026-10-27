@@ -341,9 +341,33 @@
   // é pedido quando a CÂMERA leu agora (``lido=camera`` vindo do leitor). O
   // link de um aviso, o código digitado e a página recarregada abrem o ponto,
   // mas a execução fica com a hora do celular — marcada para a gestão.
+  // GPS na leitura do QR (27/10/2026): a posição do celular SÓ neste
+  // instante, para mostrar que a leitura foi no local. Nunca trava: sem
+  // resposta em 10 s, sem permissão ou sem GPS, a leitura segue "sem GPS".
+  function obterGps() {
+    if (!navigator.geolocation) return Promise.resolve({erro: 'indisponivel'});
+    return new Promise(function (ok) {
+      var feito = false;
+      var limite = setTimeout(function () { if (!feito) { feito = true; ok({erro: 'sem_resposta'}); } }, 10000);
+      navigator.geolocation.getCurrentPosition(function (pos) {
+        if (feito) return;
+        feito = true; clearTimeout(limite);
+        ok({lat: pos.coords.latitude, lng: pos.coords.longitude,
+            precisao: Math.round(pos.coords.accuracy || 0)});
+      }, function (e) {
+        if (feito) return;
+        feito = true; clearTimeout(limite);
+        ok({erro: e && e.code === 1 ? 'negado' : 'indisponivel'});
+      }, {enableHighAccuracy: true, timeout: 9000, maximumAge: 60000});
+    });
+  }
+
   function lerNoServidor(codigo, comCamera) {
     if (leitura && leitura.ponto === codigo) return leitura.pronta;     // voltou ao mesmo ponto
-    leitura = {ponto: codigo, selo: null, lido_em: new Date().toISOString(), comCamera: !!comCamera};
+    leitura = {ponto: codigo, selo: null, lido_em: new Date().toISOString(), comCamera: !!comCamera,
+               gps: null};
+    var comGps = leitura;
+    comGps.gpsPronta = obterGps().then(function (g) { comGps.gps = g; return g; });
     if (!comCamera || navigator.onLine === false || !window.fetch) {
       leitura.pronta = Promise.resolve(null);
       return leitura.pronta;
@@ -410,15 +434,18 @@
       }
       var h = hora(esta.lido_em);
       window.TrinoFila.guardar({tipo: 'chegada', rotulo: 'Chegada · ' + (local ? local.nome : p.local),
-                                corpo: {ponto: codigo, lido_em: esta.lido_em, com_camera: esta.comCamera}})
+                                corpo: {ponto: codigo, lido_em: esta.lido_em, com_camera: esta.comCamera,
+                                        gps: esta.gps}})
         .then(function () { chegou(h, true); },
               function () { dizer('Sem sinal, e não foi possível guardar. Tente de novo.', 'danger'); });
     }
-    esta.pronta.then(function (selo) {
+    Promise.all([esta.pronta, esta.gpsPronta]).then(function (r) {
+      var selo = r[0];
       if (navigator.onLine === false) { guardar(); return; }
       return fetch('/app/api/chegada', {method: 'POST', headers: {'Content-Type': 'application/json'},
                                         body: JSON.stringify({ponto: codigo, selo_leitura: selo,
-                                                              com_camera: esta.comCamera})})
+                                                              com_camera: esta.comCamera,
+                                                              gps: esta.gps})})
         .then(function (r) {
           if (window.TrinoFila && window.TrinoFila.ehFalhaDeConexao(r)) { guardar(); return; }
           return r.json().then(function (x) {
@@ -1038,7 +1065,8 @@
       selo_leitura: leitura && leitura.ponto === codigo ? leitura.selo : null,
       lido_em: leitura && leitura.ponto === codigo ? leitura.lido_em : inicio,
       concluida_em: new Date().toISOString(),
-      sem_sinal: !(leitura && leitura.selo)
+      sem_sinal: !(leitura && leitura.selo),
+      gps: leitura && leitura.ponto === codigo ? leitura.gps : null
     };
     if (tarefa) corpo.tarefa_id = tarefa.id; else corpo.versao_id = versao.id;
     if (prev) corpo.chamado_id = prev.id;

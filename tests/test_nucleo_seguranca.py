@@ -147,7 +147,9 @@ def test_cookie_manter_conectado_tem_as_travas_do_cookie_de_sessao(app_module):
 
 def test_permissions_policy_em_toda_resposta(client):
     r = client.get('/healthz')
-    assert r.headers['Permissions-Policy'] == 'camera=(self), microphone=(), geolocation=()'
+    # 27/10/2026: a localização passa a valer para o próprio sistema (GPS na
+    # leitura do QR); de fora (iframe de outro site), continua negada.
+    assert r.headers['Permissions-Policy'] == 'camera=(self), microphone=(), geolocation=(self)'
 
 
 def test_hsts_em_https_e_nao_em_http_de_desenvolvimento(client):

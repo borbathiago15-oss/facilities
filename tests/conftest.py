@@ -157,7 +157,9 @@ def clean_transactional_data(app_module):
                       + rotas_models.MODELOS_EM_ORDEM_DE_LIMPEZA + (PushInscricao,)):
             model.query.delete()
         app_module.app.extensions.pop('facilities_push', None)
-        Client.query.update({'contratante_id': None, 'estado_id': None})
+        Client.query.update({'contratante_id': None, 'estado_id': None, 'latitude': None,
+                             'longitude': None, 'raio_gps_m': None,
+                             'posicao_marcada_em': None, 'posicao_marcada_por': None})
         # A cadeia e o perfil cliente (Fase 2) também apontam para cadastros.
         app_module.User.query.update({'cliente_id': None, 'superior_id': None})
         for model in cadastros_models.MODELOS_EM_ORDEM_DE_LIMPEZA:

@@ -109,6 +109,7 @@ def centro(cid):
                            areas=centros.areas(loc),
                            numeros=montagem.numeros_dos_pontos(loc.id),
                            checklists=centros.checklists_do_centro(loc),
+                           raio=_raio(loc),
                            rotas=Rota.query.filter_by(client_id=loc.id)
                            .order_by(Rota.is_active.desc(), Rota.hora_inicio, Rota.nome).all())
 
@@ -142,6 +143,23 @@ def trocar_checklist(cid, pid):
     return redirect(url_for('centros.centro', cid=loc.id))
 
 
+@bp.post('/centros/<int:cid>/posicao')
+@login_required
+def marcar_posicao(cid):
+    """GPS na leitura do QR (27/10/2026): a gestão, no local, marca a posição
+    dele pelo celular; as leituras longe disso ficam marcadas "fora do local"."""
+    from facilities.rotas import gps
+    loc = _centro(cid)
+    try:
+        gps.marcar_posicao(loc, request.form, current_user)
+        db.session.commit()
+    except CadastroInvalido as erro:
+        return _erro(erro, url_for('centros.centro', cid=loc.id))
+    flash(f'Posição de {loc.name} marcada. Leitura de QR a mais de {gps.raio_do_local(loc)} m '
+          'daqui fica marcada "fora do local" e avisa o supervisor.', 'success')
+    return redirect(url_for('centros.centro', cid=loc.id))
+
+
 @bp.post('/centros/<int:cid>/rotas')
 @login_required
 def criar_rota(cid):
@@ -169,6 +187,11 @@ def rota(cid, rid):
                            pessoas=rotas.pessoas_escalaveis(loc.id),
                            dias=rotas.DIAS_DA_SEMANA, hoje=tempo.hoje().isoformat(),
                            vazias=range(8))
+
+
+def _raio(loc):
+    from facilities.rotas import gps
+    return gps.raio_do_local(loc)
 
 
 def _replanejar(r):

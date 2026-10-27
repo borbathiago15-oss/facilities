@@ -10,6 +10,22 @@
 </ul>
 
 {% if aba != 'rotas' %}
+<section class="fc-cartao mb-3" aria-labelledby="tit-posicao">
+  <h2 class="h6 fw-bold" id="tit-posicao"><i class="bi bi-geo-alt" aria-hidden="true"></i> Posição do local (GPS)</h2>
+  {% if local.latitude is not none %}
+  <p class="small mb-2">Marcada em {{ local.posicao_marcada_em|hora_local('%d/%m/%Y %H:%M') if local.posicao_marcada_em else '—' }}. Leitura de QR a mais de <strong>{{ raio }} m</strong> daqui fica marcada "fora do local" e avisa o supervisor.</p>
+  {% else %}
+  <p class="small mb-2">Ainda não marcada. Esteja <strong>dentro do local</strong>, com a localização do celular ligada, e toque no botão: as leituras de QR longe daqui passam a ficar marcadas "fora do local".</p>
+  {% endif %}
+  <form method="post" action="{{ url_for('centros.marcar_posicao', cid=local.id) }}" class="d-flex flex-wrap gap-2 align-items-end m-0" data-form-posicao>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="lat"><input type="hidden" name="lng"><input type="hidden" name="precisao">
+    <div><label class="form-label small fw-semibold mb-1" for="raio">Raio (metros)</label>
+      <input class="form-control" id="raio" name="raio" type="number" min="50" max="5000" step="10" value="{{ raio }}"></div>
+    <button class="btn btn-outline-primary" type="button" data-marcar-posicao><i class="bi bi-crosshair" aria-hidden="true"></i> {{ 'Marcar de novo' if local.latitude is not none else 'Marcar a posição deste local' }}</button>
+  </form>
+  <p class="small text-muted mt-2 mb-0" data-posicao-estado role="status"></p>
+</section>
 <div class="fc-cartao p-0 mb-3">
   {% for p in areas %}
   <div class="d-flex flex-wrap gap-2 align-items-center border-bottom px-3 py-2">
@@ -85,3 +101,4 @@
 </section>
 {% endif %}
 {% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/posicao-local.js') }}"></script>{% endblock %}
