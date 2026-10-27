@@ -207,12 +207,19 @@ class PontoInspecao(db.Model):
     # local (``servico.salvar_ponto`` garante).
     entrada_do_local = db.Column(db.Boolean, default=False, nullable=False,
                                  server_default=db.false())
+    # Cadastro simplificado (27/10/2026): a ÁREA é um ponto com QR, e o
+    # checklist dela (o escopo do que fazer ali) fica aqui. A rota digitada
+    # como "06:00 · Banheiro 01" usa este checklist.
+    checklist_id = db.Column(db.Integer, db.ForeignKey('checklist_modelos.id',
+                                                       ondelete='RESTRICT'),
+                             nullable=True, index=True)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     ambiente = db.relationship('Ambiente', backref=db.backref(
         'pontos', order_by='PontoInspecao.nome'))
     equipamento = db.relationship('Equipamento')
+    checklist = db.relationship('ChecklistModelo')
 
 
 @event.listens_for(PontoInspecao.codigo_qr, 'set')

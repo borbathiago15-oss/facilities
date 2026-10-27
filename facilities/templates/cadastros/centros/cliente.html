@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% block title %}{{ cliente.nome }}{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item"><a href="{{ url_for('centros.clientes') }}">Clientes</a></li><li class="breadcrumb-item active" aria-current="page">{{ cliente.nome }}</li>{% endblock %}
+{% block content %}
+<h1 class="fc-titulo">{{ cliente.nome }}</h1>
+<p class="fc-sub">Os centros de custo deste cliente. Em cada um você cadastra as áreas e as rotas.</p>
+<div class="fc-cartao p-0 mb-3">
+  {% for loc in centros %}
+  <a class="d-flex flex-wrap gap-2 align-items-center border-bottom px-3 py-2 text-reset text-decoration-none" href="{{ url_for('centros.centro', cid=loc.id) }}">
+    <span class="fw-semibold">{{ loc.name }}</span>
+    {% if loc.cost_center %}<span class="small text-muted">CC {{ loc.cost_center }}</span>{% endif %}
+    <span class="small ms-auto">{{ resumo[loc.id].areas }} área(s) · {{ resumo[loc.id].rotas }} rota(s)</span>
+  </a>
+  {% else %}
+  <div class="fc-vazio">Nenhum centro de custo ainda. Cadastre o primeiro abaixo.</div>
+  {% endfor %}
+</div>
+<details class="fc-cartao" {% if not centros %}open{% endif %}>
+  <summary class="fw-bold"><i class="bi bi-plus-lg" aria-hidden="true"></i> Novo centro de custo</summary>
+  <form method="post" action="{{ url_for('centros.criar_centro', ctid=cliente.id) }}" class="mt-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="row g-2">
+      <div class="col-md-6"><label class="form-label small fw-semibold" for="name">Nome</label>
+        <input class="form-control" id="name" name="name" required maxlength="120" placeholder="Ex.: {{ cliente.nome }} — Armazém 1"></div>
+      <div class="col-md-3"><label class="form-label small fw-semibold" for="cost_center">Código do centro de custo</label>
+        <input class="form-control" id="cost_center" name="cost_center" maxlength="50"></div>
+      <div class="col-md-3"><label class="form-label small fw-semibold" for="estado_id">Estado</label>
+        <select class="form-select" id="estado_id" name="estado_id" required>
+          <option value="">Escolha</option>
+          {% for e in estados %}<option value="{{ e.id }}">{{ e.nome }}</option>{% endfor %}
+        </select></div>
+      <div class="col-12"><label class="form-label small fw-semibold" for="endereco">Endereço (opcional)</label>
+        <input class="form-control" id="endereco" name="endereco" maxlength="255"></div>
+    </div>
+    <button class="btn btn-primary fw-bold mt-3" type="submit">Criar e cadastrar as áreas</button>
+  </form>
+</details>
+{% endblock %}

@@ -263,6 +263,9 @@ SEMENTES = [
     "responsavel_id=(SELECT id FROM users WHERE email='sup@ensaio')",
     # Troca de área: uma execução adiantada a pedido do cliente.
     "UPDATE execucoes SET motivo_troca='pedido_cliente', motivo_troca_texto='Reunião às 8h'",
+    # Cadastro simplificado: a área com o checklist dela.
+    "UPDATE pontos_inspecao SET checklist_id=(SELECT MIN(id) FROM checklist_modelos "
+    "WHERE client_id IS NOT NULL)",
 ]
 
 

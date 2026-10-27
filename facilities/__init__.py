@@ -273,6 +273,7 @@ def _rotas(app):
     from facilities.chamados.rotas import bp as chamados_bp
     from facilities.cadastros.rotas import bp as cadastros_bp
     from facilities.cadastros.novo_contrato import bp as montagem_bp
+    from facilities.cadastros.centros_telas import bp as centros_bp
     from facilities.campo.rotas import bp as campo_bp
     from facilities.rotas.telas import bp as rotas_bp
     from facilities.rotas.publico import bp as publico_bp
@@ -289,7 +290,8 @@ def _rotas(app):
     for bp in (core_bp, auth_bp, admin_bp, app_bp, passagem_bp, chamados_bp, cadastros_bp,
                campo_bp, rotas_bp, publico_bp, preventiva_bp, demandas_bp,
                equipes_bp, visitas_bp, materiais_bp, paineis_bp, integracao_api_bp,
-               integracao_bp, portal_bp, cobrancas_bp, relatorios_bp, montagem_bp):
+               integracao_bp, portal_bp, cobrancas_bp, relatorios_bp, montagem_bp,
+               centros_bp):
         app.register_blueprint(bp)
 
 

@@ -319,6 +319,12 @@ def _valor_do_parametro(nome, ids, entidade=None, endpoint=''):
                     'rmid': ids['rota_pronta'], 'acao': 'retirar'}
         if nome in por_rota:
             return por_rota[nome]
+    if endpoint.startswith('centros.'):
+        # Cadastro simplificado (27/10/2026): centro de custo = local; área = ponto.
+        por_centro = {'cid': ids['local'], 'ctid': ids['cliente'], 'rid': ids['rota'],
+                      'iid': ids['item'], 'pid': ids['ponto']}
+        if nome in por_centro:
+            return por_centro[nome]
     if endpoint.startswith('relatorios.'):
         por_relatorio = {'cid': ids['local'], 'mes': ids['mes_relatorio'], 'acao': 'recolher',
                          'formato': 'pdf'}

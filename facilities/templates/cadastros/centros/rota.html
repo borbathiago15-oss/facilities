@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+{% block title %}{{ rota.nome }} — {{ local.name }}{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item"><a href="{{ url_for('centros.clientes') }}">Clientes</a></li><li class="breadcrumb-item"><a href="{{ url_for('centros.centro', cid=local.id, aba='rotas') }}">{{ local.name }}</a></li><li class="breadcrumb-item active" aria-current="page">{{ rota.nome }}</li>{% endblock %}
+{% block content %}
+<h1 class="fc-titulo">{{ rota.nome }}</h1>
+<p class="fc-sub">{{ rota.turno }} · {{ rota.hora_inicio.strftime('%H:%M') }} às {{ rota.hora_fim.strftime('%H:%M') }} · {% for d in rota.dias_semana %}{{ dias[d] }}{% if not loop.last %}, {% endif %}{% endfor %}</p>
+
+<section class="fc-cartao p-0 mb-3" aria-labelledby="tit-linhas">
+  <h2 class="h6 fw-bold px-3 pt-3" id="tit-linhas">O roteiro</h2>
+  {% for l in linhas %}
+  <div class="d-flex flex-wrap gap-2 align-items-center border-bottom px-3 py-2" data-linha="{{ l.hora }}">
+    <span class="fw-bold fs-5">{{ l.hora }}</span>
+    <span class="fw-semibold">{{ l.ponto.nome }}</span>
+    <span class="small text-muted">{{ l.checklist.nome }}</span>
+    <form method="post" action="{{ url_for('centros.remover_linha', cid=local.id, rid=rota.id, iid=l.item.id) }}" class="ms-auto m-0">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="hora" value="{{ l.hora }}">
+      <button class="btn btn-sm btn-outline-danger" type="submit" aria-label="Tirar {{ l.hora }} {{ l.ponto.nome }} da rota">Tirar</button>
+    </form>
+  </div>
+  {% else %}
+  <div class="fc-vazio">Nenhum horário ainda. Digite abaixo: horário e área.</div>
+  {% endfor %}
+</section>
+
+<section class="fc-cartao mb-3" aria-labelledby="tit-incluir">
+  <h2 class="h6 fw-bold" id="tit-incluir">Incluir horários</h2>
+  <p class="small text-muted">Uma linha por passada: o horário e a área. O checklist vem da área. A mesma área pode aparecer em vários horários.</p>
+  <form method="post" action="{{ url_for('centros.adicionar_linhas', cid=local.id, rid=rota.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% for i in vazias %}
+    <div class="row g-2 mb-2">
+      <div class="col-4 col-md-2"><label class="visually-hidden" for="h{{ i }}">Horário da linha {{ i + 1 }}</label>
+        <input class="form-control" id="h{{ i }}" name="hora" type="time"></div>
+      <div class="col-8 col-md-6"><label class="visually-hidden" for="a{{ i }}">Área da linha {{ i + 1 }}</label>
+        <select class="form-select" id="a{{ i }}" name="area">
+          <option value="">Área</option>
+          {% for p in areas %}<option value="{{ p.id }}">{{ p.nome }}</option>{% endfor %}
+        </select></div>
+    </div>
+    {% endfor %}
+    <button class="btn btn-primary fw-bold" type="submit">Incluir na rota</button>
+  </form>
+</section>
+
+<section class="fc-cartao mb-3" aria-labelledby="tit-quem">
+  <h2 class="h6 fw-bold" id="tit-quem">Quem faz</h2>
+  {% for e in rota.escalas if e.is_active %}
+  <p class="mb-1"><i class="bi bi-person" aria-hidden="true"></i> {{ e.pessoa.name }} <span class="small text-muted">desde {{ e.data_inicio.strftime('%d/%m/%Y') }}</span></p>
+  {% else %}
+  <p class="small text-muted">Ninguém escalado: as tarefas aparecem para todos do local.</p>
+  {% endfor %}
+  <form method="post" action="{{ url_for('centros.escalar', cid=local.id, rid=rota.id) }}" class="d-flex flex-wrap gap-2 mt-2">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="data_inicio" value="{{ hoje }}">
+    <label class="visually-hidden" for="pessoa">Pessoa</label>
+    <select class="form-select w-auto" id="pessoa" name="user_id" required>
+      <option value="">Escolha a pessoa</option>
+      {% for p in pessoas %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}
+    </select>
+    <button class="btn btn-outline-primary" type="submit">Escalar</button>
+  </form>
+  {% if not pessoas %}<p class="small text-muted mt-2 mb-0">Ninguém da equipe neste centro de custo ainda. <a href="{{ url_for('montagem.equipe', cid=local.id) }}">Convide a equipe</a>.</p>{% endif %}
+</section>
+<a class="btn btn-link" href="{{ url_for('rotas.rota', rid=rota.id) }}">Modo avançado (frequência, horários por dia, tolerância)</a>
+{% endblock %}

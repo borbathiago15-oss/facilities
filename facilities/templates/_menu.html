@@ -69,6 +69,7 @@
     <details class="fc-lat-grupo" open>
       <summary class="fc-lat-titulo">Cadastros</summary>
       {% if r in ('master', 'gerente', 'pleno') %}
+      {{ item('centros.clientes', 'Áreas e rotas dos clientes', 'bi-diagram-2', ep.startswith('centros.')) }}
       {{ item('montagem.inicio', 'Novo contrato', 'bi-magic', ep.startswith('montagem.') and ep not in ('montagem.convites',)) }}
       {{ item('montagem.convites', 'Convites', 'bi-person-plus') }}
       {% endif %}

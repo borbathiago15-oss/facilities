@@ -1,0 +1,87 @@
+{% extends 'base.html' %}
+{% block title %}{{ local.name }}{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item"><a href="{{ url_for('centros.clientes') }}">Clientes</a></li>{% if local.contratante %}<li class="breadcrumb-item"><a href="{{ url_for('centros.cliente', ctid=local.contratante_id) }}">{{ local.contratante.nome }}</a></li>{% endif %}<li class="breadcrumb-item active" aria-current="page">{{ local.name }}</li>{% endblock %}
+{% block content %}
+<h1 class="fc-titulo">{{ local.name }}</h1>
+<p class="fc-sub">Centro de custo{% if local.cost_center %} {{ local.cost_center }}{% endif %}. Primeiro as áreas, depois as rotas.</p>
+<ul class="nav nav-tabs mb-3">
+  <li class="nav-item"><a class="nav-link {% if aba != 'rotas' %}active{% endif %}" {% if aba != 'rotas' %}aria-current="page"{% endif %} href="{{ url_for('centros.centro', cid=local.id) }}">1. Áreas ({{ areas|length }})</a></li>
+  <li class="nav-item"><a class="nav-link {% if aba == 'rotas' %}active{% endif %}" {% if aba == 'rotas' %}aria-current="page"{% endif %} href="{{ url_for('centros.centro', cid=local.id, aba='rotas') }}">2. Rotas ({{ rotas|selectattr('is_active')|list|length }})</a></li>
+</ul>
+
+{% if aba != 'rotas' %}
+<div class="fc-cartao p-0 mb-3">
+  {% for p in areas %}
+  <div class="d-flex flex-wrap gap-2 align-items-center border-bottom px-3 py-2">
+    <span class="badge text-bg-light">QR {{ '%03d'|format(numeros.get(p.id, 0)) }}</span>
+    <span class="fw-semibold">{{ p.nome }}</span>
+    {% if p.entrada_do_local %}<span class="badge text-bg-info">Entrada</span>{% endif %}
+    <form method="post" action="{{ url_for('centros.trocar_checklist', cid=local.id, pid=p.id) }}" class="d-flex gap-1 ms-auto m-0">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label class="visually-hidden" for="ck{{ p.id }}">Checklist de {{ p.nome }}</label>
+      <select class="form-select form-select-sm" id="ck{{ p.id }}" name="checklist_id">
+        {% if not p.checklist_id %}<option value="">Sem checklist</option>{% endif %}
+        {% for m in checklists %}<option value="{{ m.id }}" {% if m.id == p.checklist_id %}selected{% endif %}>{{ m.nome }}</option>{% endfor %}
+      </select>
+      <button class="btn btn-sm btn-outline-primary" type="submit">Trocar</button>
+    </form>
+  </div>
+  {% else %}
+  <div class="fc-vazio">Nenhuma área ainda. Escreva abaixo, uma por linha.</div>
+  {% endfor %}
+</div>
+<section class="fc-cartao mb-3" aria-labelledby="tit-novas">
+  <h2 class="h6 fw-bold" id="tit-novas">Novas áreas</h2>
+  <form method="post" action="{{ url_for('centros.criar_areas', cid=local.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label class="form-label small" for="areas">Uma área por linha. Cada uma ganha um QR e o checklist que combina com o nome (banheiro, copa, vestiário, recepção…), que você troca na lista acima.</label>
+    <textarea class="form-control mb-2" id="areas" name="areas" rows="6" placeholder="Banheiro 01&#10;Banheiro 02&#10;Recepção&#10;Copa"></textarea>
+    <button class="btn btn-primary fw-bold" type="submit">Cadastrar as áreas</button>
+  </form>
+</section>
+<div class="d-flex flex-wrap gap-2">
+  {% if areas %}<a class="btn btn-outline-secondary" href="{{ url_for('cadastros.etiquetas', cid=local.id) }}"><i class="bi bi-printer" aria-hidden="true"></i> Imprimir as etiquetas QR</a>{% endif %}
+  {% if areas %}<a class="btn btn-primary" href="{{ url_for('centros.centro', cid=local.id, aba='rotas') }}">Seguir para as rotas <i class="bi bi-arrow-right" aria-hidden="true"></i></a>{% endif %}
+  <a class="btn btn-link" href="{{ url_for('cadastros.local', cid=local.id) }}">Modo avançado (setores, vários QRs por área)</a>
+</div>
+
+{% else %}
+<div class="fc-cartao p-0 mb-3">
+  {% for r in rotas %}
+  <a class="d-flex flex-wrap gap-2 align-items-center border-bottom px-3 py-2 text-reset text-decoration-none" href="{{ url_for('centros.rota', cid=local.id, rid=r.id) }}">
+    <span class="fw-semibold">{{ r.nome }}</span>
+    <span class="small text-muted">{{ r.turno }} · {{ r.hora_inicio.strftime('%H:%M') }} às {{ r.hora_fim.strftime('%H:%M') }}</span>
+    {% if not r.is_active %}<span class="badge text-bg-secondary">Desativada</span>{% endif %}
+    <span class="small ms-auto">{{ r.itens|selectattr('is_active')|list|length }} área(s)</span>
+  </a>
+  {% else %}
+  <div class="fc-vazio">Nenhuma rota ainda. Crie a primeira abaixo.</div>
+  {% endfor %}
+</div>
+{% if not areas %}<div class="alert alert-warning">Cadastre as áreas primeiro: a rota é feita de horários e áreas.</div>{% endif %}
+<section class="fc-cartao" aria-labelledby="tit-rota">
+  <h2 class="h6 fw-bold" id="tit-rota">Nova rota</h2>
+  <form method="post" action="{{ url_for('centros.criar_rota', cid=local.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="row g-2">
+      <div class="col-md-5"><label class="form-label small fw-semibold" for="rnome">Nome da rota</label>
+        <input class="form-control" id="rnome" name="nome" required maxlength="150" placeholder="Ex.: Banheiros — manhã"></div>
+      <div class="col-md-3"><label class="form-label small fw-semibold" for="rturno">Turno</label>
+        <input class="form-control" id="rturno" name="turno" required maxlength="50" value="1º Turno"></div>
+      <div class="col-6 col-md-2"><label class="form-label small fw-semibold" for="rini">Começa</label>
+        <input class="form-control" id="rini" name="hora_inicio" type="time" required value="06:00"></div>
+      <div class="col-6 col-md-2"><label class="form-label small fw-semibold" for="rfim">Termina</label>
+        <input class="form-control" id="rfim" name="hora_fim" type="time" required value="14:00"></div>
+    </div>
+    <fieldset class="mt-2"><legend class="form-label small fw-semibold">Dias</legend>
+      <div class="d-flex flex-wrap gap-2">
+        {% for d, nome in [('1','seg'),('2','ter'),('3','qua'),('4','qui'),('5','sex'),('6','sáb'),('7','dom')] %}
+        <label class="form-check-label"><input class="form-check-input" type="checkbox" name="dias_semana" value="{{ d }}" {% if d in '12345' %}checked{% endif %}> {{ nome }}</label>
+        {% endfor %}
+      </div>
+    </fieldset>
+    <button class="btn btn-primary fw-bold mt-3" type="submit" {% if not areas %}disabled{% endif %}>Criar e digitar os horários</button>
+  </form>
+</section>
+{% endif %}
+{% endblock %}
