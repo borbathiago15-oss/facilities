@@ -21,7 +21,7 @@ Decisões que este arquivo segue (MODELO_ROTAS, R1 a R7; D49, D51 a D53):
 * Sem sinal vale o horário do aparelho, marcado "feito sem sinal" (R4).
 """
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from facilities.extensions import db
 
@@ -83,6 +83,17 @@ MOTIVOS_NAO_FEITO = {
     'faltou_material': 'Faltou material',
     'equipamento': 'Equipamento com problema',
     'sem_acesso': 'Sem acesso (fechado, ocupado)',
+    'outro': 'Outro',
+}
+
+# Troca de área (decisões do dono, 27/10/2026): o técnico vai a outra área
+# antes da ordem da rota — adianta uma área da rota (a tarefa fica concluída)
+# ou limpa uma área fora da rota (atividade extra). O app pergunta o motivo.
+# 'outro' exige texto.
+MOTIVOS_TROCA = {
+    'pedido_gestao': 'Pedido da gestão',
+    'pedido_cliente': 'Pedido do cliente',
+    'area_mais_suja': 'Área mais suja, precisa adiantar',
     'outro': 'Outro',
 }
 
@@ -387,8 +398,19 @@ class Execucao(db.Model):
     # Levou mais que o previsto: o motivo (MOTIVOS_ATRASO) e o texto de 'outro'.
     motivo_atraso = db.Column(db.String(40))
     motivo_atraso_texto = db.Column(db.String(300))
+    # Troca de área (27/10/2026): por que a pessoa foi a esta área fora da
+    # ordem da rota (MOTIVOS_TROCA) — tarefa adiantada ou atividade extra.
+    motivo_troca = db.Column(db.String(30))
+    motivo_troca_texto = db.Column(db.String(300))
 
     tarefa = db.relationship('TarefaDia', backref='execucoes')
+
+    @property
+    def adiantada(self):
+        """Tarefa da rota feita antes da janela do horário (com motivo)."""
+        t = self.tarefa
+        return bool(t is not None and self.motivo_troca and
+                    self.lido_em < t.previsto_para - timedelta(minutes=t.tolerancia_min))
 
     @property
     def duracao_min(self):

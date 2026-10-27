@@ -30,7 +30,8 @@ from facilities.rotas.models import (MOTIVOS_NAO_REALIZADA, SITUACOES, TIPOS_DE_
                                      Rota, RotaEscala, RotaItem, TarefaDia)
 from facilities.rotas.servico import RegraDaRota
 from facilities.rotas import chegadas, ocorrencias, presenca
-from facilities.rotas.models import (MOTIVOS_ATRASO, MOTIVOS_NAO_FEITO, SITUACOES_OCORRENCIA,
+from facilities.rotas.models import (MOTIVOS_ATRASO, MOTIVOS_NAO_FEITO, MOTIVOS_TROCA,
+                                     SITUACOES_OCORRENCIA,
                                      TIPOS_OCORRENCIA_PUBLICA, ElogioPublico,
                                      OcorrenciaPublica)
 
@@ -728,7 +729,7 @@ def dia(cid):
                            motivos=MOTIVOS_NAO_REALIZADA, extras=extras,
                            aderencia={'no_prazo': no_prazo, 'base': base, 'pct': pct},
                            ocorrencias=ocors, tipos_ocorrencia=TIPOS_OCORRENCIA_PUBLICA,
-                           elogios=elogios,
+                           elogios=elogios, motivos_troca=MOTIVOS_TROCA,
                            situacoes_ocorrencia=SITUACOES_OCORRENCIA,
                            atrasada=ocorrencias.atrasada,
                            presencas=presenca.da_rota_no_dia(loc.id, d),
@@ -782,7 +783,8 @@ def execucao(eid):
                            itens=servico.itens_da_versao(ex.versao),
                            respostas=servico.respostas_vigentes(ex),
                            originais=json.loads(ex.respostas_json or '{}'),
-                           pode_corrigir=current_user.e_gestao())
+                           pode_corrigir=current_user.e_gestao(),
+                           motivos_troca=MOTIVOS_TROCA)
 
 
 @bp.post('/rotas/execucoes/<int:eid>/corrigir')
@@ -888,6 +890,19 @@ def _dados_do_turno(locais):
     for m in modelos:
         if m.versao_atual:
             versoes[m.versao_atual.id] = m.versao_atual
+    # O escopo de cada área (27/10/2026): os checklists das rotas que passam
+    # pelo ponto. Na área fora da rota, é o que abre (em vez da lista inteira
+    # dos checklists do local).
+    vigente = {m.id: m.versao_atual.id for m in modelos if m.versao_atual}
+    escopo = {}
+    for pid, mid in (db.session.query(RotaItem.ponto_id, RotaItem.modelo_id)
+                     .join(Rota, Rota.id == RotaItem.rota_id)
+                     .filter(Rota.client_id.in_(ids or [-1]), Rota.is_active.is_(True),
+                             RotaItem.is_active.is_(True))
+                     .order_by(RotaItem.rota_id, RotaItem.ordem)):
+        vid = vigente.get(mid)
+        if vid and vid not in escopo.setdefault(pid, []):
+            escopo[pid].append(vid)
 
     # Fase 5: as ordens preventivas em aberto que a pessoa pode atender.
     from facilities.chamados.models import ORIGEM_PREVENTIVA, STATUS_EM_ABERTO, Chamado
@@ -945,7 +960,8 @@ def _dados_do_turno(locais):
         'pontos': {codigo: {'id': p.id, 'nome': p.nome, 'ambiente': p.ambiente.nome,
                             'descricao': p.descricao or '', 'local': p.ambiente.setor.local.name,
                             'local_id': p.client_id, 'entrada': bool(p.entrada_do_local),
-                            'extras': extras_do_local.get(p.client_id, [])}
+                            'extras': extras_do_local.get(p.client_id, []),
+                            'escopo': escopo.get(p.id, [])}
                    for codigo, p in pontos.items()},
         'preventivas': preventivas,
         'motivos': MOTIVOS_NAO_REALIZADA,
@@ -955,6 +971,8 @@ def _dados_do_turno(locais):
         # seguem a ordem do vocabulário (o "Outro" por último).
         'motivos_atraso_ordem': list(MOTIVOS_ATRASO),
         'motivos_nao_feito_ordem': list(MOTIVOS_NAO_FEITO),
+        'motivos_troca': MOTIVOS_TROCA,
+        'motivos_troca_ordem': list(MOTIVOS_TROCA),
         'tolerancia_atraso_min': servico.TOLERANCIA_ATRASO_MIN,
         # Etapa 2: um cartão por local da carteira — o QR da entrada (quando o
         # local tem) e a chegada de hoje (hora), para o app abrir o turno certo.

@@ -33,7 +33,7 @@ from facilities.core.models import User
 from facilities.cadastros.models import PontoInspecao
 from facilities.rotas.models import (
     CONCLUIDA_COM_ATRASO, CONCLUIDA_NO_PRAZO, ENCERRADAS, MOTIVOS_ATRASO, MOTIVOS_NAO_FEITO,
-    MOTIVOS_NAO_REALIZADA, NAO_REALIZADA, PERDIDA, PREVISTA, RESPOSTA_NAO_FEITO, TIPOS_DE_ITEM,
+    MOTIVOS_NAO_REALIZADA, MOTIVOS_TROCA, NAO_REALIZADA, PERDIDA, PREVISTA, RESPOSTA_NAO_FEITO, TIPOS_DE_ITEM,
     TOLERANCIA_ATRASO_MIN, AgendadorExecucao, ChecklistModelo, ChecklistVersao, Execucao,
     ExecucaoCorrecao, ExecucaoFoto, NaoConformidade, Rota, RotaEscala, RotaItem, TarefaDia)
 
@@ -1241,6 +1241,21 @@ def _motivo_do_atraso(dados, previsto, duracao):
     return motivo, texto if motivo else None
 
 
+def _motivo_da_troca(dados):
+    """→ (motivo, texto) da troca de área, ou (None, None) sem troca."""
+    motivo = str(dados.get('motivo_troca') or '').strip() or None
+    texto = str(dados.get('motivo_troca_texto') or '').strip()[:300] or None
+    if motivo is None:
+        return None, None
+    if motivo not in MOTIVOS_TROCA:
+        raise RegraDaRota('Escolha na lista por que você foi a esta área agora.',
+                          codigo_app='motivo_troca')
+    if motivo == 'outro' and not texto:
+        raise RegraDaRota('Conte em poucas palavras por que você foi a esta área agora.',
+                          codigo_app='motivo_troca')
+    return motivo, texto
+
+
 def ler_imagem(arquivo):
     """Lê e confere a foto (extensão E assinatura, tamanho) → (dados, ext, mime).
 
@@ -1387,13 +1402,17 @@ def registrar_execucao(user, dados, fotos, agora_utc=None):
     duracao = max(0, int((concluida - lido).total_seconds() // 60))
     previsto = tarefa.item.tempo_previsto_min if tarefa is not None and tarefa.item else None
     motivo_atraso, motivo_atraso_texto = _motivo_do_atraso(dados, previsto, duracao)
+    motivo_troca, motivo_troca_texto = _motivo_da_troca(dados)
     virou_extra = None
     if tarefa is not None:
         tol = timedelta(minutes=tarefa.tolerancia_min)
-        if lido < tarefa.previsto_para - tol:
+        # Adiantar uma área da rota (27/10/2026): antes da janela do horário,
+        # só com o motivo da troca; a tarefa fica concluída (no prazo).
+        if lido < tarefa.previsto_para - tol and motivo_troca is None:
             raise RegraDaRota(
-                'Ainda não chegou o horário desta tarefa. Ela pode ser feita a partir das '
-                f'{tempo.fmt(tarefa.previsto_para - tol, "%H:%M")}.', 409)
+                'Ainda não chegou o horário desta tarefa (a partir das '
+                f'{tempo.fmt(tarefa.previsto_para - tol, "%H:%M")}). Para adiantar, diga o '
+                'motivo.', 422, codigo_app='motivo_troca')
         # O trabalho FOI feito: se a tarefa já tinha dono ou o turno acabou
         # (comum quando o envio ficou guardado sem sinal), vira atividade extra
         # em vez de ser recusado — antes a fila só oferecia "descartar".
@@ -1429,7 +1448,9 @@ def registrar_execucao(user, dados, fotos, agora_utc=None):
                                if virou_extra else '')
                               + (dados.get('observacao') or '').strip())[:2000] or None,
                   envio_id=envio, n_nao_conformes=len(ncs),
-                  motivo_atraso=motivo_atraso, motivo_atraso_texto=motivo_atraso_texto)
+                  motivo_atraso=motivo_atraso, motivo_atraso_texto=motivo_atraso_texto,
+                  motivo_troca=motivo_troca if chamado is None else None,
+                  motivo_troca_texto=motivo_troca_texto if chamado is None else None)
     ex.virou_extra = virou_extra
     db.session.add(ex)
     try:

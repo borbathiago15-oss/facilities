@@ -24,6 +24,7 @@
     <span class="small ms-auto">
       {% if t.execucoes %}{% set ex = t.execucoes[0] %}
         <a href="{{ url_for('rotas.execucao', eid=ex.id) }}">{{ ex.pessoa.name }} · {{ ex.iniciada_em|hora_local('%H:%M') }}–{{ ex.concluida_em|hora_local('%H:%M') }}{% if ex.sem_sinal %} · hora do celular{% endif %}{% if ex.n_nao_conformes %} · {{ ex.n_nao_conformes }} não conforme(s){% endif %}</a>
+        {% if ex.adiantada %}<span class="badge text-bg-info">Adiantada</span> <span class="text-muted">{{ motivos_troca.get(ex.motivo_troca, ex.motivo_troca) }}{% if ex.motivo_troca_texto %}: {{ ex.motivo_troca_texto }}{% endif %}</span>{% endif %}
       {% elif t.status == 'nao_realizada' %}
         {{ motivos.get(t.motivo, t.motivo) }}{% if t.motivo_texto %}: {{ t.motivo_texto }}{% endif %}{% if t.chamado_id %} · <a href="{{ url_for('chamados.ver', chamado_id=t.chamado_id) }}">chamado</a>{% endif %}
       {% else %}
@@ -92,11 +93,11 @@
 {% endif %}
 
 {% if extras %}
-<h2 class="h6 fw-bold mt-3">Atividades extras</h2>
+<h2 class="h6 fw-bold mt-3">Atividades fora da rota</h2>
 <div class="fc-cartao p-0">
   {% for ex in extras %}
   <a class="d-flex flex-wrap gap-2 border-bottom px-3 py-2 text-reset" href="{{ url_for('rotas.execucao', eid=ex.id) }}">
-    <span class="fw-bold">{{ ex.concluida_em|hora_local('%H:%M') }}</span><span>{{ ex.ponto.nome }}</span><span class="small text-muted">{{ ex.versao.modelo.nome }} · {{ ex.pessoa.name }}</span>
+    <span class="fw-bold">{{ ex.concluida_em|hora_local('%H:%M') }}</span><span>{{ ex.ponto.nome }}</span><span class="small text-muted">{{ ex.versao.modelo.nome }} · {{ ex.pessoa.name }}</span>{% if ex.motivo_troca %}<span class="small">Fora da rota · {{ motivos_troca.get(ex.motivo_troca, ex.motivo_troca) }}{% if ex.motivo_troca_texto %}: {{ ex.motivo_troca_texto }}{% endif %}</span>{% endif %}
   </a>
   {% endfor %}
 </div>

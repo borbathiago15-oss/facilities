@@ -33,6 +33,11 @@
   var leitura = null;   // {ponto, selo, lido_em, pronta (Promise)}
   var CHAVE_LOCAL = 'trino-turno-feitas-' + dados.usuario;
   var CHAVE_CHEGADA = 'trino-turno-chegada-' + dados.usuario;
+  // Troca de área (27/10/2026): o motivo escolhido antes de ir ler o QR da
+  // outra área sobrevive à ida e volta do leitor (sessionStorage), por 30 min.
+  var CHAVE_TROCA = 'trino-turno-troca-' + dados.usuario;
+  var VALIDADE_TROCA_MS = 30 * 60000;
+  var verColegas = false;
   var materiaisPorLocal = {};
 
   // ── Ajudantes ─────────────────────────────────────────────────────────
@@ -90,6 +95,16 @@
     gravarJson(CHAVE_LOCAL, f);
   }
   function irParaLerQr() { location.assign(URL_LER_QR); }
+  function lerTroca() {
+    try {
+      var t = JSON.parse(sessionStorage.getItem(CHAVE_TROCA) || 'null');
+      return t && Date.now() - t.em < VALIDADE_TROCA_MS ? t : null;
+    } catch (e) { return null; }
+  }
+  function guardarTroca(t) {
+    try { sessionStorage.setItem(CHAVE_TROCA, JSON.stringify(t)); } catch (e) {}
+  }
+  function limparTroca() { try { sessionStorage.removeItem(CHAVE_TROCA); } catch (e) {} }
   function botaoLerQr(classe) {
     return el('a', {classe: classe || 'btn btn-primary btn-lg w-100 fc-app-acao', href: URL_LER_QR},
       [el('i', {classe: 'bi bi-qr-code-scan'}), ' Ler o QR']);
@@ -146,6 +161,15 @@
   }
   // A próxima da rota depois de ``feita``: a atrasada ou a da hora primeiro,
   // senão a primeira que ainda vai chegar.
+  // Só as minhas tarefas (27/10/2026); as dos colegas, num toque. Sem
+  // nenhuma minha no local (o supervisor), todas.
+  function tarefasVisiveis(localId) {
+    var doLocal = tarefasDoLocal(localId);
+    var minhas = doLocal.filter(function (t) { return t.minha; });
+    return {lista: minhas.length && !verColegas ? minhas : doLocal, minhas: minhas.length,
+            todas: doLocal.length};
+  }
+
   function proximaTarefa(localId, feita) {
     var abertas = tarefasDoLocal(localId).filter(function (t) {
       return emAberto(t) && (!feita || t.id !== feita.id);
@@ -229,8 +253,20 @@
     if (mensagem) sec.appendChild(el('div', {classe: 'alert alert-success', role: 'status', texto: mensagem}));
     sec.appendChild(el('h1', {classe: 'fc-titulo', texto: ch ? 'Você está no ' + l.nome : l.nome}));
     sec.appendChild(el('p', {classe: 'fc-sub', texto: (ch ? 'Chegou às ' + ch.hora + (ch.guardada ? ' (chegada guardada no aparelho)' : '') + ' · ' : '') + 'Tarefas de hoje'}));
-    sec.appendChild(botaoLerQr('btn btn-primary btn-lg w-100 fc-app-acao mb-3'));
-    var tarefas = tarefasDoLocal(l.id);
+    sec.appendChild(botaoLerQr('btn btn-primary btn-lg w-100 fc-app-acao mb-2'));
+    // Ir a outra área antes da ordem da rota: pergunta o motivo e manda ler
+    // o QR da área (adiantar uma da rota ou limpar uma fora da rota).
+    sec.appendChild(el('button', {type: 'button', classe: 'btn btn-outline-primary w-100 fc-app-acao mb-3',
+      'data-trocar-area': '1', onclick: function () {
+        folhaTroca('Ir para outra área', function (troca) {
+          if (!troca) return;
+          troca.em = Date.now();
+          guardarTroca(troca);
+          irParaLerQr();
+        });
+      }}, [el('i', {classe: 'bi bi-arrow-left-right'}), ' Ir para outra área']));
+    var visiveis = tarefasVisiveis(l.id);
+    var tarefas = visiveis.lista;
     var proxima = proximaTarefa(l.id, null);
     var avisos = (dados.ocorrencias || []).filter(function (o) { return (dados.pontos[o.ponto] || {}).local_id === l.id; });
     if (avisos.length) sec.appendChild(cartaoChecarAvisos(avisos));
@@ -245,6 +281,13 @@
       var cartao = el('div', {classe: 'fc-cartao', id: 'turno-itens'});
       tarefas.forEach(function (t, i) { cartao.appendChild(cartaoTarefa(t, i + 1, t === proxima)); });
       sec.appendChild(cartao);
+      if (visiveis.minhas && visiveis.minhas < visiveis.todas) {
+        sec.appendChild(el('button', {type: 'button', classe: 'btn btn-link w-100 mt-1', onclick: function () {
+          verColegas = !verColegas;
+          mostrarTurno(l.id);
+        }}, [verColegas ? 'Ver só as minhas tarefas' :
+                          'Ver também as dos colegas (' + (visiveis.todas - visiveis.minhas) + ')']));
+      }
       sec.appendChild(el('p', {classe: 'small text-muted mt-2',
         texto: 'Para fazer uma tarefa, leia o QR do ponto: o checklist abre na hora.'}));
     }
@@ -275,7 +318,7 @@
         var cartao = document.getElementById('turno-itens');
         if (!cartao || secLista.hidden) return;
         limpar(cartao);
-        var tarefas = tarefasDoLocal(localId);
+        var tarefas = tarefasVisiveis(localId).lista;
         var proxima = proximaTarefa(localId, null);
         tarefas.forEach(function (t, i) { cartao.appendChild(cartaoTarefa(t, i + 1, t === proxima)); });
       })
@@ -333,7 +376,16 @@
     // direto no checklist. A de outra pessoa fica na tela do ponto.
     var agora = dados.tarefas.filter(function (t) { return t.ponto === codigo && podeFazer(t) && (t.minha || !t.escalado); })
       .sort(function (a, b) { return Date.parse(a.previsto) - Date.parse(b.previsto); })[0];
-    if (agora) { abrirExecucao(agora, dados.versoes[agora.versao]); return; }
+    var troca = lerTroca();
+    if (agora) { limparTroca(); abrirExecucao(agora, dados.versoes[agora.versao]); return; }
+    if (troca) {
+      // Veio de "Ir para outra área": a próxima tarefa desta área na rota é
+      // adiantada; sem tarefa aqui, é a área fora da rota, com o escopo dela.
+      var futura = tarefaParaAdiantar(codigo);
+      if (futura) { abrirExecucao(futura, dados.versoes[futura.versao], null, troca); return; }
+      var escopo = (p.escopo || []).map(function (vid) { return dados.versoes[vid]; }).filter(Boolean);
+      if (escopo.length === 1) { abrirExecucao(null, escopo[0], null, troca); return; }
+    }
     telaPonto(codigo);
   }
 
@@ -383,6 +435,15 @@
 
   // O ponto sem tarefa para fazer agora: o que há ali hoje (horários,
   // preventivas, avisos do público, atividade extra).
+  // A próxima tarefa ainda fora da janela do horário neste ponto (desta
+  // pessoa ou sem dono): a que "adiantar" conclui.
+  function tarefaParaAdiantar(codigo) {
+    return dados.tarefas.filter(function (t) {
+      return t.ponto === codigo && situacao(t).cod === 'prevista' && !feitasNoAparelho()[t.id] &&
+             (t.minha || !t.escalado);
+    }).sort(function (a, b) { return Date.parse(a.previsto) - Date.parse(b.previsto); })[0] || null;
+  }
+
   function telaPonto(codigo) {
     var p = dados.pontos[codigo];
     var sec = mostrarSo(secPonto);
@@ -410,6 +471,14 @@
         if (podeFazer(t)) {
           barra.appendChild(el('button', {type: 'button', classe: 'btn btn-primary fc-app-acao flex-grow-1',
             onclick: function () { abrirExecucao(t, dados.versoes[t.versao]); }}, ['Fazer agora']));
+        } else if (s === 'prevista' && (t.minha || !t.escalado)) {
+          // Adiantar (27/10/2026): pergunta o motivo e abre o checklist.
+          barra.appendChild(el('button', {type: 'button', classe: 'btn btn-outline-primary fc-app-acao flex-grow-1',
+            'data-adiantar': t.id, onclick: function () {
+              folhaTroca('Adiantar: ' + t.ambiente + ' das ' + t.hora, function (troca) {
+                if (troca) abrirExecucao(t, dados.versoes[t.versao], null, troca);
+              });
+            }}, ['Adiantar esta área']));
         } else {
           var desde = new Date(Date.parse(t.previsto) - t.tolerancia * 60000).toISOString();
           barra.appendChild(el('span', {classe: 'small text-muted align-self-center flex-grow-1',
@@ -422,6 +491,20 @@
       cartao.appendChild(linha);
     });
     sec.appendChild(cartao);
+    // Área fora da rota (27/10/2026): o escopo da área (o checklist das
+    // rotas que passam por ela) abre direto, com o motivo da troca.
+    var escopo = (p.escopo || []).map(function (vid) { return dados.versoes[vid]; }).filter(Boolean);
+    escopo.forEach(function (v) {
+      sec.appendChild(el('button', {type: 'button', classe: 'btn btn-outline-primary w-100 fc-app-acao mb-2',
+        'data-fora-da-rota': v.id, onclick: function () {
+          var pendente = lerTroca();
+          if (pendente) { abrirExecucao(null, v, null, pendente); return; }
+          folhaTroca('Limpar fora da rota: ' + p.nome, function (troca) {
+            if (troca) abrirExecucao(null, v, null, troca);
+          });
+        }}, [el('i', {classe: 'bi bi-plus-circle'}), ' Limpar esta área fora da rota' +
+              (escopo.length > 1 ? ' (' + v.modelo + ')' : '')]));
+    });
     var extras = (p.extras || []).map(function (vid) { return dados.versoes[vid]; }).filter(Boolean);
     if (extras.length) {
       var sel = el('select', {classe: 'form-select form-select-lg', id: 'extra-modelo', 'aria-label': 'Checklist'},
@@ -432,7 +515,7 @@
           texto: 'Para registrar uma limpeza ou vistoria fora do horário da rota.'}),
         sel,
         el('button', {type: 'button', classe: 'btn btn-outline-primary fc-app-acao w-100 mt-2',
-          onclick: function () { abrirExecucao(null, dados.versoes[sel.value]); }},
+          onclick: function () { abrirExecucao(null, dados.versoes[sel.value], null, lerTroca()); }},
           ['Fazer atividade extra'])]));
     }
     sec.appendChild(el('button', {type: 'button', classe: 'btn btn-outline-secondary w-100 fc-app-acao',
@@ -538,7 +621,7 @@
   }
   function ehDeMarcar(it) { return it.tipo === 'sim_nao' || it.tipo === 'conforme'; }
 
-  function abrirExecucao(tarefa, versao, prev) {
+  function abrirExecucao(tarefa, versao, prev, troca) {
     if (!versao) { dizer('Checklist não encontrado. Recarregue com sinal.', 'warning'); return; }
     var codigo = tarefa ? tarefa.ponto : (leitura && leitura.ponto);
     if (!leitura || leitura.ponto !== codigo) lerNoServidor(codigo);
@@ -546,12 +629,14 @@
     var p = dados.pontos[codigo] || {nome: tarefa ? tarefa.ponto_nome : '', local_id: tarefa ? tarefa.local_id : null};
     var sec = mostrarSo(secExec);
     dizer('');
-    var estado = {respostas: {}, motivos: {}, fotos: {}, motivo_atraso: null, motivo_atraso_texto: null};
+    var estado = {respostas: {}, motivos: {}, fotos: {}, motivo_atraso: null, motivo_atraso_texto: null,
+                  troca: prev ? null : (troca || null)};
     var linhas = {};
 
     sec.appendChild(el('h1', {classe: 'fc-titulo', texto: p.nome}));
     sec.appendChild(el('p', {classe: 'fc-sub fc-exec-sub', texto:
-      versao.modelo + (tarefa ? ' das ' + tarefa.hora : prev ? ' · preventiva ' + prev.numero : ' · atividade extra') +
+      versao.modelo + (tarefa ? ' das ' + tarefa.hora : prev ? ' · preventiva ' + prev.numero : ' · fora da rota') +
+      (estado.troca ? ' · ' + (tarefa ? 'adiantada' : 'motivo') + ': ' + estado.troca.rotulo : '') +
       (tarefa && tarefa.tempo_previsto_min ? ' · Previsto: ' + tarefa.tempo_previsto_min + ' min' : '')}));
     if (leitura && !leitura.comCamera && !leitura.selo) {
       sec.appendChild(el('p', {classe: 'small text-muted fc-exec-sem-selo',
@@ -802,6 +887,48 @@
 
   // "Não deu" de um item: a folha com os motivos. "Faltou material" abre o
   // catálogo do local; "Outro" pede o texto.
+  // ── Folha: por que foi a outra área (27/10/2026) ──────────────────────
+  // devolver({motivo, texto, rotulo}) ou devolver(null) ao cancelar.
+  function folhaTroca(tituloTexto, devolver) {
+    var folha = el('div', {classe: 'fc-folha', role: 'dialog', 'aria-modal': 'true', 'aria-label': tituloTexto});
+    var caixa = el('div', {classe: 'fc-folha-caixa'});
+    folha.appendChild(caixa);
+    function fechar(r) { folha.remove(); document.body.classList.remove('fc-folha-aberta'); devolver(r || null); }
+    function inicio() {
+      limpar(caixa);
+      caixa.appendChild(el('h2', {classe: 'h5 fw-bold', texto: tituloTexto}));
+      caixa.appendChild(el('p', {classe: 'small text-muted', texto: 'Por que você vai a outra área agora?'}));
+      (dados.motivos_troca_ordem || Object.keys(dados.motivos_troca || {})).forEach(function (k) {
+        var b = el('button', {type: 'button', classe: 'btn btn-outline-dark btn-lg w-100 fc-app-acao mb-2 fc-motivo',
+                              'data-motivo-troca': k, texto: dados.motivos_troca[k]});
+        b.addEventListener('click', function () {
+          if (k === 'outro') { outro(); return; }
+          fechar({motivo: k, rotulo: dados.motivos_troca[k]});
+        });
+        caixa.appendChild(b);
+      });
+      caixa.appendChild(el('button', {type: 'button', classe: 'btn btn-link w-100', onclick: function () { fechar(null); }}, ['Cancelar']));
+    }
+    function outro() {
+      limpar(caixa);
+      caixa.appendChild(el('h2', {classe: 'h5 fw-bold', texto: tituloTexto}));
+      var campo = el('input', {classe: 'form-control form-control-lg mb-2', maxlength: '300',
+                               'aria-label': 'Por que vai a outra área', placeholder: 'Conte em poucas palavras'});
+      var erro = el('p', {classe: 'small text-danger', hidden: true, texto: 'Escreva o motivo.'});
+      caixa.appendChild(campo);
+      caixa.appendChild(erro);
+      caixa.appendChild(el('button', {type: 'button', classe: 'btn btn-primary btn-lg w-100 fc-app-acao mb-2', onclick: function () {
+        if (!campo.value.trim()) { erro.hidden = false; return; }
+        fechar({motivo: 'outro', texto: campo.value.trim(), rotulo: campo.value.trim()});
+      }}, ['Confirmar']));
+      caixa.appendChild(el('button', {type: 'button', classe: 'btn btn-link w-100', onclick: inicio}, ['Voltar']));
+      campo.focus();
+    }
+    inicio();
+    document.body.appendChild(folha);
+    document.body.classList.add('fc-folha-aberta');
+  }
+
   function folhaNaoDeu(it, p, devolver) {
     var folha = el('div', {classe: 'fc-folha', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Não deu: ' + it.texto});
     var caixa = el('div', {classe: 'fc-folha-caixa'});
@@ -915,6 +1042,10 @@
     };
     if (tarefa) corpo.tarefa_id = tarefa.id; else corpo.versao_id = versao.id;
     if (prev) corpo.chamado_id = prev.id;
+    if (estado.troca) {
+      corpo.motivo_troca = estado.troca.motivo;
+      corpo.motivo_troca_texto = estado.troca.texto || null;
+    }
     var fotos = Object.keys(estado.fotos).filter(function (k) { return estado.fotos[k]; })
       .map(function (k) { return {campo: k, arquivo: estado.fotos[k]}; });
     var reduzir = window.TrinoFoto ? window.TrinoFoto.reduzirTodos : function (fs) { return Promise.resolve(fs); };
@@ -960,6 +1091,7 @@
                                 tarefa_id: tarefa ? tarefa.id : null,
                                 corpo: corpo, fotos: fotos}).then(function () {
         if (tarefa) marcarFeita(tarefa.id, 'Guardada no aparelho');
+        if (corpo.motivo_troca) limparTroca();
         tirarPreventiva();
         telaDepois(tarefa, p, null, true);
       }, function () {
@@ -978,6 +1110,15 @@
         }, function () { botao.disabled = false; secExec.hidden = false; secPonto.hidden = true; });
         return;
       }
+      if (x.motivo === 'motivo_troca') {
+        folhaTroca(x.error || 'Por que você foi a esta área agora?', function (troca) {
+          if (!troca) { botao.disabled = false; return; }
+          corpo.motivo_troca = troca.motivo;
+          corpo.motivo_troca_texto = troca.texto || null;
+          mandar(corpo, fotos).then(function (r2) { concluir(r2, tarefa, codigo, corpo, fotos, botao, prev); });
+        });
+        return;
+      }
       if (x.motivo === 'sem_chegada') {
         telaConfirmeChegada(localDe(p.local_id) || {nome: p.local || ''});
         return;
@@ -987,6 +1128,7 @@
       return;
     }
     if (tarefa) { tarefa.status = res.x.status; }
+    if (corpo.motivo_troca) limparTroca();
     tirarPreventiva();
     telaDepois(tarefa, p, res.x, false);
   }
