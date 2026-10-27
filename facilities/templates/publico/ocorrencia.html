@@ -1,5 +1,5 @@
 {% extends 'publico/_base.html' %}
-{% block title %}Avisar um problema{% endblock %}
+{% block title %}Avisar ou elogiar{% endblock %}
 {% block content %}
 {% if not ponto.is_active %}
 <h1 class="h4 fw-bold">Este QR não está mais em uso</h1>
@@ -16,6 +16,13 @@
     <p class="text-muted">{{ ponto.ambiente.nome }}</p>
     <button class="btn btn-primary btn-lg w-100 fw-bold fc-app-acao mb-2" type="button" data-proximo>Sim</button>
     <button class="btn btn-outline-secondary btn-lg w-100 fc-app-acao" type="button" data-voltar-pagina>Não, voltar</button>
+  </section>
+
+  <section class="fc-qr-passo" data-passo="escolha">
+    <h2 class="h5 fw-bold">O que você quer fazer?</h2>
+    <p class="text-muted small">Leva menos de um minuto. Não pedimos seu nome nem seu contato.</p>
+    <button class="btn btn-primary btn-lg w-100 fw-bold fc-app-acao mb-2" type="button" data-proximo><i class="bi bi-exclamation-triangle" aria-hidden="true"></i> Avisar um problema</button>
+    <a class="btn btn-outline-primary btn-lg w-100 fw-bold fc-app-acao" href="{{ url_for('publico.elogio', codigo=ponto.codigo_qr) }}"><i class="bi bi-star" aria-hidden="true"></i> Fazer um elogio</a>
   </section>
 
   <section class="fc-qr-passo" data-passo="problema">

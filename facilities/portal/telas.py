@@ -207,10 +207,28 @@ def relatorio_arquivo(cid, mes, formato):
     return arquivo(loc, primeiro, formato, so_liberado=True)
 
 
+def _avisos_do_qr(client_ids):
+    """A aba "Avisos pelo QR" (decisão do dono, 27/10/2026): o que o público
+    reclamou pelo QR, com a situação. Não é cobrança: não tem prazo do
+    cliente e quem encerra é a equipe."""
+    from facilities.rotas import ocorrencias
+    from facilities.rotas.models import SITUACOES_OCORRENCIA
+    situacao = request.args.get('situacao') or ''
+    if situacao not in SITUACOES_OCORRENCIA:
+        situacao = ''
+    return {'avisos': ocorrencias.do_periodo(client_ids, situacao or None),
+            'situacao': situacao, 'situacoes': SITUACOES_OCORRENCIA,
+            'atrasada': ocorrencias.atrasada}
+
+
 @bp.get('/cobrancas')
 @login_required
 def cobrancas():
     _so_cliente()
+    locais = servico.locais_do_cliente(current_user)
+    if request.args.get('aba') == 'qr':
+        return render_template('portal/avisos_qr.html', locais=locais,
+                               **_avisos_do_qr([c.id for c in locais]))
     return render_template('portal/cobrancas.html',
                            cobrancas=servico.cobrancas_do_cliente(current_user),
                            locais=servico.locais_do_cliente(current_user),
@@ -283,6 +301,10 @@ def _ve_cobrancas():
 def lista():
     _ve_cobrancas()
     ids = allowed_client_ids_or_none()
+    if request.args.get('aba') == 'qr':
+        from facilities.core.acesso import clientes_visiveis
+        locais = ids if ids is not None else [c.id for c in clientes_visiveis()]
+        return render_template('portal/interno_avisos_qr.html', **_avisos_do_qr(locais))
     q = Cobranca.query
     if ids is not None:
         q = q.filter(Cobranca.client_id.in_(ids or [-1]))

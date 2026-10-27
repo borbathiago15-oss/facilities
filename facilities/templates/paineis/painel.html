@@ -3,7 +3,7 @@
 {% macro tabela(linhas) %}
 <div class="fc-mes-rolar">
 <table class="table table-sm mb-0 align-middle">
-  <thead><tr><th scope="col">Local</th><th scope="col" class="text-center">Nota</th>{% for k, v in indicadores.items() %}<th scope="col" class="text-center small">{{ v }}</th>{% endfor %}<th scope="col" class="text-center small">Atrasado agora</th></tr></thead>
+  <thead><tr><th scope="col">Local</th><th scope="col" class="text-center">Nota</th>{% for k, v in indicadores.items() %}<th scope="col" class="text-center small">{{ v }}</th>{% endfor %}<th scope="col" class="text-center small">Elogios do público</th><th scope="col" class="text-center small">Atrasado agora</th></tr></thead>
   <tbody>{% for x in linhas %}
 <tr>
   <th scope="row" class="small">{{ x.local.name }}</th>
@@ -11,6 +11,7 @@
   {% for k in indicadores %}{% set i = x.indicadores[k] %}
   <td class="text-center small">{% if i.pct is not none %}{{ '%.1f'|format(i.pct)|replace('.', ',') }}%<br><span class="text-muted">{{ i.bom }} de {{ i.base }}</span>{% else %}<span class="text-muted">—</span>{% endif %}</td>
   {% endfor %}
+  <td class="text-center small">{% set e = elogios.get(x.local.id) %}{% if e %}<span class="fc-nota-estrelas"><i class="bi bi-star-fill" aria-hidden="true"></i> {{ ('%.1f'|format(e[0]))|replace('.', ',') }}</span><br><span class="text-muted">{{ e[1] }} avaliação(ões)</span>{% else %}<span class="text-muted">—</span>{% endif %}</td>
   <td class="text-center">{% if atrasadas.get(x.local.id) %}<a class="badge fc-dem fc-dem-atrasada text-decoration-none" href="{{ url_for('demandas.painel', local=x.local.id, situacao='atrasada') }}">{{ atrasadas[x.local.id] }}</a>{% else %}<span class="small text-muted">0</span>{% endif %}</td>
 </tr>
   {% endfor %}</tbody>
@@ -42,5 +43,5 @@
 {% else %}
 <section class="fc-cartao p-0">{{ tabela(linhas) }}</section>
 {% endif %}
-<p class="small text-muted mt-2">O período vai de {{ de.strftime('%d/%m/%Y') }} a {{ ate.strftime('%d/%m/%Y') }}. Os mesmos números saem pela integração com o Trino Intelligence.</p>
+<p class="small text-muted mt-2">O período vai de {{ de.strftime('%d/%m/%Y') }} a {{ ate.strftime('%d/%m/%Y') }}. Os mesmos números saem pela integração com o Trino Intelligence. Os elogios do público (1 a 5 estrelas, pelo QR dos pontos) não entram na nota.</p>
 {% endblock %}

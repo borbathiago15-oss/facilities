@@ -23,6 +23,7 @@ from facilities.relatorios.models import RelatorioCliente
 FOTOS_MAX = 12
 FOTOS_NA_AMOSTRA = 9
 CHAMADOS_NA_LISTA = 60
+ELOGIOS_NA_LISTA = 8
 MESES = ('janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto',
          'setembro', 'outubro', 'novembro', 'dezembro')
 
@@ -159,6 +160,21 @@ def _ocorrencias(local_id, de, ate):
             'tempo_medio_min': (round(sum(tempos) / len(tempos) / 60) if tempos else None)}
 
 
+def _elogios(local_id, de, ate):
+    """Os elogios do público no mês: média de estrelas, quantos, e os
+    comentários mais recentes (sem nome de ninguém)."""
+    from facilities.rotas.models import ElogioPublico
+    lista = (ElogioPublico.query.filter(
+        ElogioPublico.client_id == local_id, ElogioPublico.criado_em >= _utc(de),
+        ElogioPublico.criado_em < _utc(ate + timedelta(days=1)))
+        .order_by(ElogioPublico.criado_em.desc()).all())
+    return {'total': len(lista),
+            'media': round(sum(e.nota for e in lista) / len(lista), 1) if lista else None,
+            'comentarios': [{'quando': e.criado_em, 'nota': e.nota, 'texto': e.texto,
+                             'onde': f'{e.ponto.ambiente.nome} · {e.ponto.nome}'}
+                            for e in lista if e.texto][:ELOGIOS_NA_LISTA]}
+
+
 def _visitas(local_id, de, ate):
     from facilities.visitas.models import FEITA, Visita
     lista = Visita.query.filter(Visita.client_id == local_id, Visita.vencimento >= de,
@@ -204,6 +220,7 @@ def dados(local, primeiro, agora=None):
         'chamados': _chamados(local.id, primeiro, ate),
         'ncs': _nao_conformidades(local.id, primeiro, ate),
         'ocorrencias': _ocorrencias(local.id, primeiro, ate),
+        'elogios': _elogios(local.id, primeiro, ate),
         'visitas': _visitas(local.id, primeiro, ate),
         'cobrancas': _cobrancas(local.id, primeiro, ate),
         'gerado_em': agora,
@@ -424,6 +441,9 @@ def mudancas(rel, atual):
          atual['chamados']['resolvidos']),
         ('Não conformidades', antes['ncs']['total'], atual['ncs']['total']),
         ('Avisos do público', antes['ocorrencias']['total'], atual['ocorrencias']['total']),
+        # Relatório liberado antes dos elogios existirem: sem a chave.
+        ('Elogios do público', (antes.get('elogios') or {}).get('total'),
+         (atual.get('elogios') or {}).get('total')),
         ('Visitas feitas', antes['visitas']['feitas'], atual['visitas']['feitas']),
     ]
     return [(o, a, b) for o, a, b in linhas if a != b]

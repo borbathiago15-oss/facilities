@@ -539,15 +539,61 @@ class OcorrenciaPublica(db.Model):
     itens_json = db.Column(db.Text)
     autor_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='RESTRICT'),
                          nullable=True)
+    # Reclamação e elogio (27/10/2026): quem cuida do ponto no dia recebe o
+    # aviso como tarefa "Checar aviso" (o escalado; sem escalado, vazio e a
+    # supervisão recebe). ``resumo``: os problemas marcados, com o texto da
+    # época ("Lixeiras esvaziadas"), para a tela não depender do checklist
+    # de hoje.
+    responsavel_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='RESTRICT'),
+                               nullable=True, index=True)
+    resumo = db.Column(db.String(300))
 
     ponto = db.relationship('PontoInspecao')
     quem_atendeu = db.relationship('User', foreign_keys=[atendida_por])
     quem_resolveu = db.relationship('User', foreign_keys=[resolvida_por])
     autor = db.relationship('User', foreign_keys=[autor_id])
+    responsavel = db.relationship('User', foreign_keys=[responsavel_id])
 
     @property
     def itens(self):
         return json.loads(self.itens_json or '[]')
+
+    @property
+    def titulo(self):
+        """O que foi avisado, em palavras: os problemas marcados ou o tipo."""
+        if self.resumo:
+            return self.resumo
+        return TIPOS_OCORRENCIA_PUBLICA.get(self.tipo, self.tipo)
+
+
+# ── Elogio pelo QR público (27/10/2026) ───────────────────────────────────
+NOTAS_ELOGIO = (1, 2, 3, 4, 5)
+
+
+class ElogioPublico(db.Model):
+    """A avaliação de quem passou pelo ponto: de 1 a 5 estrelas e um
+    comentário opcional. Como a ocorrência, não guarda dado de quem avaliou
+    (só a conta, quando a pessoa estava logada). Não é demanda: ninguém
+    precisa "resolver" um elogio."""
+    __tablename__ = 'elogios_publicos'
+    id = db.Column(db.Integer, primary_key=True)
+    ponto_id = db.Column(db.Integer, db.ForeignKey('pontos_inspecao.id', ondelete='RESTRICT'),
+                         nullable=False, index=True)
+    client_id = db.Column(db.Integer, db.ForeignKey('clients.id', ondelete='RESTRICT'),
+                          nullable=False, index=True)
+    nota = db.Column(db.SmallInteger, nullable=False)
+    texto = db.Column(db.String(300))
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    # Quem cuidava do ponto no dia (recebe o elogio no aplicativo).
+    responsavel_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='RESTRICT'),
+                               nullable=True)
+    autor_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='RESTRICT'),
+                         nullable=True)
+
+    ponto = db.relationship('PontoInspecao')
+    responsavel = db.relationship('User', foreign_keys=[responsavel_id])
+
+    __table_args__ = (db.CheckConstraint('nota BETWEEN 1 AND 5', name='ck_elogios_nota'),)
 
 
 # ── Confirmação de presença (D48, Q4) ─────────────────────────────────────
@@ -617,7 +663,7 @@ class Chegada(db.Model):
     )
 
 
-MODELOS_EM_ORDEM_DE_LIMPEZA = (Feriado, Chegada, ConfirmacaoPresenca, OcorrenciaPublica, ExecucaoCorrecao,
+MODELOS_EM_ORDEM_DE_LIMPEZA = (Feriado, Chegada, ConfirmacaoPresenca, ElogioPublico, OcorrenciaPublica, ExecucaoCorrecao,
                                NaoConformidade, ExecucaoFoto, Execucao, TarefaDia, RotaEscala,
                                RotaItem, Rota, RotaModeloItem, RotaModelo,
                                ChecklistDocumento, ChecklistVersao,

@@ -1,0 +1,15 @@
+{# As duas abas da tela de cobranças: a cobrança formal do cliente e os
+   avisos que o público deixou pelo QR (decisão do dono, 27/10/2026). #}
+{% macro abas(rota, ativa) %}
+<ul class="nav nav-tabs mb-3">
+  <li class="nav-item"><a class="nav-link {% if ativa == 'cobrancas' %}active{% endif %}" {% if ativa == 'cobrancas' %}aria-current="page"{% endif %} href="{{ url_for(rota) }}">Cobranças</a></li>
+  <li class="nav-item"><a class="nav-link {% if ativa == 'qr' %}active{% endif %}" {% if ativa == 'qr' %}aria-current="page"{% endif %} href="{{ url_for(rota, aba='qr') }}"><i class="bi bi-qr-code" aria-hidden="true"></i> Avisos pelo QR</a></li>
+</ul>
+{% endmacro %}
+
+{% macro filtros(rota, situacao, situacoes) %}
+<div class="d-flex flex-wrap gap-2 mb-3">
+  <a class="btn btn-sm {% if not situacao %}btn-primary{% else %}btn-outline-primary{% endif %}" href="{{ url_for(rota, aba='qr') }}">Todos</a>
+  {% for k, v in situacoes.items() %}<a class="btn btn-sm {% if situacao == k %}btn-primary{% else %}btn-outline-primary{% endif %}" href="{{ url_for(rota, aba='qr', situacao=k) }}">{{ v }}</a>{% endfor %}
+</div>
+{% endmacro %}

@@ -52,7 +52,8 @@
   <a class="fc-app-item" href="{{ url_for('rotas.turno', ponto=o.ponto.codigo_qr) }}">
     {# Local primeiro: quem cuida de dois locais com ambientes de mesmo nome
        ("Banheiro da operação 1" nos dois) precisa saber em QUAL deles é. #}
-    <span class="fw-semibold">{{ o.ponto.ambiente.setor.local.name }} · {{ o.ponto.ambiente.nome }} · {{ tipos_ocorrencia[o.tipo] }}</span>
+    <span><span class="badge text-bg-warning">Checar aviso</span>{% if o.responsavel_id == current_user.id %} <span class="badge text-bg-light">Sua</span>{% endif %}</span>
+    <span class="fw-semibold">{{ o.ponto.ambiente.setor.local.name }} · {{ o.ponto.ambiente.nome }} · {{ o.titulo }}</span>
     <span class="small text-muted">{{ o.ponto.nome }} · {{ o.criada_em|hora_local('%H:%M') }}{% if o.texto %} · "{{ o.texto }}"{% endif %}</span>
   </a>
   {% endfor %}

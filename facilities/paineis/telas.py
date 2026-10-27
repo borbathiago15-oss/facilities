@@ -30,9 +30,16 @@ def painel():
     for item in demandas.demandas([c.id for c in locais]):
         if item['situacao'] == 'atrasada':
             atrasadas[item['client_id']] = atrasadas.get(item['client_id'], 0) + 1
+    # Elogios do público (27/10/2026): a média de estrelas do período por
+    # local. Fica FORA da nota — é a voz de quem usa o local, não execução.
+    from datetime import timedelta
+    from facilities.rotas.ocorrencias import media_dos_elogios
+    elogios = media_dos_elogios([c.id for c in locais], servico._utc(de),
+                                servico._utc(ate + timedelta(days=1)))
     agrupar = current_user._effective_role() != 'supervisor'
     return render_template('paineis/painel.html', de=de, ate=ate, linhas=linhas,
                            grupos=servico.por_cliente(linhas) if agrupar else None,
                            resumo=servico.resumo(linhas), atrasadas=atrasadas,
+                           elogios=elogios,
                            faixas=servico.FAIXAS, indicadores=servico.INDICADORES,
                            faixa_critica=servico.FAIXA_CRITICA, faixa_boa=servico.FAIXA_BOA)

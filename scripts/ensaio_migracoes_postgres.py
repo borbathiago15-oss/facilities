@@ -255,6 +255,12 @@ SEMENTES = [
     "WHERE c.name='GL Armazém 1' AND u.email='gerente@ensaio'",
     "UPDATE rotas SET funciona_em_feriado=false, vale_a_partir='2026-10-23 17:00'",
     "UPDATE relatorios_cliente SET congelado_json='{\"dados\": {}, \"fotos\": []}'",
+    # Reclamação e elogio pelo QR: um elogio e um aviso com responsável e resumo.
+    "INSERT INTO elogios_publicos (ponto_id,client_id,nota,texto,criado_em,responsavel_id) "
+    "SELECT p.id,p.client_id,5,'Impecável',now(),u.id FROM pontos_inspecao p, users u "
+    "WHERE u.email='sup@ensaio'",
+    "UPDATE ocorrencias_publicas SET resumo='Lixeiras esvaziadas', "
+    "responsavel_id=(SELECT id FROM users WHERE email='sup@ensaio')",
 ]
 
 

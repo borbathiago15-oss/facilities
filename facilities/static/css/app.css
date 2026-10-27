@@ -730,6 +730,18 @@ body.dark .page-title, body.dark .pg-titulo, body.dark .pg-num-v, body.dark .pg-
 .fc-ocor-aberta { background: var(--aviso); color: #fff; }
 .fc-ocor-em_atendimento { background: var(--info); color: #fff; }
 .fc-ocor-resolvida { background: var(--ok); color: #fff; }
+/* Elogio pelo QR (27/10/2026): cinco estrelas grandes, sem JavaScript. A
+   fila está virada (5 → 1 no HTML): a escolhida acende ela e as de antes. */
+.fc-estrelas { display: flex; flex-direction: row-reverse; justify-content: center; gap: 6px; }
+.fc-estrela-radio { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.fc-estrela { font-size: 44px; line-height: 1; padding: 4px; min-width: 52px; min-height: 52px;
+  display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+  color: var(--gray-300, #ced4da); }
+.fc-estrela-radio:checked ~ .fc-estrela,
+.fc-estrela:hover, .fc-estrela:hover ~ .fc-estrela { color: var(--faixa-laranja); }
+.fc-estrela-radio:focus-visible + .fc-estrela { outline: 3px solid var(--info); outline-offset: 2px; border-radius: 8px; }
+.fc-obrigado-icone { font-size: 56px; color: var(--marca); }
+.fc-nota-estrelas { color: var(--aviso); white-space: nowrap; }
 .fc-presenca { position: fixed; left: 12px; right: 12px; bottom: calc(72px + env(safe-area-inset-bottom));
   z-index: 1040; background: var(--marca); color: #fff; border-radius: var(--radius-lg);
   padding: 14px; box-shadow: 0 8px 24px rgba(0, 0, 0, .25); }

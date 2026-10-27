@@ -15,6 +15,7 @@ def test_visitante_avisa_e_a_ana_resolve(servidor, navegador, perfil):
         visitante.goto(servidor['base'] + '/q/' + servidor['qr'])
         assert visitante.get_by_role('heading', name='É aqui?').is_visible()
         visitante.get_by_role('button', name='Sim').click()
+        visitante.get_by_role('button', name='Avisar um problema').click()
         visitante.locator('label.fc-qr-item', has_text='Papel higiênico reposto?').click()
         visitante.fill('#texto', 'Piso molhado perto da pia')
         visitante.get_by_role('button', name='Continuar').click()
@@ -28,7 +29,13 @@ def test_visitante_avisa_e_a_ana_resolve(servidor, navegador, perfil):
         equipe = ctx.browser.new_context()
         ana = equipe.new_page()
         entrar(ana, servidor['base'], 'ana@e2e.test')
-        assert 'Itens do checklist' in ana.content()            # início do app
+        assert 'Checar aviso' in ana.content()                  # início do app
+        # No turno do local, o aviso é uma tarefa "Checar aviso" (27/10/2026).
+        [(local_id,)] = servidor['sql'](
+            "SELECT client_id FROM pontos_inspecao WHERE codigo_qr = '%s'" % servidor['qr'])
+        ana.goto(servidor['base'] + '/app/turno?local=%d' % local_id)
+        ana.wait_for_selector('#turno-avisos')
+        assert 'Papel higiênico reposto?' in ana.inner_text('#turno-avisos')
         ana.goto(servidor['base'] + '/app/turno?ponto=' + servidor['qr'])
         # O ponto abre no checklist da hora; o aviso fica em "Outras coisas".
         ana.get_by_role('button', name='Outras coisas neste ponto').click()
@@ -38,5 +45,27 @@ def test_visitante_avisa_e_a_ana_resolve(servidor, navegador, perfil):
 
         visitante.goto(link)
         assert 'Resolvida' in visitante.content()
+    finally:
+        b.close()
+
+
+def test_visitante_elogia_com_estrelas(servidor, navegador, perfil):
+    """27/10/2026: o QR também recebe elogio — 1 a 5 estrelas e comentário."""
+    b, ctx = abrir_contexto(navegador, perfil)
+    try:
+        pg = ctx.new_page()
+        pg.goto(servidor['base'] + '/q/' + servidor['qr'])
+        pg.get_by_role('button', name='Sim').click()
+        pg.get_by_role('link', name='Fazer um elogio').click()
+        pg.wait_for_url('**/elogio')
+        pg.locator('label[for="nota4"]').click()
+        assert pg.locator('#nota4').is_checked()
+        pg.fill('#texto', 'Banheiro muito limpo')
+        largura = pg.evaluate('document.documentElement.scrollWidth')
+        assert largura <= pg.viewport_size['width']
+        pg.get_by_role('button', name='Enviar elogio').click()
+        pg.wait_for_selector('text=Obrigado!')
+        assert servidor['sql']('SELECT nota, texto FROM elogios_publicos') == \
+            [(4, 'Banheiro muito limpo')]
     finally:
         b.close()

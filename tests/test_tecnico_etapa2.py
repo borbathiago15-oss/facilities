@@ -154,7 +154,8 @@ def test_post_publico_sem_tipo_grava_os_itens(app_module):
         assert json.loads(oc.itens_json) == ['papel_higienico_reposto', 'mictorios']
         assert oc.texto is None and oc.autor_id is None
     html = c.get(r.headers['Location']).get_data(as_text=True)
-    assert 'Itens do checklist' in html and 'Recebida' in html
+    # O que foi marcado, em palavras (27/10/2026) — não o "Itens do checklist".
+    assert 'Itens do checklist' not in html and 'Mictórios' in html and 'Recebida' in html
     # Só o texto: "outro". Nada: recusado com a mensagem da tela.
     r = c.post(f"/q/{cena['qr']}/ocorrencia", data={'texto': 'Porta não fecha'},
                content_type='multipart/form-data')

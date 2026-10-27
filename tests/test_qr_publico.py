@@ -65,8 +65,8 @@ def test_publico_abre_sem_login_e_acompanha(app_module, cena):
 
 def test_sem_escalado_avisa_supervisor_e_coordenador(app_module, cena):
     _enviar(app_module, cena['qr'])
-    assert _avisos(app_module, cena['sup']) == ['Ocorrência: Local sujo']
-    assert _avisos(app_module, cena['coord']) == ['Ocorrência: Local sujo']
+    assert _avisos(app_module, cena['sup']) == ['Checar aviso: Local sujo']
+    assert _avisos(app_module, cena['coord']) == ['Checar aviso: Local sujo']
     assert _avisos(app_module, cena['ana']) == []
 
 
@@ -87,8 +87,8 @@ def test_com_rota_agora_avisa_quem_esta_nela_e_o_supervisor(app_module, cena):
         s.garantir_hoje([loc.id])
         db.session.commit()
     _enviar(app_module, cena['qr'])
-    assert _avisos(app_module, cena['ana']) == ['Ocorrência: Local sujo']
-    assert _avisos(app_module, cena['sup']) == ['Ocorrência: Local sujo']
+    assert _avisos(app_module, cena['ana']) == ['Checar aviso: Local sujo']
+    assert _avisos(app_module, cena['sup']) == ['Checar aviso: Local sujo']
     assert _avisos(app_module, cena['coord']) == []
 
 

@@ -1,10 +1,12 @@
 {% extends 'base.html' %}
 {% from 'portal/_nota.html' import situacao_cobranca %}
+{% from 'portal/_abas_cobrancas.html' import abas %}
 {% block title %}Cobranças{% endblock %}
 {% block breadcrumb %}<li class="breadcrumb-item"><a href="{{ url_for('portal.inicio') }}">Seus locais</a></li><li class="breadcrumb-item active" aria-current="page">Cobranças</li>{% endblock %}
 {% block content %}
 <h1 class="fc-titulo">Cobranças</h1>
 <p class="fc-sub">Peça algo à coordenação do contrato e escolha até quando quer a resposta (no mínimo 24 horas). Quando ela responder, você confirma que ficou bom ou reabre.</p>
+{{ abas('portal.cobrancas', 'cobrancas') }}
 
 {% if locais %}
 <details class="fc-cartao mb-3" {% if not cobrancas or local_escolhido %}open{% endif %}>

@@ -1,8 +1,10 @@
 {% extends 'base.html' %}
+{% from 'portal/_abas_cobrancas.html' import abas %}
 {% block title %}Cobranças do cliente{% endblock %}
 {% block content %}
 <h1 class="fc-titulo">Cobranças do cliente</h1>
 <p class="fc-sub">O que o cliente pediu pelo portal, com a data que ele escolheu. A coordenação responde; só o cliente encerra ou reabre.</p>
+{{ abas('cobrancas.lista', 'cobrancas') }}
 <div class="d-flex flex-wrap gap-2 mb-3">
   <a class="btn btn-sm {% if not status %}btn-primary{% else %}btn-outline-primary{% endif %}" href="{{ url_for('cobrancas.lista') }}">Todas</a>
   {% for k, v in rotulos.items() %}<a class="btn btn-sm {% if status == k %}btn-primary{% else %}btn-outline-primary{% endif %}" href="{{ url_for('cobrancas.lista', status=k) }}">{{ v }}</a>{% endfor %}
