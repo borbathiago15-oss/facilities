@@ -55,7 +55,7 @@
     <h2 class="h5 fw-bold">Quer mandar uma foto?</h2>
     <p class="text-muted small">Opcional. Fotografe só o problema, sem pessoas.</p>
     <div class="fc-foto mb-2">
-      <input class="fc-foto-input" id="foto" name="foto" type="file" accept="image/*" capture="environment">
+      <input class="fc-foto-input" id="foto" name="foto" type="file" accept="image/*" capture="environment" data-foto-leve>
       <label class="btn btn-outline-primary btn-lg w-100 fc-app-acao" for="foto"><i class="bi bi-camera"></i> Tirar foto</label>
       <p class="small text-muted mt-1 mb-0" data-foto-estado>Nenhuma foto.</p>
     </div>
@@ -66,4 +66,7 @@
 <p class="small text-muted mt-3">É da equipe? <a href="{{ url_for('auth.login', next=request.path) }}">Entre no sistema</a>.</p>
 {% endif %}
 {% endblock %}
-{% block scripts %}<script src="{{ url_for('static', filename='js/publico-qr.js') }}"></script>{% endblock %}
+{% block scripts %}{# A foto da câmera (4 a 12 MB) é reduzida no celular antes de subir,
+   como no aplicativo da equipe (27/10/2026). #}
+<script src="{{ url_for('static', filename='js/foto-leve.js') }}"></script>
+<script src="{{ url_for('static', filename='js/publico-qr.js') }}"></script>{% endblock %}
