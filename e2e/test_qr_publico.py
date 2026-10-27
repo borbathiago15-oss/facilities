@@ -69,3 +69,34 @@ def test_visitante_elogia_com_estrelas(servidor, navegador, perfil):
             [(4, 'Banheiro muito limpo')]
     finally:
         b.close()
+
+
+def test_foto_grande_da_camera_e_reduzida_no_celular(servidor, navegador, tmp_path):
+    """27/10/2026: a foto da câmera (vários MB) era recusada. A página reduz
+    no próprio celular antes de subir."""
+    import os
+    from PIL import Image
+    caminho = tmp_path / 'IMG_camera.jpg'
+    Image.frombytes('RGB', (4000, 3000), os.urandom(4000 * 3000 * 3)).save(
+        caminho, 'JPEG', quality=92)
+    assert os.path.getsize(caminho) > 3 * 1024 * 1024
+    b, ctx = abrir_contexto(navegador, 'celular')
+    try:
+        pg = ctx.new_page()
+        pg.goto(servidor['base'] + '/q/' + servidor['qr'])
+        pg.get_by_role('button', name='Sim').click()
+        pg.get_by_role('button', name='Avisar um problema').click()
+        pg.locator('label.fc-qr-item').first.click()
+        pg.get_by_role('button', name='Continuar').click()
+        pg.set_input_files('#foto', str(caminho))
+        # O arquivo que vai subir vira a versão leve no próprio celular.
+        pg.wait_for_function(
+            "() => { var f = document.getElementById('foto').files[0];"
+            " return f && f.size < 1024 * 1024 && f.type === 'image/jpeg'; }")
+        pg.get_by_role('button', name='Enviar').click()
+        pg.wait_for_url('**/acompanhar/**')
+        assert 'Recebida' in pg.content()
+        [(chave,)] = servidor['sql']('SELECT foto_key FROM ocorrencias_publicas')
+        assert chave
+    finally:
+        b.close()

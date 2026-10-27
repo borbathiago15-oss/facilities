@@ -20,6 +20,9 @@ QR_DO_TESTE = 'QRdoTesteE2E0000000001'
 QR_ENTRADA = 'QRentradaE2E0000000002'
 QR_COPA = 'QRcopaE2E00000000000003'
 QR_REFEITORIO = 'QRrefeitorioE2E00000004'
+# Troca de área (27/10/2026): um terceiro local, só do Tito.
+QR_RECEPCAO = 'QRrecepcaoE2E0000000005'
+QR_SALA = 'QRsalaE2E000000000000006'
 SENHA = 'senha12345'
 
 
@@ -194,6 +197,46 @@ def montar(caminho_db):
                    cliente_id=gl.id)
         cli.set_password(SENHA)
         db.session.add(cli)
+        # Troca de área (27/10/2026): o Tito, no "GL Armazém 3", tem a
+        # recepção daqui a duas horas (para adiantar) e a sala de reunião,
+        # que é de uma rota de outro dia (fora da rota hoje, com escopo).
+        local3 = Client(name='GL Armazém 3', cost_center='GL-03', is_active=True)
+        db.session.add(local3)
+        tito = User(name='Tito Técnico', email='tito@e2e.test', role='encarregado')
+        tito.set_password(SENHA)
+        db.session.add(tito)
+        db.session.flush()
+        tito.clients = [local3]
+        setor3 = servico.salvar_setor(local3, None, {'nome': 'Operação'}, admin)
+        amb3 = servico.salvar_ambiente(local3, None, {'nome': 'Administrativo',
+                                                      'setor_id': setor3.id}, admin)
+        recepcao = PontoInspecao(ambiente_id=amb3.id, client_id=local3.id, nome='Recepção',
+                                 codigo_qr=QR_RECEPCAO)
+        sala = PontoInspecao(ambiente_id=amb3.id, client_id=local3.id, nome='Sala de reunião',
+                             codigo_qr=QR_SALA)
+        db.session.add_all([recepcao, sala])
+        db.session.flush()
+        mr = rotas.criar_modelo(local3.id, {'nome': 'Limpeza da recepção'}, admin)
+        rotas.publicar(mr, rotas.normalizar_itens([
+            {'texto': 'Balcão limpo?', 'tipo': 'sim_nao', 'obrigatorio': True}]), {}, admin)
+        ms = rotas.criar_modelo(local3.id, {'nome': 'Limpeza da sala'}, admin)
+        rotas.publicar(ms, rotas.normalizar_itens([
+            {'texto': 'Mesa limpa?', 'tipo': 'sim_nao', 'obrigatorio': True}]), {}, admin)
+        daqui_a_2h = min(tempo.agora() + timedelta(hours=2),
+                         tempo.agora().replace(hour=23, minute=50))
+        rota3 = rotas.salvar_rota(local3, None, {
+            'nome': 'Rota do administrativo', 'turno': '1º Turno', 'hora_inicio': '00:00',
+            'hora_fim': '23:59', 'tolerancia_min': '15', 'dias_semana': '1234567'})
+        rotas.salvar_item(rota3, None, {'ponto_id': recepcao.id, 'modelo_id': mr.id,
+                                        'horarios': daqui_a_2h.strftime('%H:%M')})
+        rotas.salvar_escala(rota3, {'user_id': tito.id, 'dias_semana': '1234567',
+                                    'data_inicio': tempo.hoje().isoformat()})
+        outro_dia = str((tempo.hoje().isoweekday() + 2) % 7 + 1)
+        rota4 = rotas.salvar_rota(local3, None, {
+            'nome': 'Rota da sala', 'turno': '1º Turno', 'hora_inicio': '00:00',
+            'hora_fim': '23:59', 'tolerancia_min': '15', 'dias_semana': outro_dia})
+        rotas.salvar_item(rota4, None, {'ponto_id': sala.id, 'modelo_id': ms.id,
+                                        'horarios': '10:00'})
         db.session.commit()
     return app
 

@@ -261,6 +261,8 @@ SEMENTES = [
     "WHERE u.email='sup@ensaio'",
     "UPDATE ocorrencias_publicas SET resumo='Lixeiras esvaziadas', "
     "responsavel_id=(SELECT id FROM users WHERE email='sup@ensaio')",
+    # Troca de área: uma execução adiantada a pedido do cliente.
+    "UPDATE execucoes SET motivo_troca='pedido_cliente', motivo_troca_texto='Reunião às 8h'",
 ]
 
 

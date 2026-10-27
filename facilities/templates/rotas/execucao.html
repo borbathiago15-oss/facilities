@@ -3,7 +3,7 @@
 {% block breadcrumb %}<li class="breadcrumb-item"><a href="{{ url_for('rotas.inicio') }}">Rotas</a></li><li class="breadcrumb-item"><a href="{{ url_for('rotas.dia', cid=ex.client_id, data=ex.iniciada_em|hora_local('%Y-%m-%d')) }}">Dia</a></li><li class="breadcrumb-item active" aria-current="page">Execução</li>{% endblock %}
 {% block content %}
 <h1 class="fc-titulo">{{ ex.ponto.ambiente.nome }} · {{ ex.ponto.nome }}</h1>
-<p class="fc-sub">{{ ex.versao.modelo.nome }} (versão {{ ex.versao.numero }}){% if ex.extra %} · atividade extra{% endif %}</p>
+<p class="fc-sub">{{ ex.versao.modelo.nome }} (versão {{ ex.versao.numero }}){% if ex.extra %} · fora da rota{% endif %}</p>
 <div class="fc-cartao mb-3">
   <div class="row small">
     <div class="col-6 col-md-3"><div class="text-muted">Quem fez</div><div class="fw-semibold">{{ ex.pessoa.name }}</div></div>
@@ -11,7 +11,8 @@
     <div class="col-6 col-md-3"><div class="text-muted">Concluído</div><div class="fw-semibold">{{ ex.concluida_em|hora_local }}</div></div>
     <div class="col-6 col-md-3"><div class="text-muted">Registro</div><div class="fw-semibold">{% if ex.sem_sinal %}Horário do celular (sem sinal ou sem leitura do QR pela câmera), recebido {{ ex.recebida_em|hora_local }}{% else %}Horário do sistema{% endif %}</div></div>
   </div>
-  {% if ex.tarefa %}<p class="small mt-2 mb-0">Tarefa das {{ ex.tarefa.previsto_para|hora_local('%H:%M') }} da rota "{{ ex.tarefa.rota.nome }}".</p>{% endif %}
+  {% if ex.tarefa %}<p class="small mt-2 mb-0">Tarefa das {{ ex.tarefa.previsto_para|hora_local('%H:%M') }} da rota "{{ ex.tarefa.rota.nome }}"{% if ex.adiantada %}, adiantada{% endif %}.</p>{% endif %}
+  {% if ex.motivo_troca %}<p class="small mt-1 mb-0">{{ 'Adiantada' if ex.tarefa else 'Fora da rota' }} — motivo: {{ motivos_troca.get(ex.motivo_troca, ex.motivo_troca) }}{% if ex.motivo_troca_texto %}: {{ ex.motivo_troca_texto }}{% endif %}</p>{% endif %}
 </div>
 <div class="fc-cartao mb-3">
   <h2 class="h6 fw-bold">Respostas</h2>

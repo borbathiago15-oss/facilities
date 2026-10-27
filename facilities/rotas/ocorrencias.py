@@ -37,7 +37,10 @@ ITENS_MAX = 30
 # Só estes tipos de pergunta viram "problema" que o público marca: texto,
 # número, data e escolha não têm um "deu errado" claro.
 TIPOS_REPORTAVEIS = ('sim_nao', 'conforme')
-FOTO_MAX = 3 * 1024 * 1024      # anônimo: 3 MB na entrada, e ainda é reduzida
+# Anônimo: a página já reduz a foto no celular (foto-leve.js); o teto do
+# servidor cobre o navegador que não reduziu — uma foto de câmera inteira (até
+# 15 MB). O que fica guardado é sempre a versão reduzida (1600 px).
+FOTO_MAX = 15 * 1024 * 1024
 
 
 def prazo_minutos(ponto, tipo):

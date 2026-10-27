@@ -133,7 +133,32 @@ def test_foto_do_publico_e_reduzida_no_servidor(app_module, cena):
 def test_qr_publico_tem_teto_por_dia():
     fonte = _arquivo('facilities', 'rotas', 'publico.py')
     assert "@limiter.limit('100 per day', key_func=_chave_do_qr)" in fonte
-    assert 'FOTO_MAX = 3 * 1024 * 1024' in _arquivo('facilities', 'rotas', 'ocorrencias.py')
+    # 27/10/2026: o teto subiu para caber uma foto de câmera inteira (o
+    # navegador que não reduz); o que fica guardado continua reduzido.
+    assert 'FOTO_MAX = 15 * 1024 * 1024' in _arquivo('facilities', 'rotas', 'ocorrencias.py')
+
+
+def test_foto_de_camera_de_celular_passa_e_fica_reduzida(app_module, cena):
+    """Uma foto de câmera de 12 MP (vários MB) era recusada como "formato ou
+    tamanho" — o caso do dono em 27/10/2026."""
+    import os
+    from PIL import Image
+    from facilities.core.anexos import storage
+    from facilities.rotas.models import OcorrenciaPublica
+    buf = io.BytesIO()
+    Image.frombytes('RGB', (4000, 3000), os.urandom(4000 * 3000 * 3)).save(
+        buf, 'JPEG', quality=92)
+    original = buf.getvalue()
+    assert len(original) > 3 * 1024 * 1024
+    c = app_module.app.test_client()
+    r = c.post(f"/q/{cena['qr']}/ocorrencia",
+               data={'tipo': 'sujo', 'foto': (io.BytesIO(original), 'IMG_20261027.jpg')},
+               content_type='multipart/form-data')
+    assert r.status_code == 302, r.get_data(as_text=True)[:300]
+    with app_module.app.app_context():
+        guardada = storage().load(OcorrenciaPublica.query.one().foto_key)
+        with Image.open(io.BytesIO(guardada)) as im:
+            assert max(im.size) <= 1600
 
 
 # ── Retenção ──────────────────────────────────────────────────────────────
