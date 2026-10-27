@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% from 'portal/_abas_cobrancas.html' import abas, filtros %}
+{% block title %}Avisos pelo QR{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item"><a href="{{ url_for('portal.inicio') }}">Seus locais</a></li><li class="breadcrumb-item active" aria-current="page">Avisos pelo QR</li>{% endblock %}
+{% block content %}
+<h1 class="fc-titulo">Cobranças</h1>
+<p class="fc-sub">O que as pessoas avisaram pelo QR dos seus locais e o que a equipe fez. Cada aviso vai direto para quem cuida do ponto no dia.</p>
+{{ abas('portal.cobrancas', 'qr') }}
+{{ filtros('portal.cobrancas', situacao, situacoes) }}
+<div class="fc-cartao p-0">
+  {% for o in avisos %}
+  <div class="d-flex flex-wrap gap-2 align-items-center border-bottom px-3 py-2">
+    <span class="badge fc-sit fc-ocor-{{ o.status }}">{{ situacoes[o.status] }}</span>
+    <span class="fw-semibold">{{ o.titulo }}</span>
+    <span class="small text-muted">{{ o.ponto.ambiente.setor.local.name }} · {{ o.ponto.ambiente.nome }} · {{ o.ponto.nome }}{% if o.texto %} · "{{ o.texto }}"{% endif %}</span>
+    <span class="small ms-auto">{{ o.criada_em|hora_local('%d/%m %H:%M') }}{% if o.resolvida_em %} · resolvido {{ o.resolvida_em|hora_local('%d/%m %H:%M') }}{% if o.resolucao %}: {{ o.resolucao }}{% endif %}{% endif %}</span>
+  </div>
+  {% else %}
+  <div class="fc-vazio">Nenhum aviso pelo QR aqui.</div>
+  {% endfor %}
+</div>
+{% endblock %}

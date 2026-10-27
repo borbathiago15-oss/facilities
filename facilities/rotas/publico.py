@@ -72,6 +72,31 @@ def abrir_ocorrencia(codigo):
     return redirect(url_for('publico.acompanhar', codigo=ponto.codigo_qr, token=oc.token))
 
 
+@bp.route('/q/<codigo>/elogio', methods=['GET', 'POST'])
+@limiter.limit('5 per hour', methods=['POST'])
+@limiter.limit('30 per hour', key_func=_chave_do_qr, methods=['POST'])
+@limiter.limit('100 per day', key_func=_chave_do_qr, methods=['POST'])
+def elogio(codigo):
+    """O elogio de quem passou pelo ponto: 1 a 5 estrelas e um comentário
+    opcional. Sem login, sem dado de quem avaliou."""
+    ponto = _ponto_ativo(codigo)
+    local = ponto.ambiente.setor.local.name if ponto.ambiente else ''
+    if request.method == 'GET':
+        return render_template('publico/elogio.html', ponto=ponto, local=local)
+    if (request.form.get('site') or '').strip():
+        return render_template('publico/elogio.html', ponto=ponto, local=local,
+                               erro='Não foi possível enviar.'), 400
+    try:
+        ocorrencias.elogiar(ponto, request.form.get('nota'), request.form.get('texto'),
+                            autor=current_user)
+        db.session.commit()
+    except RegraDaRota as erro:
+        db.session.rollback()
+        return render_template('publico/elogio.html', ponto=ponto, local=local,
+                               erro=erro.mensagem), erro.codigo
+    return render_template('publico/elogio_obrigado.html', ponto=ponto)
+
+
 @bp.get('/q/<codigo>/acompanhar/<token>')
 def acompanhar(codigo, token):
     oc = OcorrenciaPublica.query.filter_by(token=(token or '')[:40]).first()

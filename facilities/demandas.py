@@ -40,7 +40,7 @@ def _situacao(prazo, agora, parada=False):
 def demandas(client_ids, agora=None, com_visitas=True, com_pedidos=True, acompanha_rotas=True):
     from facilities.chamados.models import (AGUARDANDO, ORIGEM_PREVENTIVA, STATUS_EM_ABERTO,
                                             Chamado)
-    from facilities.rotas.models import TIPOS_OCORRENCIA_PUBLICA, SITUACOES_OCORRENCIA
+    from facilities.rotas.models import SITUACOES_OCORRENCIA
     from facilities.rotas.ocorrencias import abertas
     agora = agora or datetime.utcnow()
     q = Chamado.query.filter(Chamado.status.in_(STATUS_EM_ABERTO))
@@ -59,11 +59,12 @@ def demandas(client_ids, agora=None, com_visitas=True, com_pedidos=True, acompan
     ids = client_ids if client_ids is not None else [c.id for c in clientes_visiveis()]
     for oc in abertas(ids):
         itens.append({
-            'tipo': 'publico', 'titulo': f'{TIPOS_OCORRENCIA_PUBLICA[oc.tipo]} · '
+            'tipo': 'publico', 'titulo': f'{oc.titulo} · '
                                          f'{oc.ponto.ambiente.nome} · {oc.ponto.nome}',
             'numero': '', 'local': oc.ponto.ambiente.setor.local.name,
             'client_id': oc.client_id,
-            'responsavel': oc.quem_atendeu.name if oc.quem_atendeu else '',
+            'responsavel': (oc.quem_atendeu.name if oc.quem_atendeu else
+                            oc.responsavel.name if oc.responsavel else ''),
             'prazo': oc.prazo, 'estado': SITUACOES_OCORRENCIA[oc.status],
             'situacao': _situacao(oc.prazo, agora),
             # Quem não acompanha as rotas (encarregado, técnico) atende o

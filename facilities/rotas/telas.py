@@ -31,7 +31,8 @@ from facilities.rotas.models import (MOTIVOS_NAO_REALIZADA, SITUACOES, TIPOS_DE_
 from facilities.rotas.servico import RegraDaRota
 from facilities.rotas import chegadas, ocorrencias, presenca
 from facilities.rotas.models import (MOTIVOS_ATRASO, MOTIVOS_NAO_FEITO, SITUACOES_OCORRENCIA,
-                                     TIPOS_OCORRENCIA_PUBLICA, OcorrenciaPublica)
+                                     TIPOS_OCORRENCIA_PUBLICA, ElogioPublico,
+                                     OcorrenciaPublica)
 
 bp = Blueprint('rotas', __name__)
 
@@ -716,11 +717,18 @@ def dia(cid):
              .order_by(OcorrenciaPublica.criada_em.desc()).limit(200).all())
     ocors = [o for o in ocors if o.status != 'resolvida'
              or tempo.local(o.criada_em).date() == d]
+    inicio_do_dia = tempo.para_utc(d, datetime.min.time())
+    elogios = (ElogioPublico.query.filter(ElogioPublico.client_id == loc.id,
+                                          ElogioPublico.criado_em >= inicio_do_dia,
+                                          ElogioPublico.criado_em < inicio_do_dia
+                                          + timedelta(days=1))
+               .order_by(ElogioPublico.criado_em.desc()).all())
     return render_template('rotas/dia.html', local=loc, data=d, tarefas=tarefas, agora=agora,
                            situacao=servico.situacao, situacoes=SITUACOES,
                            motivos=MOTIVOS_NAO_REALIZADA, extras=extras,
                            aderencia={'no_prazo': no_prazo, 'base': base, 'pct': pct},
                            ocorrencias=ocors, tipos_ocorrencia=TIPOS_OCORRENCIA_PUBLICA,
+                           elogios=elogios,
                            situacoes_ocorrencia=SITUACOES_OCORRENCIA,
                            atrasada=ocorrencias.atrasada,
                            presencas=presenca.da_rota_no_dia(loc.id, d),
@@ -955,7 +963,9 @@ def _dados_do_turno(locais):
         # Fase 4B: o que o público avisou pelo QR e ainda não foi resolvido.
         'ocorrencias': [{
             'id': o.id, 'ponto': o.ponto.codigo_qr, 'ponto_nome': o.ponto.nome,
-            'ambiente': o.ponto.ambiente.nome, 'tipo': TIPOS_OCORRENCIA_PUBLICA[o.tipo],
+            'ambiente': o.ponto.ambiente.nome, 'tipo': o.titulo,
+            'minha': o.responsavel_id == current_user.id,
+            'responsavel': o.responsavel.name if o.responsavel else '',
             'texto': o.texto or '', 'hora': tempo.fmt(o.criada_em, '%H:%M'),
             'status': o.status, 'prazo': tempo.fmt(o.prazo, '%H:%M') if o.prazo else '',
             'atrasada': ocorrencias.atrasada(o, agora),

@@ -14,6 +14,11 @@
   ``itens_reportaveis``). Com item marcado, o texto é opcional (menos no
   tipo "outro"). Quem está logado (o cliente do portal, a equipe) fica
   registrado como autor; sem login continua anônimo.
+* Reclamação e elogio (27/10/2026): o aviso vai como tarefa "Checar aviso"
+  para quem está ESCALADO no ponto no dia (mesmo que a passada dele já
+  tenha sido feita); sem ninguém escalado, para o supervisor do local. O
+  elogio (1 a 5 estrelas) avisa quem cuida do ponto e entra no painel e no
+  relatório do cliente; não é demanda.
 """
 import json
 import secrets
@@ -24,8 +29,8 @@ from facilities import tempo
 from facilities.extensions import db
 from facilities.rotas.models import (OCORRENCIA_ABERTA, OCORRENCIA_EM_ATENDIMENTO,
                                      OCORRENCIA_RESOLVIDA, PREVISTA, TIPO_ITENS_DO_CHECKLIST,
-                                     TIPOS_OCORRENCIA_PUBLICA, OcorrenciaPublica, Rota, RotaItem,
-                                     TarefaDia)
+                                     TIPOS_OCORRENCIA_PUBLICA, ElogioPublico, OcorrenciaPublica,
+                                     Rota, RotaItem, TarefaDia)
 
 TEXTO_MAX = 300
 ITENS_MAX = 30
@@ -84,23 +89,38 @@ def _itens_marcados(ponto, brutos):
     return saida
 
 
-def _destinatarios(ponto, agora_utc):
-    """(quem está na rota agora, quem acompanha) — Q1."""
-    from facilities.core.hierarquia import carteira
-    from facilities.core.models import User
+def escalado_no_ponto(ponto, agora_utc):
+    """Quem cuida do ponto agora (decisão do dono, 27/10/2026): primeiro quem
+    ainda tem tarefa aberta ali dentro do turno (a mais próxima); senão, quem
+    foi escalado no ponto hoje, mesmo com a passada já feita (a última do
+    dia). Sem ninguém escalado, None — e a supervisão recebe."""
     hoje = tempo.local(agora_utc).date()
-    na_rota = {t.user_id for t in TarefaDia.query.filter(
+    aberta = (TarefaDia.query.filter(
         TarefaDia.ponto_id == ponto.id, TarefaDia.status == PREVISTA,
         TarefaDia.data.in_([hoje, hoje - timedelta(days=1)]),
-        TarefaDia.fim_do_turno >= agora_utc, TarefaDia.user_id.isnot(None))}
-    papeis = ('supervisor',) if na_rota else ('supervisor', 'pleno')
+        TarefaDia.fim_do_turno >= agora_utc, TarefaDia.user_id.isnot(None))
+        .order_by(TarefaDia.previsto_para).first())
+    if aberta is not None:
+        return aberta.user_id
+    do_dia = (TarefaDia.query.filter(TarefaDia.ponto_id == ponto.id, TarefaDia.data == hoje,
+                                     TarefaDia.user_id.isnot(None))
+              .order_by(TarefaDia.previsto_para.desc()).first())
+    return do_dia.user_id if do_dia is not None else None
+
+
+def _destinatarios(ponto, responsavel_id):
+    """Quem acompanha o local: o supervisor; sem ninguém escalado no ponto,
+    também o coordenador (Q1)."""
+    from facilities.core.hierarquia import carteira
+    from facilities.core.models import User
+    papeis = ('supervisor',) if responsavel_id else ('supervisor', 'pleno')
     acompanham = set()
     for u in User.query.filter(User.role.in_(papeis), User.is_active.is_(True),
                                User.is_deleted.is_(False)):
         cart = carteira(u)
         if cart is not None and ponto.client_id in cart:
             acompanham.add(u.id)
-    return na_rota, acompanham
+    return acompanham
 
 
 def abrir(ponto, tipo, texto, foto=None, agora_utc=None, itens=None, autor=None):
@@ -133,13 +153,15 @@ def abrir(ponto, tipo, texto, foto=None, agora_utc=None, itens=None, autor=None)
         oc.prazo = agora_utc + timedelta(minutes=minutos)
     if foto is not None and getattr(foto, 'filename', ''):
         _guardar_foto(oc, foto)
+    if marcados:
+        oc.resumo = ', '.join(rotulos_dos_itens(oc, ponto))[:300]
+    oc.responsavel_id = escalado_no_ponto(ponto, agora_utc)
     db.session.add(oc)
     db.session.flush()
-    na_rota, acompanham = _destinatarios(ponto, agora_utc)
-    titulo = f'Ocorrência: {TIPOS_OCORRENCIA_PUBLICA[tipo]}'
+    na_rota = {oc.responsavel_id} if oc.responsavel_id else set()
+    acompanham = _destinatarios(ponto, oc.responsavel_id)
+    titulo = f'Checar aviso: {oc.titulo}'[:200]
     onde = f'{ponto.ambiente.setor.local.name} · {ponto.ambiente.nome} · {ponto.nome}'
-    if marcados:
-        onde = f'{onde} — {", ".join(rotulos_dos_itens(oc))}'[:300]
     link_campo = f'/app/turno?ponto={ponto.codigo_qr}'
     link_gestao = f'/rotas/locais/{ponto.client_id}/dia'
     if na_rota:
@@ -174,13 +196,19 @@ def _guardar_foto(oc, foto):
     storage().save(oc.foto_key, dados, oc.foto_mime)
 
 
-def rotulos_dos_itens(oc):
-    """Os rótulos ("Falta papel") dos itens marcados numa ocorrência."""
+def rotulos_dos_itens(oc, ponto=None):
+    """Os rótulos ("Falta papel") dos itens marcados numa ocorrência, sem o
+    "Problema: " da frente (na tela do gestor e do técnico ele sobra)."""
     marcados = oc.itens
     if not marcados:
         return []
-    por_codigo = {it['codigo']: it['rotulo_problema'] for it in itens_reportaveis(oc.ponto)}
-    return [por_codigo.get(c, c) for c in marcados]
+    por_codigo = {it['codigo']: it['rotulo_problema']
+                  for it in itens_reportaveis(ponto or oc.ponto)}
+    return [_sem_prefixo(por_codigo.get(c, c)) for c in marcados]
+
+
+def _sem_prefixo(rotulo):
+    return rotulo[len('Problema: '):] if rotulo.startswith('Problema: ') else rotulo
 
 
 def atender(oc, user, agora_utc=None):
@@ -217,7 +245,9 @@ def abertas(client_ids):
             .options(joinedload(OcorrenciaPublica.ponto)
                      .joinedload(PontoInspecao.ambiente)
                      .joinedload(Ambiente.setor)
-                     .joinedload(Setor.local))
+                     .joinedload(Setor.local),
+                     joinedload(OcorrenciaPublica.responsavel),
+                     joinedload(OcorrenciaPublica.quem_atendeu))
             .filter(OcorrenciaPublica.client_id.in_(list(client_ids) or [-1]),
                     OcorrenciaPublica.status != OCORRENCIA_RESOLVIDA)
             .order_by(OcorrenciaPublica.criada_em).all())
@@ -226,3 +256,69 @@ def abertas(client_ids):
 def atrasada(oc, agora_utc=None):
     return bool(oc.prazo and oc.status != OCORRENCIA_RESOLVIDA
                 and (agora_utc or datetime.utcnow()) > oc.prazo)
+
+
+# ── Elogio ────────────────────────────────────────────────────────────────
+
+def elogiar(ponto, nota, texto, agora_utc=None, autor=None):
+    """Registra o elogio (1 a 5 estrelas) e avisa quem cuida do ponto no dia
+    — reconhecimento direto para a equipe. Sem escalado, ninguém é avisado
+    na hora: o elogio aparece no painel e no relatório do mês."""
+    from facilities.core import push
+    from facilities.core.rotas import avisar as avisar_no_sino
+    from facilities.rotas.servico import RegraDaRota
+    agora_utc = agora_utc or datetime.utcnow()
+    if not ponto.is_active:
+        raise RegraDaRota('Este ponto não recebe mais avaliações.', 409)
+    try:
+        nota = int(nota)
+    except (TypeError, ValueError):
+        nota = 0
+    if nota not in (1, 2, 3, 4, 5):
+        raise RegraDaRota('Escolha de 1 a 5 estrelas.')
+    autor_id = getattr(autor, 'id', None) if getattr(autor, 'is_authenticated', False) else None
+    el = ElogioPublico(ponto_id=ponto.id, client_id=ponto.client_id, nota=nota,
+                       texto=(texto or '').strip()[:TEXTO_MAX] or None, criado_em=agora_utc,
+                       responsavel_id=escalado_no_ponto(ponto, agora_utc), autor_id=autor_id)
+    db.session.add(el)
+    db.session.flush()
+    if el.responsavel_id:
+        titulo = f'Elogio: {nota} de 5 estrelas'
+        onde = f'{ponto.ambiente.setor.local.name} · {ponto.ambiente.nome} · {ponto.nome}'
+        if el.texto:
+            onde = f'{onde} — "{el.texto}"'[:300]
+        quem = avisar_no_sino({el.responsavel_id}, titulo, onde, '/app/', tipo='elogio',
+                              client_id=ponto.client_id)
+        push.avisar(quem, titulo, onde, '/app/', marca=f'elogio-{el.id}')
+    return el
+
+
+def media_dos_elogios(client_ids, de_utc=None, ate_utc=None):
+    """{local: (média, quantos)} dos elogios do período, numa consulta só."""
+    q = db.session.query(ElogioPublico.client_id, db.func.avg(ElogioPublico.nota),
+                         db.func.count(ElogioPublico.id)).filter(
+        ElogioPublico.client_id.in_(list(client_ids) or [-1]))
+    if de_utc is not None:
+        q = q.filter(ElogioPublico.criado_em >= de_utc)
+    if ate_utc is not None:
+        q = q.filter(ElogioPublico.criado_em < ate_utc)
+    return {cid: (round(float(m), 1), n)
+            for cid, m, n in q.group_by(ElogioPublico.client_id)}
+
+
+def do_periodo(client_ids, situacao=None, limite=300):
+    """Os avisos dos locais para a aba "Avisos pelo QR" das cobranças: os em
+    aberto primeiro, depois os resolvidos, mais novos antes."""
+    from sqlalchemy.orm import joinedload
+    from facilities.cadastros.models import Ambiente, PontoInspecao, Setor
+    q = (OcorrenciaPublica.query
+         .options(joinedload(OcorrenciaPublica.ponto)
+                  .joinedload(PontoInspecao.ambiente)
+                  .joinedload(Ambiente.setor)
+                  .joinedload(Setor.local),
+                  joinedload(OcorrenciaPublica.responsavel))
+         .filter(OcorrenciaPublica.client_id.in_(list(client_ids) or [-1])))
+    if situacao:
+        q = q.filter(OcorrenciaPublica.status == situacao)
+    return (q.order_by(OcorrenciaPublica.status == OCORRENCIA_RESOLVIDA,
+                       OcorrenciaPublica.criada_em.desc()).limit(limite).all())

@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% from 'portal/_abas_cobrancas.html' import abas, filtros %}
+{% block title %}Avisos pelo QR{% endblock %}
+{% block content %}
+<h1 class="fc-titulo">Cobranças do cliente</h1>
+<p class="fc-sub">O que o público avisou pelo QR dos pontos. Cada aviso vira a tarefa "Checar aviso" de quem está escalado no ponto; sem ninguém escalado, vai para o supervisor.</p>
+{{ abas('cobrancas.lista', 'qr') }}
+{{ filtros('cobrancas.lista', situacao, situacoes) }}
+<div class="fc-cartao p-0">
+  {% for o in avisos %}
+  <a class="d-flex flex-wrap gap-2 align-items-center border-bottom px-3 py-2 text-reset text-decoration-none" href="{{ url_for('rotas.dia', cid=o.client_id, data=(o.criada_em|hora_local('%Y-%m-%d'))) }}">
+    <span class="badge fc-sit fc-ocor-{{ o.status }}">{{ situacoes[o.status] }}</span>
+    {% if atrasada(o) %}<span class="badge fc-dem fc-dem-atrasada">Fora do prazo</span>{% endif %}
+    <span class="fw-semibold">{{ o.titulo }}</span>
+    <span class="small text-muted">{{ o.ponto.ambiente.setor.local.name }} · {{ o.ponto.ambiente.nome }} · {{ o.ponto.nome }}{% if o.texto %} · "{{ o.texto }}"{% endif %}</span>
+    <span class="small ms-auto">{{ o.criada_em|hora_local('%d/%m %H:%M') }}{% if o.responsavel %} · tarefa de {{ o.responsavel.name }}{% endif %}</span>
+  </a>
+  {% else %}
+  <div class="fc-vazio">Nenhum aviso pelo QR aqui.</div>
+  {% endfor %}
+</div>
+{% endblock %}

@@ -233,10 +233,7 @@
     var tarefas = tarefasDoLocal(l.id);
     var proxima = proximaTarefa(l.id, null);
     var avisos = (dados.ocorrencias || []).filter(function (o) { return (dados.pontos[o.ponto] || {}).local_id === l.id; });
-    if (avisos.length) {
-      sec.appendChild(el('div', {classe: 'alert alert-warning',
-        texto: avisos.length + ' aviso(s) do público esperando. Leia o QR do ponto para atender.'}));
-    }
+    if (avisos.length) sec.appendChild(cartaoChecarAvisos(avisos));
     var prevs = (dados.preventivas || []).filter(function (x) { return (dados.pontos[x.ponto] || {}).local_id === l.id; });
     if (prevs.length) {
       sec.appendChild(el('div', {classe: 'alert alert-info',
@@ -463,6 +460,36 @@
   }
 
   // ── Avisos do público pelo QR (Fase 4B) ───────────────────────────────
+  // Na lista do turno (27/10/2026): cada aviso é uma tarefa "Checar aviso",
+  // a de quem cuida do ponto com o selo "Sua". Tocar abre o ponto, onde se
+  // atende e resolve.
+  function cartaoChecarAvisos(lista) {
+    var cartao = el('div', {classe: 'fc-cartao mb-3 border-warning', id: 'turno-avisos'},
+      [el('h2', {classe: 'h6 fw-bold', texto: 'Checar avisos do público (' + lista.length + ')'})]);
+    lista.slice().sort(function (a, b) { return (b.minha ? 1 : 0) - (a.minha ? 1 : 0); })
+      .forEach(function (o) {
+        var item = el('a', {classe: 'fc-app-item text-reset text-decoration-none',
+                            href: '/app/turno?ponto=' + encodeURIComponent(o.ponto), 'data-aviso': o.id}, [
+          el('div', {classe: 'd-flex align-items-center gap-2 flex-wrap'}, [
+            el('span', {classe: 'badge text-bg-warning', texto: 'Checar aviso'}),
+            o.atrasada ? el('span', {classe: 'badge fc-sit fc-sit-atrasada', texto: 'Fora do prazo'}) : null,
+            o.status === 'em_atendimento' ? el('span', {classe: 'badge fc-ocor-em_atendimento', texto: 'Em atendimento'}) : null,
+            o.minha ? el('span', {classe: 'badge text-bg-light', texto: 'Sua'}) : null]),
+          el('span', {classe: 'fw-semibold', texto: o.tipo}),
+          el('span', {classe: 'small text-muted',
+                      texto: o.ambiente + ' · ' + o.ponto_nome + ' · às ' + o.hora +
+                             (o.texto ? ' · "' + o.texto + '"' : '') +
+                             (o.responsavel && !o.minha ? ' · com ' + o.responsavel : '')})]);
+        item.addEventListener('click', function (ev) {
+          ev.preventDefault();
+          history.pushState(null, '', '/app/turno?ponto=' + encodeURIComponent(o.ponto));
+          telaPonto(o.ponto);
+        });
+        cartao.appendChild(item);
+      });
+    return cartao;
+  }
+
   function cartaoOcorrencias(lista) {
     var cartao = el('div', {classe: 'fc-cartao mb-3 border-warning'},
       [el('h2', {classe: 'h6 fw-bold', texto: 'Avisos do público aqui'})]);

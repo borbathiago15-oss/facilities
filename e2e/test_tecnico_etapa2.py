@@ -198,6 +198,9 @@ def test_pagina_publica_e_aqui_itens_e_enviar(servidor, navegador):
         _capturar(pg, '08-publico-e-aqui')
         pg.get_by_role('button', name='Sim').click()
         assert pg.locator('[data-passo="lugar"]').is_hidden()
+        # 27/10/2026: avisar um problema ou elogiar.
+        assert pg.get_by_role('link', name='Fazer um elogio').is_visible()
+        pg.get_by_role('button', name='Avisar um problema').click()
         # Sem marcar nada: não passa.
         pg.get_by_role('button', name='Continuar').click()
         assert pg.locator('[data-erro-problema]').is_visible()
@@ -208,7 +211,8 @@ def test_pagina_publica_e_aqui_itens_e_enviar(servidor, navegador):
         assert pg.locator('[data-passo="foto"]').is_visible()
         pg.get_by_role('button', name='Enviar').click()
         pg.wait_for_url('**/acompanhar/**')
-        assert 'Recebemos o seu aviso' in pg.content() and 'Itens do checklist' in pg.content()
+        assert 'Recebemos o seu aviso' in pg.content() and 'Lixeira cheia' in pg.content()
+        assert 'Itens do checklist' not in pg.content()
         _sem_rolagem_lateral(pg)
         _capturar(pg, '10-publico-obrigado')
         assert servidor['sql']('SELECT tipo, texto, itens_json, autor_id FROM ocorrencias_publicas') == \
@@ -225,6 +229,7 @@ def test_ponto_sem_checklist_mantem_os_tipos(servidor, navegador):
         pg = ctx.new_page()
         pg.goto(base + '/q/' + QR_ENTRADA)              # a portaria não tem rota
         pg.get_by_role('button', name='Sim').click()
+        pg.get_by_role('button', name='Avisar um problema').click()
         assert pg.locator('label.fc-opcao', has_text='Local sujo').is_visible()
         assert pg.locator('label.fc-opcao', has_text='Itens do checklist').count() == 0
     finally:

@@ -35,6 +35,8 @@ FORA = {
     # Público por decisão (D47): qualquer pessoa no local abre ocorrência
     # pelo QR, logada ou não. Testado em test_qr_publico.py.
     'publico.abrir_ocorrencia': 'aberto ao público por desenho',
+    # O elogio pelo QR (27/10/2026): idem. Testado em test_reclamacao_elogio.py.
+    'publico.elogio': 'aberto ao público por desenho',
 }
 # Rotas fora da varredura só para UM perfil, com o motivo.
 FORA_PARA = {

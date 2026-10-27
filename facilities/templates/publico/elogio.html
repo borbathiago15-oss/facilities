@@ -1,0 +1,26 @@
+{% extends 'publico/_base.html' %}
+{% block title %}Fazer um elogio{% endblock %}
+{% block content %}
+<form method="post" action="{{ url_for('publico.elogio', codigo=ponto.codigo_qr) }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  {% if erro %}<div class="alert alert-danger" role="alert">{{ erro }}</div>{% endif %}
+  <h1 class="h4 fw-bold">Como está o {{ ponto.nome }}?</h1>
+  <p class="text-muted">{{ ponto.ambiente.nome }}{% if local %} · {{ local }}{% endif %}</p>
+  {# As estrelas vão da 5 para a 1 no HTML e a fila é virada no CSS: assim
+     a estrela escolhida acende ela e as anteriores, sem JavaScript. #}
+  <fieldset class="mb-3">
+    <legend class="fw-semibold fs-6">Toque nas estrelas</legend>
+    <div class="fc-estrelas">
+      {% for n in [5, 4, 3, 2, 1] %}
+      <input class="fc-estrela-radio" type="radio" id="nota{{ n }}" name="nota" value="{{ n }}" required>
+      <label class="fc-estrela" for="nota{{ n }}"><i class="bi bi-star-fill" aria-hidden="true"></i><span class="visually-hidden">{{ n }} estrela{{ 's' if n > 1 }}</span></label>
+      {% endfor %}
+    </div>
+  </fieldset>
+  <label class="form-label fw-semibold" for="texto">Quer deixar um comentário? (opcional)</label>
+  <textarea class="form-control mb-3" id="texto" name="texto" rows="3" maxlength="300" placeholder="Ex.: banheiro impecável hoje, parabéns à equipe"></textarea>
+  <div class="fc-isca" aria-hidden="true"><label for="site">Não preencha</label><input id="site" name="site" tabindex="-1" autocomplete="off"></div>
+  <button class="btn btn-primary btn-lg w-100 fw-bold fc-app-acao mb-2" type="submit">Enviar elogio</button>
+  <a class="btn btn-link w-100" href="{{ url_for('cadastros.qr', codigo=ponto.codigo_qr) }}">Prefiro avisar um problema</a>
+</form>
+{% endblock %}

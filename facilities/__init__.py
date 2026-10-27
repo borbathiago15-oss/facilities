@@ -51,7 +51,7 @@ _LIVRES_DO_CLIENTE = _LIVRES_SEM_SEGUNDA_ETAPA | {'core.avisos', 'core.abrir_avi
                                                  # O QR público (D47) é de qualquer pessoa no
                                                  # local; o cliente logado abre e fica como autor.
                                                  'cadastros.qr', 'publico.abrir_ocorrencia',
-                                                 'publico.acompanhar'}
+                                                 'publico.acompanhar', 'publico.elogio'}
 MSG_SO_DA_EQUIPE = 'Esta parte do sistema é da equipe da Trino. Use o portal do cliente.'
 
 

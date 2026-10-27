@@ -4,10 +4,12 @@
 <h1 class="h4 fw-bold">Recebemos o seu aviso</h1>
 <p class="text-muted">{{ oc.ponto.ambiente.nome }} · {{ oc.ponto.nome }}</p>
 <div class="fc-cartao mb-3">
-  <p class="mb-1"><strong>{{ tipos.get(oc.tipo, oc.tipo) }}</strong></p>
+  <p class="mb-1"><strong>{{ oc.titulo }}</strong></p>
+  {% if oc.texto %}<p class="mb-1">"{{ oc.texto }}"</p>{% endif %}
   <p class="mb-1">Situação: <span class="badge fc-sit fc-ocor-{{ oc.status }}">{{ situacoes[oc.status] }}</span></p>
   <p class="small text-muted mb-0">Enviado às {{ oc.criada_em|hora_local('%H:%M') }} de {{ oc.criada_em|hora_local('%d/%m') }}.
     {% if oc.resolvida_em %} Resolvido às {{ oc.resolvida_em|hora_local('%H:%M') }}.{% elif oc.atendida_em %} Em atendimento desde as {{ oc.atendida_em|hora_local('%H:%M') }}.{% endif %}</p>
 </div>
 <p class="small">Guarde este endereço para acompanhar: esta página se atualiza quando a equipe atender.</p>
+<a class="btn btn-outline-primary w-100 fc-app-acao" href="{{ url_for('publico.elogio', codigo=oc.ponto.codigo_qr) }}"><i class="bi bi-star" aria-hidden="true"></i> Quer deixar um elogio também?</a>
 {% endblock %}

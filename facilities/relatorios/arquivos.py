@@ -188,6 +188,18 @@ def pdf(d, fotos, carregar_foto, recado=None):
               ['Suas cobranças', f'{cb["abertas"]} aberta(s), {cb["respondidas"]} respondida(s) '
                f'({cb["no_prazo"]} no prazo), {cb["encerradas"]} encerrada(s)']],
               [largura * .35, largura * .65], est)]
+    el = d.get('elogios')
+    if el:
+        h.append(Paragraph('Elogios do público', est['secao']))
+        if el['total']:
+            h.append(Paragraph(f'Média {_num(el["media"], 1, "")} de 5 estrelas em '
+                               f'{el["total"]} avaliação(ões) pelo QR dos pontos.', est['txt']))
+            if el['comentarios']:
+                h.append(_tabela(['Comentário', 'Estrelas', 'Onde'],
+                                 [[c['texto'], c['nota'], c['onde']] for c in el['comentarios']],
+                                 [largura * .55, largura * .12, largura * .33], est))
+        else:
+            h.append(Paragraph('Nenhuma avaliação pelo QR no mês.', est['txt']))
 
     if fotos:
         h.append(Paragraph('Fotos do mês', est['secao']))
@@ -283,6 +295,12 @@ def excel(d):
         ['Visitas sem não conformidade', v['conformes']],
         ['Cobranças abertas', cb['abertas']], ['Cobranças respondidas', cb['respondidas']],
         ['Respondidas no prazo', cb['no_prazo']], ['Cobranças encerradas', cb['encerradas']]])
+    el = d.get('elogios')
+    if el:
+        aba(wb.create_sheet('Elogios'), ['Quando', 'Estrelas', 'Onde', 'Comentário'],
+            [['Média do mês', el['media'], f'{el["total"]} avaliação(ões)', '']] +
+            [[tempo.fmt(c['quando'], vazio=''), c['nota'], c['onde'], c['texto']]
+             for c in el['comentarios']])
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()

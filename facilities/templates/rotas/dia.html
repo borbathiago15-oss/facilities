@@ -41,7 +41,8 @@
   <div class="d-flex flex-wrap gap-2 align-items-center border-bottom px-3 py-2">
     <span class="fw-bold">{{ o.criada_em|hora_local('%H:%M') }}</span>
     <span>{{ o.ponto.ambiente.nome }} · {{ o.ponto.nome }}</span>
-    <span class="fw-semibold">{{ tipos_ocorrencia.get(o.tipo, o.tipo) }}</span>
+    <span class="fw-semibold">{{ o.titulo }}</span>
+    {% if o.responsavel %}<span class="small text-muted">tarefa de {{ o.responsavel.name }}</span>{% endif %}
     {% if o.texto %}<span class="small text-muted">"{{ o.texto }}"</span>{% endif %}
     {% if o.foto_key %}<a class="small" href="{{ url_for('publico.foto_da_ocorrencia', oid=o.id) }}" target="_blank" rel="noopener">foto</a>{% endif %}
     <span class="badge fc-sit fc-ocor-{{ o.status }}">{{ situacoes_ocorrencia[o.status] }}</span>
@@ -60,6 +61,20 @@
   </div>
   {% else %}
   <div class="fc-vazio">Nenhuma ocorrência do público neste dia.</div>
+  {% endfor %}
+</div>
+<h2 class="h6 fw-bold mt-3">Elogios do público</h2>
+<div class="fc-cartao p-0 mb-3">
+  {% for e in elogios %}
+  <div class="d-flex flex-wrap gap-2 align-items-center border-bottom px-3 py-2">
+    <span class="fw-bold">{{ e.criado_em|hora_local('%H:%M') }}</span>
+    <span>{{ e.ponto.ambiente.nome }} · {{ e.ponto.nome }}</span>
+    <span class="fc-nota-estrelas" aria-label="{{ e.nota }} de 5 estrelas">{% for i in range(5) %}<i class="bi {{ 'bi-star-fill' if i < e.nota else 'bi-star' }}" aria-hidden="true"></i>{% endfor %}</span>
+    {% if e.texto %}<span class="small text-muted">"{{ e.texto }}"</span>{% endif %}
+    {% if e.responsavel %}<span class="ms-auto small text-muted">equipe: {{ e.responsavel.name }}</span>{% endif %}
+  </div>
+  {% else %}
+  <div class="fc-vazio">Nenhum elogio neste dia.</div>
   {% endfor %}
 </div>
 

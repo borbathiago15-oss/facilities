@@ -1,5 +1,6 @@
 // A página pública do QR (sem login), passo a passo no celular:
-//   "É aqui?" → o que está acontecendo (itens do checklist) → foto → enviar.
+//   "É aqui?" → avisar um problema ou elogiar (o elogio é outra página) →
+//   o que está acontecendo (itens do checklist) → foto → enviar.
 // Sem JavaScript o formulário inteiro aparece de uma vez e funciona igual.
 (function () {
   'use strict';
@@ -57,7 +58,11 @@
   form.addEventListener('change', function () { if (problemaOk()) form.querySelector('[data-erro-problema]').hidden = true; });
   form.addEventListener('input', function () { if (problemaOk()) form.querySelector('[data-erro-problema]').hidden = true; });
   form.addEventListener('submit', function (ev) {
-    if (!problemaOk()) { ev.preventDefault(); mostrar(1); form.querySelector('[data-erro-problema]').hidden = false; }
+    if (!problemaOk()) {
+      ev.preventDefault();
+      mostrar(passos.indexOf(form.querySelector('[data-passo=problema]')));
+      form.querySelector('[data-erro-problema]').hidden = false;
+    }
   });
   mostrar(0);
 })();

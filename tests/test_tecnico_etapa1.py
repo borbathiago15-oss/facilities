@@ -485,8 +485,9 @@ def test_publico_marca_itens_e_o_cliente_logado_fica_como_autor(app_module, cena
         oc = OcorrenciaPublica.query.one()
         assert oc.itens == ['mictorios', 'papel_higienico_reposto'] and oc.autor_id is None
         from facilities.rotas import ocorrencias
-        assert ocorrencias.rotulos_dos_itens(oc) == ['Problema: Mictórios',
-                                                     'Problema: Papel higiênico reposto?']
+        # Na tela, sem o "Problema: " da frente (27/10/2026).
+        assert ocorrencias.rotulos_dos_itens(oc) == ['Mictórios', 'Papel higiênico reposto?']
+        assert oc.resumo == 'Mictórios, Papel higiênico reposto?'
     # "Outro" continua exigindo o texto, mesmo com item marcado.
     r = c.post(f"/q/{cena['qr']}/ocorrencia", data={'tipo': 'outro', 'itens': ['mictorios']},
                content_type='multipart/form-data')
