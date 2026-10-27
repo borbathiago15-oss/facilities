@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block title %}Clientes, áreas e rotas{% endblock %}
+{% block content %}
+<h1 class="fc-titulo">Clientes, áreas e rotas</h1>
+<p class="fc-sub">Escolha o cliente, depois o centro de custo. Lá dentro você cadastra as áreas (cada uma ganha um QR) e as rotas de limpeza.</p>
+{% if pode_criar %}<a class="btn btn-outline-primary mb-3" href="{{ url_for('montagem.inicio') }}"><i class="bi bi-plus-lg" aria-hidden="true"></i> Novo cliente</a>{% endif %}
+{% for c in clientes %}
+<section class="fc-cartao mb-3" aria-labelledby="cli{{ c.id }}">
+  <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+    <h2 class="h5 fw-bold mb-0" id="cli{{ c.id }}">{{ c.nome }}</h2>
+    <a class="btn btn-sm btn-primary ms-auto" href="{{ url_for('centros.cliente', ctid=c.id) }}">Abrir o cliente</a>
+  </div>
+  {% for loc in centros[c.id] %}
+  <a class="fc-app-item text-reset text-decoration-none" href="{{ url_for('centros.centro', cid=loc.id) }}">
+    <span class="fw-semibold">{{ loc.name }}</span>
+    <span class="small text-muted">Centro de custo{% if loc.cost_center %} {{ loc.cost_center }}{% endif %}</span>
+  </a>
+  {% else %}
+  <p class="small text-muted mb-0">Nenhum centro de custo ainda. Abra o cliente para cadastrar o primeiro.</p>
+  {% endfor %}
+</section>
+{% else %}
+<div class="fc-cartao fc-vazio">Nenhum cliente na sua carteira.{% if pode_criar %} Comece por "Novo cliente".{% endif %}</div>
+{% endfor %}
+{% endblock %}

@@ -894,7 +894,9 @@ def _dados_do_turno(locais):
     # pelo ponto. Na área fora da rota, é o que abre (em vez da lista inteira
     # dos checklists do local).
     vigente = {m.id: m.versao_atual.id for m in modelos if m.versao_atual}
-    escopo = {}
+    # O checklist da própria área (cadastro simplificado) vem primeiro.
+    escopo = {p.id: [vigente[p.checklist_id]] for p in pontos.values()
+              if p.checklist_id in vigente}
     for pid, mid in (db.session.query(RotaItem.ponto_id, RotaItem.modelo_id)
                      .join(Rota, Rota.id == RotaItem.rota_id)
                      .filter(Rota.client_id.in_(ids or [-1]), Rota.is_active.is_(True),
