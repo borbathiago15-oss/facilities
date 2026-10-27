@@ -88,10 +88,11 @@ def _gravar(user_id, ponto, dia, chegou_em, com_camera, liberada_por=None):
     return c, True
 
 
-def registrar(user, ponto, agora_utc=None, com_camera=True):
+def registrar(user, ponto, agora_utc=None, com_camera=True, gps_bruto=None):
     """A pessoa leu o QR da entrada. → (chegada, nova)
 
-    ``agora_utc`` é a hora da leitura (o selo do servidor, quando houver).
+    ``agora_utc`` é a hora da leitura (o selo do servidor, quando houver);
+    ``gps_bruto``, a posição do celular naquele instante (``rotas.gps``).
     """
     from facilities.rotas.servico import PERFIS_QUE_EXECUTAM
     agora_utc = agora_utc or datetime.utcnow()
@@ -104,7 +105,14 @@ def registrar(user, ponto, agora_utc=None, com_camera=True):
     if user._effective_role() not in PERFIS_QUE_EXECUTAM:
         raise _regra('Seu perfil não registra chegada.', 403)
     dia = tempo.local(agora_utc).date()
-    return _gravar(user.id, ponto, dia, agora_utc, bool(com_camera))
+    c, nova = _gravar(user.id, ponto, dia, agora_utc, bool(com_camera))
+    if nova:
+        from facilities.core.models import Client
+        from facilities.rotas import gps
+        local = db.session.get(Client, ponto.client_id)
+        if gps.gravar(c, local, gps_bruto) == gps.FORA:
+            gps.avisar_fora(user, local, f'chegada ({ponto.nome})', agora_utc)
+    return c, nova
 
 
 def liberar(gestor, user, local, dia=None, agora_utc=None):

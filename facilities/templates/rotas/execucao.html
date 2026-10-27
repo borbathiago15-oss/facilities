@@ -11,6 +11,7 @@
     <div class="col-6 col-md-3"><div class="text-muted">Concluído</div><div class="fw-semibold">{{ ex.concluida_em|hora_local }}</div></div>
     <div class="col-6 col-md-3"><div class="text-muted">Registro</div><div class="fw-semibold">{% if ex.sem_sinal %}Horário do celular (sem sinal ou sem leitura do QR pela câmera), recebido {{ ex.recebida_em|hora_local }}{% else %}Horário do sistema{% endif %}</div></div>
   </div>
+  {% if ex.gps_situacao %}<p class="small mt-2 mb-0"><span class="text-muted">Localização na leitura do QR:</span> <strong class="{{ 'text-danger' if ex.gps_situacao == 'fora' else '' }}">{{ texto_gps(ex.gps_situacao, ex.gps_distancia_m) }}</strong>{% if ex.gps_precisao_m %} <span class="text-muted">(precisão do celular: {{ ex.gps_precisao_m }} m)</span>{% endif %}</p>{% endif %}
   {% if ex.tarefa %}<p class="small mt-2 mb-0">Tarefa das {{ ex.tarefa.previsto_para|hora_local('%H:%M') }} da rota "{{ ex.tarefa.rota.nome }}"{% if ex.adiantada %}, adiantada{% endif %}.</p>{% endif %}
   {% if ex.motivo_troca %}<p class="small mt-1 mb-0">{{ 'Adiantada' if ex.tarefa else 'Fora da rota' }} — motivo: {{ motivos_troca.get(ex.motivo_troca, ex.motivo_troca) }}{% if ex.motivo_troca_texto %}: {{ ex.motivo_troca_texto }}{% endif %}</p>{% endif %}
 </div>

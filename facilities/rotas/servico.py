@@ -1452,6 +1452,13 @@ def registrar_execucao(user, dados, fotos, agora_utc=None):
                   motivo_troca=motivo_troca if chamado is None else None,
                   motivo_troca_texto=motivo_troca_texto if chamado is None else None)
     ex.virou_extra = virou_extra
+    # GPS na leitura do QR (27/10/2026): aceita sempre; fora do local, marca
+    # e avisa a supervisão (uma vez por pessoa e dia).
+    from facilities.core.models import Client
+    from facilities.rotas import gps
+    local = db.session.get(Client, ponto.client_id)
+    if gps.gravar(ex, local, dados.get('gps')) == gps.FORA:
+        gps.avisar_fora(user, local, f'{ponto.ambiente.nome} · {ponto.nome}', agora_utc)
     db.session.add(ex)
     try:
         db.session.flush()

@@ -266,6 +266,12 @@ SEMENTES = [
     # Cadastro simplificado: a área com o checklist dela.
     "UPDATE pontos_inspecao SET checklist_id=(SELECT MIN(id) FROM checklist_modelos "
     "WHERE client_id IS NOT NULL)",
+    # GPS na leitura do QR: a posição do local e a situação das leituras.
+    "UPDATE clients SET latitude=-12.977749, longitude=-38.501630, raio_gps_m=250, "
+    "posicao_marcada_em=now(), posicao_marcada_por=(SELECT id FROM users "
+    "WHERE email='gerente@ensaio')",
+    "UPDATE execucoes SET gps_situacao='fora', gps_distancia_m=1100, gps_precisao_m=25",
+    "UPDATE chegadas SET gps_situacao='sem_gps'",
 ]
 
 

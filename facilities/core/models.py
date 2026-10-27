@@ -114,6 +114,15 @@ class Client(db.Model):
                                nullable=True, index=True)
     estado_id = db.Column(db.Integer, db.ForeignKey('estados.id', ondelete='RESTRICT'),
                           nullable=True, index=True)
+    # GPS na leitura do QR (decisões do dono, 27/10/2026): a posição do local,
+    # marcada pela gestão NO local ("Marcar a posição deste local"), e o raio
+    # em metros (vazio = o padrão de ``rotas.gps.RAIO_PADRAO_M``).
+    latitude = db.Column(db.Numeric(9, 6), nullable=True)
+    longitude = db.Column(db.Numeric(9, 6), nullable=True)
+    raio_gps_m = db.Column(db.Integer, nullable=True)
+    posicao_marcada_em = db.Column(db.DateTime, nullable=True)
+    posicao_marcada_por = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='RESTRICT'),
+                                    nullable=True)
 
     responsavel = db.relationship('User', foreign_keys=[responsible_user_id])
     contratante = db.relationship('Contratante', backref='locais')
