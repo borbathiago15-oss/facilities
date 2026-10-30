@@ -147,15 +147,19 @@ def test_conferir_acusa_campo_sem_cifra(app_module):
         db.session.commit()
 
 
-def test_sem_chave_o_sistema_sobe_com_aviso(monkeypatch, tmp_path, caplog):
+def test_sem_chave_o_sistema_sobe_com_aviso(monkeypatch, tmp_path):
+    from types import SimpleNamespace
     monkeypatch.delenv('FIELD_ENCRYPTION_KEY')
     monkeypatch.setenv('EXIGIR_DATABASE_URL', '1')
     monkeypatch.setenv('DATABASE_URL', 'postgresql://u:p@127.0.0.1:1/facilities')
     monkeypatch.setenv('UPLOAD_FOLDER', str(tmp_path))
+    avisos = []
     try:
-        create_app()
+        create_app()            # a imagem de produção sobe sem a chave
         assert not cifra.ligada()
-        assert 'TEXTO ABERTO' in caplog.text
+        cifra.configurar_app(SimpleNamespace(
+            logger=SimpleNamespace(warning=lambda msg, *a: avisos.append(msg))))
+        assert avisos and 'TEXTO ABERTO' in avisos[0]
     finally:
         cifra.configurar(CHAVE_SUITE)
 
