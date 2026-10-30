@@ -1,10 +1,16 @@
 """Criptografia dos campos sensíveis no banco (pedido do dono, 30/10/2026).
 
-Quem copiar o banco, um backup ou um log de consulta NÃO lê e-mail, telefone,
+É OPCIONAL e não depende de hospedagem: liga com ``FIELD_ENCRYPTION_KEY`` no
+ambiente de qualquer servidor onde o sistema e o banco estiverem (Railway,
+servidor da empresa, outra nuvem). Sem a chave, os campos ficam em texto
+aberto, como antes. Para ligar num banco que já tem dado: pôr a chave e
+rodar ``flask chaves girar``.
+
+Com a cifra ligada, quem copiar o banco, um backup ou um log de consulta NÃO lê e-mail, telefone,
 endereço, segredo da segunda etapa nem as chaves do aviso no celular: essas
 colunas guardam o texto cifrado (Fernet: AES-128-CBC + HMAC-SHA256, com
 carimbo de tempo e vetor aleatório a cada gravação). A chave fica FORA do
-banco, na variável ``FIELD_ENCRYPTION_KEY`` (Railway), com cópia num cofre
+banco, na variável ``FIELD_ENCRYPTION_KEY`` do servidor, com cópia num cofre
 offline — sem ela, o dado cifrado não volta. Ver ``docs/SEGURANCA_DADOS.md``.
 
 Senha não entra aqui: ela nunca é guardada, só o hash (scrypt) — e hash não
@@ -35,7 +41,6 @@ from sqlalchemy.types import Text, TypeDecorator
 
 # Todo token Fernet começa com o byte de versão 0x80 → "gAAAAA" em base64.
 _PREFIXO = 'gAAAAA'
-_ARQUIVO_DEV = 'chave_dos_campos.key'
 
 _estado = {'chaves': None}
 
@@ -64,42 +69,41 @@ def _ler_chaves(texto_principal, texto_antigas=''):
 
 
 def configurar(principal, antigas=''):
-    """Liga a criptografia com a chave dada (e as antigas, só para ler)."""
+    """Liga a criptografia com a chave dada (e as antigas, só para ler).
+    Sem chave principal, a cifra fica DESLIGADA (texto aberto)."""
+    principal = (principal or '').strip()
+    if not principal:
+        if (antigas or '').strip():
+            raise ChaveAusente('FIELD_ENCRYPTION_OLD_KEYS sem FIELD_ENCRYPTION_KEY: defina a '
+                               'chave principal.')
+        _estado['chaves'] = []
+        return
     _estado['chaves'] = _ler_chaves(principal, antigas)
 
 
-def configurar_app(app, sqlite, exigir_producao):
-    """Chamado pela fábrica. Fora do SQLite de desenvolvimento, sem a chave o
-    app NÃO sobe: subir sem ela gravaria dado que ninguém mais lê."""
-    principal = (os.environ.get('FIELD_ENCRYPTION_KEY') or '').strip()
-    antigas = os.environ.get('FIELD_ENCRYPTION_OLD_KEYS') or ''
-    if not principal:
-        if not sqlite or exigir_producao:
-            raise ChaveAusente(
-                'FIELD_ENCRYPTION_KEY não definida. Ela cifra e-mails, telefones, endereços e '
-                'o segredo da segunda etapa no banco: sem ela o sistema não sobe. Gere com '
-                '"flask chaves gerar", ponha no ambiente e guarde uma cópia no cofre offline.')
-        # SQLite de desenvolvimento: uma chave local, guardada na pasta
-        # instance/ (fora do git) para o banco de dev continuar legível.
-        os.makedirs(app.instance_path, exist_ok=True)
-        caminho = os.path.join(app.instance_path, _ARQUIVO_DEV)
-        if not os.path.exists(caminho):
-            with open(caminho, 'w') as f:
-                f.write(gerar_chave())
-            app.logger.warning('FIELD_ENCRYPTION_KEY não definida: chave de desenvolvimento '
-                               'criada em %s.', caminho)
-        with open(caminho) as f:
-            principal = f.read().strip()
-    configurar(principal, antigas)
+def configurar_app(app):
+    """Chamado pela fábrica. A cifra é OPCIONAL (decisão do dono, 30/10/2026:
+    ligar quando quiser, em qualquer servidor onde o banco estiver): com
+    ``FIELD_ENCRYPTION_KEY`` no ambiente ela vale; sem, o sistema sobe com os
+    campos em texto aberto, como antes, e avisa no log."""
+    configurar(os.environ.get('FIELD_ENCRYPTION_KEY') or '',
+               os.environ.get('FIELD_ENCRYPTION_OLD_KEYS') or '')
+    if not ligada():
+        app.logger.warning('FIELD_ENCRYPTION_KEY não definida: e-mails, telefones, endereços e '
+                           'o segredo da segunda etapa ficam em TEXTO ABERTO no banco. Para '
+                           'ligar a cifra, veja docs/SEGURANCA_DADOS.md.')
 
 
 def _chaves():
     if _estado['chaves'] is None:
-        principal = (os.environ.get('FIELD_ENCRYPTION_KEY') or '').strip()
-        if not principal:
-            raise ChaveAusente('Criptografia dos campos sem chave (FIELD_ENCRYPTION_KEY).')
-        configurar(principal, os.environ.get('FIELD_ENCRYPTION_OLD_KEYS') or '')
+        configurar(os.environ.get('FIELD_ENCRYPTION_KEY') or '',
+                   os.environ.get('FIELD_ENCRYPTION_OLD_KEYS') or '')
     return _estado['chaves']
+
+
+def ligada():
+    """A cifra está ligada (há chave)?"""
+    return bool(_chaves())
 
 
 def _fernet():
@@ -107,19 +111,26 @@ def _fernet():
 
 
 def cifrar(texto):
+    """Texto → cifrado. Com a cifra desligada, grava o texto como veio."""
     if texto is None:
         return None
+    if not ligada():
+        return str(texto)
     return _fernet().encrypt(str(texto).encode()).decode()
 
 
 def decifrar(valor):
-    """Texto cifrado → texto. Valor que não é token (linha antiga, ainda não
-    migrada) volta como está; token que nenhuma chave abre é ERRO — nunca
-    devolver lixo em silêncio."""
+    """Texto cifrado → texto. Valor que não é token (gravado com a cifra
+    desligada, ou antes dela) volta como está; token que nenhuma chave abre
+    — ou token com a cifra desligada — é ERRO: nunca devolver lixo em
+    silêncio."""
     if valor is None:
         return None
     if not valor.startswith(_PREFIXO):
         return valor
+    if not ligada():
+        raise ChaveAusente('O banco tem campos cifrados, mas FIELD_ENCRYPTION_KEY não está '
+                           'definida: ponha de volta a chave usada (está no cofre).')
     try:
         return _fernet().decrypt(valor.encode()).decode()
     except InvalidToken as e:
@@ -128,9 +139,12 @@ def decifrar(valor):
 
 
 def recifrar(valor):
-    """Recifra com a chave principal (rodízio). Texto antigo é cifrado."""
+    """Com a chave principal: texto aberto é cifrado, cifrado é recifrado
+    (ligar a cifra e rodízio são o mesmo comando). Desligada: fica como está."""
     if valor is None:
         return None
+    if not ligada():
+        return valor
     if not valor.startswith(_PREFIXO):
         return cifrar(valor)
     return _fernet().rotate(valor.encode()).decode()
@@ -153,18 +167,27 @@ def _indice_com(chave, texto):
     return hmac.new(_chave_indice(chave), texto.encode(), hashlib.sha256).hexdigest()
 
 
+def _indice_aberto(texto):
+    # Cifra desligada: um hash simples, só para a busca funcionar igual.
+    # Ligar a cifra (``flask chaves girar``) troca pelo HMAC com a chave.
+    return hashlib.sha256(b'facilities-indice-aberto-v1:' + texto.encode()).hexdigest()
+
+
 def indice(email):
-    """O índice cego do e-mail, com a chave principal (é o que se grava)."""
+    """O índice do e-mail que se GRAVA: HMAC com a chave principal, ou o
+    hash simples com a cifra desligada."""
     if email is None:
         return None
-    return _indice_com(_chaves()[0], normalizar_email(email))
+    texto = normalizar_email(email)
+    chaves = _chaves()
+    return _indice_com(chaves[0], texto) if chaves else _indice_aberto(texto)
 
 
 def indices(email):
-    """O índice com cada chave configurada — o que se PROCURA (durante um
-    rodízio, a linha ainda pode estar com o índice da chave antiga)."""
+    """O que se PROCURA: o índice com cada chave configurada e o da cifra
+    desligada (a linha pode ser de antes de ligar, ou de antes do rodízio)."""
     texto = normalizar_email(email)
-    return [_indice_com(k, texto) for k in _chaves()]
+    return [_indice_com(k, texto) for k in _chaves()] + [_indice_aberto(texto)]
 
 
 class Cifrado(TypeDecorator):

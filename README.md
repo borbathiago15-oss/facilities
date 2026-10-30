@@ -91,6 +91,12 @@ Passo a passo do Railway (a hospedagem escolhida): `docs/DEPLOY_RAILWAY.md`.
   | `SECRET_KEY` | sim, fora do SQLite de desenvolvimento | não sobe — sem ela cada processo do gunicorn sortearia a sua, e o login e as sessões falhariam ao acaso |
   | `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` | sim, para anexos no Cloudflare R2 | não sobe, dizendo qual falta — a menos que `STORAGE_BACKEND=local` esteja escrito (anexos no disco do servidor: só com volume persistente) |
 
+- **Cifra dos campos sensíveis (opcional, qualquer servidor):**
+  `FIELD_ENCRYPTION_KEY` cifra no banco e-mails, telefones, endereços e o
+  segredo da segunda etapa. Sem ela o app sobe com esses campos em texto
+  aberto (e avisa no log). Ligar, trocar a chave, backup cifrado:
+  `docs/SEGURANCA_DADOS.md`.
+
 - **Agendador das rotas**: gera as tarefas do dia, avisa a hora de cada uma,
   pede e fecha as confirmações de presença e marca as perdidas. Precisa
   rodar **a cada 5 minutos**, por um destes caminhos:

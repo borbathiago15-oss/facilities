@@ -253,7 +253,7 @@ def create_app(config=None):
     sqlite = _eh_sqlite(app.config['SQLALCHEMY_DATABASE_URI'])
     _garantir_segredo(app, sqlite)
     from facilities.core import cifra
-    cifra.configurar_app(app, sqlite, _flag('EXIGIR_DATABASE_URL', False))
+    cifra.configurar_app(app)
     _conferir_limites_compartilhados(app)
     # Antes das extensões: configuração recusada não toca em nada.
     storage = get_storage(app.config['UPLOAD_FOLDER'], local_implicito=sqlite)
@@ -583,10 +583,16 @@ def _comandos(app):
 
     @chaves_cli.command('girar')
     def chaves_girar():
-        """Recifra todos os campos com a chave principal e refaz os índices
-        cegos. Rode depois de pôr a chave nova em FIELD_ENCRYPTION_KEY e a
-        antiga em FIELD_ENCRYPTION_OLD_KEYS; só então tire a antiga."""
+        """Liga a cifra num banco que já tem dado, ou troca a chave: cifra o
+        que está aberto, recifra o resto com a chave principal e refaz os
+        índices. Ligar: ponha FIELD_ENCRYPTION_KEY e rode. Trocar: chave nova
+        em FIELD_ENCRYPTION_KEY, a antiga em FIELD_ENCRYPTION_OLD_KEYS, rode,
+        e só então tire a antiga."""
+        from facilities.core import cifra
         from facilities.core.cifra_banco import girar
+        if not cifra.ligada():
+            click.echo('FIELD_ENCRYPTION_KEY não definida: nada a cifrar.', err=True)
+            raise SystemExit(1)
         for tabela, n in girar(db.session).items():
             click.echo(f'{tabela}: {n} linha(s) recifrada(s)')
         db.session.commit()
@@ -594,7 +600,11 @@ def _comandos(app):
     @chaves_cli.command('conferir')
     def chaves_conferir():
         """Confere se algum campo sensível ficou sem cifra (sai com erro se sim)."""
+        from facilities.core import cifra
         from facilities.core.cifra_banco import em_claro
+        if not cifra.ligada():
+            click.echo('A cifra está desligada (sem FIELD_ENCRYPTION_KEY): os campos sensíveis '
+                       'ficam em texto aberto.', err=True)
         faltando = em_claro(db.session)
         for (tabela, coluna), n in faltando.items():
             click.echo(f'{tabela}.{coluna}: {n} valor(es) sem cifra', err=True)

@@ -6,7 +6,9 @@
 * e-mail repetido continua barrado (o índice é único);
 * rodízio: chave nova + a antiga em FIELD_ENCRYPTION_OLD_KEYS lê tudo, o
   ``flask chaves girar`` recifra, e depois a antiga pode sair;
-* fora do SQLite de desenvolvimento, sem a chave o sistema não sobe.
+* a cifra é OPCIONAL: sem a chave o sistema sobe com os campos em texto
+  aberto e o login funciona; pôr a chave e rodar ``chaves girar`` cifra o
+  que já existe; tirar a chave com dado cifrado no banco é erro claro.
 """
 import pytest
 import sqlalchemy as sa
@@ -145,41 +147,63 @@ def test_conferir_acusa_campo_sem_cifra(app_module):
         db.session.commit()
 
 
-def test_sem_chave_fora_do_sqlite_o_boot_para(monkeypatch, tmp_path):
+def test_sem_chave_o_sistema_sobe_com_aviso(monkeypatch, tmp_path, caplog):
     monkeypatch.delenv('FIELD_ENCRYPTION_KEY')
+    monkeypatch.setenv('EXIGIR_DATABASE_URL', '1')
     monkeypatch.setenv('DATABASE_URL', 'postgresql://u:p@127.0.0.1:1/facilities')
     monkeypatch.setenv('UPLOAD_FOLDER', str(tmp_path))
     try:
-        with pytest.raises(cifra.ChaveAusente, match='FIELD_ENCRYPTION_KEY'):
-            create_app()
+        create_app()
+        assert not cifra.ligada()
+        assert 'TEXTO ABERTO' in caplog.text
     finally:
         cifra.configurar(CHAVE_SUITE)
 
 
-def test_imagem_de_producao_exige_a_chave_mesmo_com_sqlite(monkeypatch, tmp_path):
-    monkeypatch.delenv('FIELD_ENCRYPTION_KEY')
-    monkeypatch.setenv('EXIGIR_DATABASE_URL', '1')
-    monkeypatch.setenv('DATABASE_URL', f'sqlite:///{tmp_path / "p.db"}')
-    monkeypatch.setenv('UPLOAD_FOLDER', str(tmp_path))
-    try:
-        with pytest.raises(cifra.ChaveAusente):
-            create_app()
-    finally:
-        cifra.configurar(CHAVE_SUITE)
+def test_cifra_desligada_grava_aberto_e_ligar_depois_cifra_tudo(app_module):
+    """O caminho de qualquer servidor: começa sem chave, liga quando quiser."""
+    from app import User, db
+    from facilities.core.cifra_banco import em_claro
+    with app_module.app.app_context():
+        try:
+            cifra.configurar('')
+            uid = fabrica.pessoa(app_module, 'cifra.aberta@trino.com')
+            db.session.get(User, uid).totp_segredo = 'JBSWY3DPEHPK3PXP'
+            db.session.commit()
+            assert _bruto('users', 'email', uid) == 'cifra.aberta@trino.com'
+            assert _bruto('users', 'totp_segredo', uid) == 'JBSWY3DPEHPK3PXP'
+            c = app_module.app.test_client()
+            r = c.post('/login', data={'email': 'CIFRA.aberta@trino.com',
+                                       'password': fabrica.SENHA})
+            assert r.status_code == 302 and '/login' not in r.headers['Location']
+            # Liga: chave no ambiente + o comando. O login continua.
+            cifra.configurar(CHAVE_SUITE)
+            r = app_module.app.test_cli_runner().invoke(args=['chaves', 'girar'])
+            assert r.exit_code == 0, r.output
+            assert 'cifra.aberta' not in _bruto('users', 'email', uid)
+            assert not em_claro(db.session)
+            db.session.expire_all()
+            assert User.por_email('cifra.aberta@trino.com').id == uid
+            assert db.session.get(User, uid).totp_segredo == 'JBSWY3DPEHPK3PXP'
+            # Tirar a chave com dado cifrado no banco: erro claro, nunca lixo.
+            cifra.configurar('')
+            db.session.expire_all()
+            with pytest.raises(cifra.ChaveAusente, match='ponha de volta a chave'):
+                db.session.get(User, uid).totp_segredo
+            db.session.rollback()
+        finally:
+            cifra.configurar(CHAVE_SUITE)
+            db.session.expire_all()
+            u = db.session.get(User, uid)
+            u.totp_segredo = None
+            db.session.commit()
 
 
-def test_sqlite_de_desenvolvimento_cria_e_reusa_a_chave_local(monkeypatch, tmp_path):
-    import logging
-    from types import SimpleNamespace
-    monkeypatch.delenv('FIELD_ENCRYPTION_KEY')
-    app = SimpleNamespace(instance_path=str(tmp_path), logger=logging.getLogger('teste'))
+def test_girar_sem_chave_avisa_e_nao_mexe(app_module):
     try:
-        cifra.configurar_app(app, sqlite=True, exigir_producao=False)
-        arquivo = tmp_path / 'chave_dos_campos.key'
-        primeira = arquivo.read_text()
-        token = cifra.cifrar('dev')
-        cifra.configurar_app(app, sqlite=True, exigir_producao=False)
-        assert arquivo.read_text() == primeira and cifra.decifrar(token) == 'dev'
+        cifra.configurar('')
+        r = app_module.app.test_cli_runner().invoke(args=['chaves', 'girar'])
+        assert r.exit_code == 1 and 'não definida' in r.output
     finally:
         cifra.configurar(CHAVE_SUITE)
 

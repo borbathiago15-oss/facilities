@@ -4,8 +4,9 @@ O que muda no schema:
 
 * ``users.email`` e ``users.totp_segredo``, ``convites.email`` e
   ``convites.telefone``, ``clients.endereco``, ``push_inscricoes.p256dh`` e
-  ``push_inscricoes.auth`` passam a TEXT e guardam o valor cifrado
-  (``facilities/core/cifra.py``, chave em ``FIELD_ENCRYPTION_KEY``).
+  ``push_inscricoes.auth`` passam a TEXT e, com a cifra ligada, guardam o
+  valor cifrado (``facilities/core/cifra.py``, chave em
+  ``FIELD_ENCRYPTION_KEY``).
 * ``users.email_index`` (único) e ``convites.email_index``: o índice cego
   (HMAC) do e-mail, por onde o login e os convites procuram.
 * Sai a restrição única de ``users.email`` e o índice ``ix_convites_email``
@@ -22,7 +23,10 @@ As linhas existentes são REESCRITAS (texto → cifrado). Antes disso:
   mesmo texto, senão nada é gravado.
 
 A volta decifra tudo, devolve tipos, restrição e índice; a quarentena fica.
-Precisa da ``FIELD_ENCRYPTION_KEY`` no ambiente (o app não sobe sem ela).
+
+A cifra é opcional: sem ``FIELD_ENCRYPTION_KEY`` no ambiente, a migração só
+muda o schema e grava o índice do e-mail (os valores continuam abertos, e a
+quarentena também). Ligar depois: pôr a chave e ``flask chaves girar``.
 
 Revision ID: e1a7c3f5b9d2
 Revises: d0f6b2c4e5a7

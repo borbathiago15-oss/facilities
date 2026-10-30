@@ -40,7 +40,6 @@ Onde os dados ficam, e o que apaga:
    ```
    DATABASE_URL=${{Postgres.DATABASE_URL}}
    SECRET_KEY=${{secret(64)}}
-   FIELD_ENCRYPTION_KEY=<a chave gerada abaixo>
    STORAGE_BACKEND=local
    UPLOAD_FOLDER=/data/uploads
    RATELIMIT_STORAGE_URI=${{Redis.REDIS_URL}}
@@ -51,16 +50,12 @@ Onde os dados ficam, e o que apaga:
 
    * `${{secret(64)}}` faz o Railway sortear a chave uma vez e guardar. **Não
      troque depois**: trocar derruba todas as sessões (ninguém perde dado).
-   * `FIELD_ENCRYPTION_KEY` cifra no banco e-mails, telefones, endereços, o
-     segredo da segunda etapa e as chaves do aviso no celular
-     (`docs/SEGURANCA_DADOS.md`). **Sem ela o site não sobe.** Ela NÃO pode
-     ser `${{secret(...)}}` (o formato é próprio): gere com
-     `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`
-     (ou `flask --app facilities chaves gerar`). **Antes de colar no
-     Railway, guarde uma cópia no cofre offline** (1Password/Bitwarden do
-     dono, ou envelope lacrado no cofre): perder a chave é perder esses
-     dados — nem o backup os devolve. Não troque à toa; para trocar, siga o
-     rodízio do `docs/SEGURANCA_DADOS.md`.
+   * **Opcional — cifra dos campos sensíveis:** `FIELD_ENCRYPTION_KEY`
+     cifra no banco e-mails, telefones, endereços, o segredo da segunda etapa
+     e as chaves do aviso no celular. Sem ela tudo funciona, com esses campos
+     em texto aberto. Como gerar, guardar no cofre e ligar num banco que já
+     tem dado: `docs/SEGURANCA_DADOS.md` (vale para qualquer servidor). Se
+     ligar, ponha a mesma variável no `agendador` (passo 6).
    * **Não** defina `RAILWAY_RUN_UID`. O contêiner começa como root só para
      acertar o dono do volume e larga o privilégio sozinho
      (`docker-entrypoint.sh`); o app nunca roda como root e o código fica só
@@ -81,7 +76,6 @@ Onde os dados ficam, e o que apaga:
    ```
    DATABASE_URL=${{Postgres.DATABASE_URL}}
    SECRET_KEY=${{web.SECRET_KEY}}
-   FIELD_ENCRYPTION_KEY=${{web.FIELD_ENCRYPTION_KEY}}
    STORAGE_BACKEND=local
    ```
 
@@ -127,30 +121,22 @@ Onde os dados ficam, e o que apaga:
    pronta" não tem o que oferecer.
 9. **Backup diário:** *Create › Docker Image* › `postgres:17` (use a MESMA
    versão principal do Postgres do projeto, ou maior — veja em *Postgres ›
-   Settings*). Nome `backup`. Volume em `/backup`. Variáveis
-   `DATABASE_URL=${{Postgres.DATABASE_URL}}` e `BACKUP_SENHA=${{secret(48)}}`
-   (**copie a senha gerada para o cofre offline**, junto com a
-   `FIELD_ENCRYPTION_KEY`). *Cron Schedule* `30 6 * * *` (03:30 em Brasília)
-   e *Custom Start Command*:
+   Settings*). Nome `backup`. Volume em `/backup`. Variável
+   `DATABASE_URL=${{Postgres.DATABASE_URL}}`. *Cron Schedule* `30 6 * * *`
+   (03:30 em Brasília) e *Custom Start Command*:
 
    ```
-   sh -c 'set -e; : "${BACKUP_SENHA:?defina BACKUP_SENHA}"; umask 077; d=/tmp/facilities.dump; pg_dump "$DATABASE_URL" -Fc -f "$d"; printf %s "$BACKUP_SENHA" > /tmp/senha; gpg --batch --yes --pinentry-mode loopback --passphrase-file /tmp/senha --symmetric --cipher-algo AES256 -o /backup/facilities-$(date +%F).dump.gpg "$d"; rm -f "$d" /tmp/senha; find /backup -name "*.dump.gpg" -mtime +14 -delete; ls -lh /backup'
+   sh -c 'pg_dump "$DATABASE_URL" -Fc -f /backup/facilities-$(date +%F).dump && find /backup -name "*.dump" -mtime +14 -delete && ls -lh /backup'
    ```
 
-   O arquivo sai **cifrado** (AES-256, `gpg`, que já vem na imagem do
-   Postgres): quem baixar o volume ou o arquivo não lê nada sem a
-   `BACKUP_SENHA`. E, dentro dele, os campos sensíveis continuam cifrados
-   pela `FIELD_ENCRYPTION_KEY` — para restaurar e usar, são as DUAS.
-   Ficam as cópias dos últimos 14 dias. Os `*.dump` antigos (de antes da
-   cifra) estão abertos: depois do primeiro `.dump.gpg` conferido, apague-os
-   (`railway ssh --service backup` e `rm /backup/*.dump`). **Atenção:** as
-   cópias estão no mesmo Railway; uma vez por mês, baixe a mais recente
-   para fora (`railway ssh --service backup` e `cat /backup/<arquivo> > ...`,
-   ou *Volume › Download*, se o painel oferecer) e guarde no drive da empresa.
-   Restaurar:
-   `gpg --batch --pinentry-mode loopback --passphrase-file senha.txt -d arquivo.dump.gpg > arquivo.dump`
-   e `pg_restore --clean --no-owner -d "$DATABASE_URL" arquivo.dump` (o app
-   que ler esse banco precisa da MESMA `FIELD_ENCRYPTION_KEY`).
+   Ficam as cópias dos últimos 14 dias. **Atenção:** elas estão no mesmo
+   Railway; uma vez por mês, baixe a mais recente para fora
+   (`railway ssh --service backup` e `cat /backup/<arquivo> > ...`, ou
+   *Volume › Download*, se o painel oferecer) e guarde no drive da empresa.
+   Restaurar: `pg_restore --clean --no-owner -d "$DATABASE_URL" arquivo.dump`.
+   **Opcional — backup cifrado:** o arquivo acima sai aberto. Para cifrá-lo
+   (gpg AES-256, que já vem na imagem do Postgres), use o comando da seção
+   "Backup cifrado" do `docs/SEGURANCA_DADOS.md`.
 9b. **Backup das fotos e documentos.** O `pg_dump` **não** leva os anexos:
    eles estão no volume `/data/uploads`, que só o `web` enxerga. Perder o
    volume perde todas as fotos. Duas saídas, da melhor para a mais simples:
@@ -230,11 +216,10 @@ pasta dos anexos. Para levar o que foi feito nos testes para a produção:
    `execucoes/12/ab3f….jpg`). Para o Cloudflare R2: a mesma árvore vira as
    chaves do bucket (`rclone copy /data/uploads r2:<bucket>`), e o app passa a
    usar `STORAGE_BACKEND=r2` + as variáveis `R2_*`.
-4. **Variáveis:** a `FIELD_ENCRYPTION_KEY` tem de ser a MESMA (sem ela os
-   e-mails e os demais campos cifrados não abrem: ninguém entra). Banco fora
-   da rede interna: a conexão ganha `sslmode=require` sozinha
-   (`DATABASE_SSLMODE` muda, ex. `verify-full` com o certificado da
-   empresa). `SECRET_KEY` nova só derruba as sessões (todos entram de
+4. **Variáveis:** se a cifra dos campos estiver ligada, a
+   `FIELD_ENCRYPTION_KEY` tem de ser a MESMA (sem ela os campos cifrados não
+   abrem: ninguém entra). Banco fora da rede interna: a conexão ganha
+   `sslmode=require` sozinha (`DATABASE_SSLMODE` muda). `SECRET_KEY` nova só derruba as sessões (todos entram de
    novo). Mantenha as MESMAS chaves `VAPID_*`, senão os celulares precisam
    aceitar os avisos de novo. Os códigos da segunda etapa vão no banco e
    continuam valendo.
