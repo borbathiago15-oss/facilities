@@ -50,6 +50,12 @@ Onde os dados ficam, e o que apaga:
 
    * `${{secret(64)}}` faz o Railway sortear a chave uma vez e guardar. **Não
      troque depois**: trocar derruba todas as sessões (ninguém perde dado).
+   * **Opcional — cifra dos campos sensíveis:** `FIELD_ENCRYPTION_KEY`
+     cifra no banco e-mails, telefones, endereços, o segredo da segunda etapa
+     e as chaves do aviso no celular. Sem ela tudo funciona, com esses campos
+     em texto aberto. Como gerar, guardar no cofre e ligar num banco que já
+     tem dado: `docs/SEGURANCA_DADOS.md` (vale para qualquer servidor). Se
+     ligar, ponha a mesma variável no `agendador` (passo 6).
    * **Não** defina `RAILWAY_RUN_UID`. O contêiner começa como root só para
      acertar o dono do volume e larga o privilégio sozinho
      (`docker-entrypoint.sh`); o app nunca roda como root e o código fica só
@@ -128,6 +134,9 @@ Onde os dados ficam, e o que apaga:
    (`railway ssh --service backup` e `cat /backup/<arquivo> > ...`, ou
    *Volume › Download*, se o painel oferecer) e guarde no drive da empresa.
    Restaurar: `pg_restore --clean --no-owner -d "$DATABASE_URL" arquivo.dump`.
+   **Opcional — backup cifrado:** o arquivo acima sai aberto. Para cifrá-lo
+   (gpg AES-256, que já vem na imagem do Postgres), use o comando da seção
+   "Backup cifrado" do `docs/SEGURANCA_DADOS.md`.
 9b. **Backup das fotos e documentos.** O `pg_dump` **não** leva os anexos:
    eles estão no volume `/data/uploads`, que só o `web` enxerga. Perder o
    volume perde todas as fotos. Duas saídas, da melhor para a mais simples:
@@ -207,7 +216,10 @@ pasta dos anexos. Para levar o que foi feito nos testes para a produção:
    `execucoes/12/ab3f….jpg`). Para o Cloudflare R2: a mesma árvore vira as
    chaves do bucket (`rclone copy /data/uploads r2:<bucket>`), e o app passa a
    usar `STORAGE_BACKEND=r2` + as variáveis `R2_*`.
-4. **Variáveis:** `SECRET_KEY` nova só derruba as sessões (todos entram de
+4. **Variáveis:** se a cifra dos campos estiver ligada, a
+   `FIELD_ENCRYPTION_KEY` tem de ser a MESMA (sem ela os campos cifrados não
+   abrem: ninguém entra). Banco fora da rede interna: a conexão ganha
+   `sslmode=require` sozinha (`DATABASE_SSLMODE` muda). `SECRET_KEY` nova só derruba as sessões (todos entram de
    novo). Mantenha as MESMAS chaves `VAPID_*`, senão os celulares precisam
    aceitar os avisos de novo. Os códigos da segunda etapa vão no banco e
    continuam valendo.

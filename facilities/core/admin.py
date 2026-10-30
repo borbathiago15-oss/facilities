@@ -85,7 +85,7 @@ def _validar(u, original_id=None):
         return 'Informe o nome.'
     if '@' not in (u.email or ''):
         return 'Informe um e-mail válido.'
-    outro = User.query.filter(db.func.lower(User.email) == u.email).first()
+    outro = User.por_email(u.email)
     if outro is not None and outro.id != original_id:
         return 'Já existe uma pessoa com este e-mail.'
     return None

@@ -120,7 +120,8 @@ def test_gerente_monta_o_contrato_e_a_pessoa_aceita_o_convite(servidor, navegado
     pg.wait_for_load_state('networkidle')
     assert '/app' in pg.url, pg.url
     _capturar(pg, perfil, '7-primeiro-acesso')
-    linhas = servidor['sql']("SELECT role FROM users WHERE email = ?", f'joana.{perfil}@e2e.test')
+    linhas = servidor['sql']("SELECT role FROM users WHERE email_index = ?",
+                             servidor['indice'](f'joana.{perfil}@e2e.test'))
     assert linhas == [('encarregado',)]
     ctx.close()
     b.close()

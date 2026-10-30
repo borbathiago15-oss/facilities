@@ -71,7 +71,8 @@ def servidor():
         finally:
             con.close()
 
-    yield {'base': base, 'sql': consultar, 'qr': QR_DO_TESTE}
+    from servidor import indice_email
+    yield {'base': base, 'sql': consultar, 'qr': QR_DO_TESTE, 'indice': indice_email}
     proc.terminate()
     proc.wait(timeout=10)
     os.remove(banco)

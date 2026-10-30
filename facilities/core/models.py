@@ -34,6 +34,8 @@ from datetime import datetime
 from flask_login import UserMixin
 from werkzeug.security import check_password_hash, generate_password_hash
 
+from facilities.core import cifra
+from facilities.core.cifra import Cifrado
 from facilities.extensions import db
 
 PERFIS = {
@@ -104,7 +106,7 @@ class Client(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(120), nullable=False)
     cost_center = db.Column(db.String(50))
-    endereco = db.Column(db.String(255))
+    endereco = db.Column(Cifrado())  # cifrado: ver core/cifra.py
     responsible_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     is_deleted = db.Column(db.Boolean, default=False, nullable=False, index=True)
@@ -139,7 +141,10 @@ class User(db.Model, UserMixin):
     __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
-    email = db.Column(db.String(150), unique=True, nullable=False)
+    # Cifrado no banco (core/cifra.py). O login procura pelo índice cego.
+    _email = db.Column('email', Cifrado(), nullable=False)
+    email = cifra.email_cifrado('_email', 'email_index')
+    email_index = db.Column(db.String(64), unique=True, index=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
     role = db.Column(db.String(20), default='encarregado', nullable=False)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
@@ -163,7 +168,7 @@ class User(db.Model, UserMixin):
                            nullable=True, index=True)
     # Segunda etapa do login (TOTP, ``core/totp.py``). O segredo só vale com
     # ``totp_ativo``; o último passo aceito barra o mesmo código duas vezes.
-    totp_segredo = db.Column(db.String(64), nullable=True)
+    totp_segredo = db.Column(Cifrado(), nullable=True)
     totp_ativo = db.Column(db.Boolean, default=False, nullable=False,
                            server_default=db.false())
     totp_ultimo_passo = db.Column(db.BigInteger, nullable=True)
@@ -185,6 +190,13 @@ class User(db.Model, UserMixin):
         'diario_config': ('Configurar o modelo de passagem de turno — '
                           'perguntas, turnos, áreas e tipos de ocorrência'),
     }
+
+    @classmethod
+    def por_email(cls, email):
+        """A conta do e-mail (sem diferença de maiúsculas), pelo índice cego."""
+        if not email:
+            return None
+        return cls.query.filter(cls.email == email).first()
 
     # ── Senha ─────────────────────────────────────────────────────────
     def set_password(self, password):
@@ -294,8 +306,9 @@ class PushInscricao(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='RESTRICT'),
                         nullable=False, index=True)
     endpoint = db.Column(db.String(600), nullable=False, unique=True)
-    p256dh = db.Column(db.String(200), nullable=False)
-    auth = db.Column(db.String(100), nullable=False)
+    # As chaves do navegador para cifrar o aviso: cifradas no banco.
+    p256dh = db.Column(Cifrado(), nullable=False)
+    auth = db.Column(Cifrado(), nullable=False)
     aparelho = db.Column(db.String(120))
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     ultimo_envio_em = db.Column(db.DateTime)

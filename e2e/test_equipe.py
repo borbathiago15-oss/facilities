@@ -32,8 +32,9 @@ def test_sueli_lanca_a_falta_e_a_cobertura(servidor, navegador, perfil):
         # (as do outro local da Ana, o Armazém 2, não são deste posto).
         assert servidor['sql']("SELECT count(*) FROM tarefas_dia t JOIN users u "
                                "ON u.id = t.user_id JOIN clients c ON c.id = t.client_id "
-                               "WHERE u.email='ana@e2e.test' AND c.name='GL Armazém 1' "
-                               "AND t.status='prevista'") == [(0,)]
+                               "WHERE u.email_index=? AND c.name='GL Armazém 1' "
+                               "AND t.status='prevista'",
+                               servidor['indice']('ana@e2e.test')) == [(0,)]
         _sem_rolagem_lateral(pg)
     finally:
         b.close()

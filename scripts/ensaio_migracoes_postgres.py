@@ -4,11 +4,16 @@
 
 O banco é ZERADO (precisa ter "test" no nome). O ensaio:
 
-1. sobe todas as migrações;
-2. semeia dado em todas as tabelas das fases novas (``SEMENTES``);
+1. sobe as migrações até a de antes da cifra dos campos (``ANTES_DA_CIFRA``);
+2. semeia dado em todas as tabelas das fases (``SEMENTES``), em texto aberto
+   como estava em produção; sobe o resto (a cifra reescreve essas linhas,
+   e o ensaio confere que nenhum campo sensível ficou aberto) e semeia
+   ``SEMENTES_DEPOIS_DA_CIFRA``;
 3. para cada migração, de trás para a frente: volta um passo e sobe de novo;
 4. confere que a contagem de cada tabela e a "impressão digital" das linhas
-   (todas as colunas, ordenadas) ficaram iguais — nada se perdeu nem mudou;
+   (todas as colunas, ordenadas; os campos cifrados entram DECIFRADOS, porque
+   o texto cifrado muda a cada gravação) ficaram iguais — nada se perdeu nem
+   mudou;
 5. ``flask db check`` sem diferença.
 
 Sai com código 1 e diz a tabela quando algo se perde.
@@ -21,6 +26,16 @@ import sys
 import sqlalchemy as sa
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if RAIZ not in sys.path:
+    sys.path.insert(0, RAIZ)
+
+from facilities.core import cifra  # noqa: E402
+from facilities.core.cifra_banco import CAMPOS, em_claro  # noqa: E402
+
+# A chave da cifra dos campos SÓ deste ensaio.
+CHAVE_ENSAIO = os.environ.get('FIELD_ENCRYPTION_KEY') or cifra.gerar_chave()
+# Última revisão sem a cifra: as sementes entram aqui, em texto aberto.
+ANTES_DA_CIFRA = 'd0f6b2c4e5a7'
 
 # Dado de exemplo, na ordem de dependência. Cada fase acrescenta o seu.
 SEMENTES = [
@@ -267,6 +282,9 @@ SEMENTES = [
     "UPDATE pontos_inspecao SET checklist_id=(SELECT MIN(id) FROM checklist_modelos "
     "WHERE client_id IS NOT NULL)",
     # GPS na leitura do QR: a posição do local e a situação das leituras.
+    # Cifra dos campos: um endereço de local (o e-mail, o telefone, o TOTP e
+    # o push já estão acima), ainda em texto aberto.
+    "UPDATE clients SET endereco='Rua do Ensaio, 10' WHERE name='GL Armazém 1'",
     "UPDATE clients SET latitude=-12.977749, longitude=-38.501630, raio_gps_m=250, "
     "posicao_marcada_em=now(), posicao_marcada_por=(SELECT id FROM users "
     "WHERE email='gerente@ensaio')",
@@ -274,10 +292,16 @@ SEMENTES = [
     "UPDATE chegadas SET gps_situacao='sem_gps'",
 ]
 
+# Fases depois da cifra: o e-mail já não serve de filtro (está cifrado);
+# use o id, ou um campo que não é cifrado (ex.: ``name``).
+SEMENTES_DEPOIS_DA_CIFRA = [
+]
+
 
 def _flask(*args, url):
     env = dict(os.environ, DATABASE_URL=url, SECRET_KEY=os.environ.get('SECRET_KEY', 'ensaio'),
-               STORAGE_BACKEND='local', SESSION_COOKIE_SECURE='0')
+               STORAGE_BACKEND='local', SESSION_COOKIE_SECURE='0',
+               FIELD_ENCRYPTION_KEY=CHAVE_ENSAIO)
     r = subprocess.run([sys.executable, '-m', 'flask', '--app', 'facilities', 'db', *args],
                        cwd=RAIZ, env=env, capture_output=True, text=True)
     if r.returncode != 0:
@@ -302,13 +326,24 @@ def _digitais(engine):
         for t in sorted(insp.get_table_names()):
             if t.startswith('_quarentena_') or t == 'alembic_version':
                 continue
-            linhas = c.execute(sa.text(f'SELECT * FROM {t} ORDER BY 1')).fetchall()
-            h = hashlib.sha256(repr([tuple(map(str, r)) for r in linhas]).encode()).hexdigest()
+            linhas = c.execute(sa.text(f'SELECT * FROM {t} ORDER BY 1')).mappings().fetchall()
+            cifradas = CAMPOS.get(t, ())
+            linhas = [tuple(str(cifra.decifrar(v) if k in cifradas else v)
+                            for k, v in r.items()) for r in linhas]
+            h = hashlib.sha256(repr(linhas).encode()).hexdigest()
             out[t] = (len(linhas), h[:12])
     return out
 
 
-def ensaiar(url, sementes=SEMENTES):
+def _sem_campo_aberto(engine):
+    from sqlalchemy.orm import Session
+    with Session(engine) as s:
+        faltando = em_claro(s)
+    if faltando:
+        raise SystemExit(f'Campos sensíveis em texto aberto depois da cifra: {faltando}')
+
+
+def ensaiar(url, sementes=SEMENTES, sementes_depois=SEMENTES_DEPOIS_DA_CIFRA):
     nome = sa.engine.make_url(url).database or ''
     if 'test' not in nome.lower():
         raise SystemExit(f'O banco {nome!r} não tem "test" no nome: o ensaio o zera.')
@@ -316,9 +351,15 @@ def ensaiar(url, sementes=SEMENTES):
     with engine.begin() as c:
         c.execute(sa.text('DROP SCHEMA public CASCADE'))
         c.execute(sa.text('CREATE SCHEMA public'))
-    _flask('upgrade', url=url)
+    cifra.configurar(CHAVE_ENSAIO)
+    _flask('upgrade', ANTES_DA_CIFRA, url=url)
     with engine.begin() as c:
         for sql in sementes:
+            c.execute(sa.text(sql))
+    _flask('upgrade', url=url)
+    _sem_campo_aberto(engine)
+    with engine.begin() as c:
+        for sql in sementes_depois:
             c.execute(sa.text(sql))
     antes = _digitais(engine)
     revs = _revisoes(url)
@@ -331,6 +372,7 @@ def ensaiar(url, sementes=SEMENTES):
             if depois.get(t) != v:
                 raise SystemExit(f'Volta e ida de {rev}: a tabela {t} mudou '
                                  f'({v} → {depois.get(t)}).')
+        _sem_campo_aberto(engine)
         print(f'ok: {rev} — volta e ida sem perder nada')
     saida = _flask('check', url=url)
     if 'No new upgrade operations detected' not in saida:

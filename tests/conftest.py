@@ -12,6 +12,9 @@ from sqlalchemy.engine import make_url
 
 os.environ.setdefault('SECRET_KEY', 'test-secret-key')
 os.environ.setdefault('ADMIN_PASSWORD', 'test-admin-pass')
+# Chave FIXA dos campos cifrados (core/cifra.py), só da suíte.
+os.environ['FIELD_ENCRYPTION_KEY'] = 'dGVzdGUtZGEtc3VpdGUtY2hhdmUtY2lmcmEtMzJieXQ='
+os.environ.pop('FIELD_ENCRYPTION_OLD_KEYS', None)
 os.environ['SESSION_COOKIE_SECURE'] = '0'
 os.environ['RATELIMIT_ENABLED'] = '0'
 # A segunda etapa obrigatória da gestão (auditoria SEC-001) fica desligada na
