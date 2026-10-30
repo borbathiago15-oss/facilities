@@ -38,6 +38,9 @@ jobs:
       TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/facilities_testes
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/facilities_testes
       SECRET_KEY: ci
+      # Chave da cifra dos campos SÓ do CI (core/cifra.py); a de produção
+      # fica no Railway e no cofre offline.
+      FIELD_ENCRYPTION_KEY: Y2ktY2hhdmUtZGEtY2lmcmEtZG9zLWNhbXBvcy0zMmI=
       SESSION_COOKIE_SECURE: '0'
       # Com Postgres a fábrica recusa subir sem destino de anexos declarado
       # (facilities/object_storage.py): aqui o disco do runner basta.

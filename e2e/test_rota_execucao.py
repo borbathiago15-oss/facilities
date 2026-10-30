@@ -21,8 +21,11 @@ def _foto(tmp_path):
 
 
 def _execucoes(servidor):
-    return servidor['sql']('SELECT e.sem_sinal, u.email, t.status FROM execucoes e '
-                           'JOIN users u ON u.id = e.user_id JOIN tarefas_dia t ON t.id = e.tarefa_id')
+    linhas = servidor['sql']('SELECT e.sem_sinal, u.email_index, t.status FROM execucoes e '
+                             'JOIN users u ON u.id = e.user_id '
+                             'JOIN tarefas_dia t ON t.id = e.tarefa_id')
+    ana = servidor['indice']('ana@e2e.test')
+    return [(s, 'ana@e2e.test' if i == ana else i, st) for s, i, st in linhas]
 
 
 def _fazer_checklist(pg, foto):

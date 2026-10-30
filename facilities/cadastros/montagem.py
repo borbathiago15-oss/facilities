@@ -24,6 +24,7 @@ import secrets
 from datetime import datetime, timedelta
 from urllib.parse import quote
 
+from facilities.core import senhas
 from facilities.extensions import db
 from facilities.core.models import NIVEL_NA_CADEIA, PERFIS, Client, Notification, User
 from facilities.cadastros.models import Contratante, Convite, Empresa, Estado
@@ -273,7 +274,7 @@ def criar_convite(autor, dados, agora=None):
         raise CadastroInvalido('Informe o nome da pessoa.')
     if not _email_valido(email):
         raise CadastroInvalido('Informe um e-mail válido: é com ele que a pessoa vai entrar.')
-    if User.query.filter(db.func.lower(User.email) == email).first() is not None:
+    if User.por_email(email) is not None:
         raise CadastroInvalido('Já existe uma pessoa com este e-mail no sistema. Se ela precisa '
                                'deste local, peça ao administrador para incluir.')
     telefone = _telefone(dados.get('telefone'))
@@ -314,7 +315,7 @@ def criar_convite(autor, dados, agora=None):
 
     # Um convite aberto por e-mail e por quem convida: o novo substitui o
     # anterior (o convite de outra pessoa da gestão continua valendo).
-    for velho in Convite.query.filter(db.func.lower(Convite.email) == email,
+    for velho in Convite.query.filter(Convite.email == email,
                                       Convite.criado_por_id == autor.id,
                                       Convite.aceito_em.is_(None),
                                       Convite.cancelado_em.is_(None)):
@@ -399,7 +400,9 @@ def aceitar(token, senha, confirma, agora=None):
         raise CadastroInvalido('A confirmação não é igual à senha.')
     if senha.lower() in (c.email.lower(), c.email.split('@')[0].lower()):
         raise CadastroInvalido('Use uma senha diferente do seu e-mail.')
-    if User.query.filter(db.func.lower(User.email) == c.email.lower()).first() is not None:
+    if senhas.problema(senha, c.email):
+        raise CadastroInvalido(senhas.problema(senha, c.email))
+    if User.por_email(c.email) is not None:
         raise CadastroInvalido('Já existe uma conta com este e-mail. Entre pela tela de login.')
     locais = [loc for loc in locais_do_convite(c) if loc.is_active and not loc.is_deleted]
     sup = c.superior if c.superior and c.superior.is_active else None

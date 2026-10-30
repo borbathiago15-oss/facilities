@@ -60,7 +60,7 @@ def test_qr_de_fora_nao_tira_o_celular_do_sistema(servidor, navegador, perfil):
 def _turnos(servidor, email):
     return servidor['sql'](
         'SELECT t.turno FROM diario_operacional_turnos t JOIN users u ON u.id = t.created_by '
-        'WHERE u.email = ? AND t.status = ?', email, 'encerrado')
+        'WHERE u.email_index = ? AND t.status = ?', servidor['indice'](email), 'encerrado')
 
 
 def test_sem_sinal_guarda_e_sobe_uma_vez(servidor, navegador, perfil):

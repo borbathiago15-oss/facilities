@@ -28,6 +28,8 @@ from datetime import datetime
 from sqlalchemy import event
 from sqlalchemy.orm.base import NEVER_SET, NO_VALUE
 
+from facilities.core import cifra
+from facilities.core.cifra import Cifrado
 from facilities.extensions import db
 
 # ── Os níveis, para a trilha e as telas ───────────────────────────────────
@@ -270,8 +272,12 @@ class Convite(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     token_hash = db.Column(db.String(64), nullable=False, unique=True)
     nome = db.Column(db.String(100), nullable=False)
-    email = db.Column(db.String(150), nullable=False, index=True)
-    telefone = db.Column(db.String(20))
+    # E-mail e telefone cifrados no banco (core/cifra.py); o índice cego
+    # acha os convites abertos de um e-mail.
+    _email = db.Column('email', Cifrado(), nullable=False)
+    email = cifra.email_cifrado('_email', 'email_index')
+    email_index = db.Column(db.String(64), nullable=False, index=True)
+    telefone = db.Column(Cifrado())
     role = db.Column(db.String(20), nullable=False)
     superior_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='RESTRICT'),
                             nullable=True)

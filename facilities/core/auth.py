@@ -30,7 +30,7 @@ from sqlalchemy import or_, update
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from facilities.extensions import db, limiter
-from facilities.core import totp
+from facilities.core import senhas, totp
 from facilities.core.models import PERFIS_COM_SEGUNDA_ETAPA, PERFIS_SEM_LOGIN, User
 
 bp = Blueprint('auth', __name__)
@@ -186,7 +186,7 @@ def login():
     if request.method == 'POST':
         email = (request.form.get('email') or '').strip().lower()
         senha = request.form.get('password') or ''
-        u = User.query.filter(db.func.lower(User.email) == email).first()
+        u = User.por_email(email)
         agora = datetime.utcnow()
         # O hash é conferido SEMPRE — e-mail inexistente e conta bloqueada
         # inclusive —, para o tempo de resposta não separar os casos.
@@ -213,6 +213,8 @@ def login():
             return render_template('core/login.html', email=email), 401
         u.failed_login_count = 0
         u.lockout_until = None
+        if senhas.precisa_refazer(u.password_hash):
+            u.set_password(senha)   # o hash sobe para o padrão atual
         db.session.commit()
         if u.totp_ativo and u.totp_segredo:
             session.pop('_2fa', None)
@@ -428,6 +430,8 @@ def trocar_senha():
             erro = 'A confirmação não é igual à senha nova.'
         elif nova == atual:
             erro = 'A senha nova precisa ser diferente da atual.'
+        elif senhas.problema(nova, current_user.email):
+            erro = senhas.problema(nova, current_user.email)
         if erro:
             flash(erro, 'danger')
             return render_template('core/trocar_senha.html'), 400

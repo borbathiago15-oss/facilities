@@ -24,6 +24,15 @@ QR_REFEITORIO = 'QRrefeitorioE2E00000004'
 QR_RECEPCAO = 'QRrecepcaoE2E0000000005'
 QR_SALA = 'QRsalaE2E000000000000006'
 SENHA = 'senha12345'
+# A chave da cifra dos campos (core/cifra.py), só do e2e.
+CHAVE_CAMPOS = 'ZTJlLWNoYXZlLWRvcy1jYW1wb3MtY2lmcmFkb3MtMzI='
+
+
+def indice_email(email):
+    """O índice cego do e-mail neste banco: o SQL cru do teste procura por ele
+    (a coluna ``email`` está cifrada)."""
+    from facilities.core import cifra
+    return cifra._indice_com(CHAVE_CAMPOS, cifra.normalizar_email(email))
 
 
 def montar(caminho_db):
@@ -31,7 +40,8 @@ def montar(caminho_db):
                       SESSION_COOKIE_SECURE='0', RATELIMIT_ENABLED='0',
                       MFA_OBRIGATORIO_GESTAO='0',
                       STORAGE_BACKEND='local', UPLOAD_FOLDER=tempfile.mkdtemp(),
-                      CLIENTE_EXTERNO_LIBERADO='1')
+                      CLIENTE_EXTERNO_LIBERADO='1',
+                      FIELD_ENCRYPTION_KEY=CHAVE_CAMPOS)
     from facilities import create_app
     from facilities.extensions import db
     app = create_app()

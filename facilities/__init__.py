@@ -152,7 +152,37 @@ def _url_do_banco(app):
     # Heroku/Supabase às vezes entregam o esquema antigo.
     if url.startswith('postgres://'):
         url = 'postgresql://' + url[len('postgres://'):]
-    return url
+    return _com_tls(url)
+
+
+# Rede interna: a conexão não sai da máquina nem da rede privada da
+# hospedagem (no Railway, ``*.railway.internal`` já anda num túnel cifrado).
+_HOSTS_INTERNOS = ('localhost', '127.0.0.1', '::1')
+_SUFIXOS_INTERNOS = ('.internal', '.local')
+
+
+def _host_interno(host):
+    host = (host or '').lower()
+    return (not host or host in _HOSTS_INTERNOS or '.' not in host
+            or host.endswith(_SUFIXOS_INTERNOS))
+
+
+def _com_tls(url):
+    """Banco fora da rede interna: a conexão só vale cifrada (TLS).
+
+    ``DATABASE_SSLMODE`` manda (``require``, ``verify-full``...; ``disable``
+    só se for de propósito). Sem ela, na imagem de produção, banco com host
+    público ganha ``sslmode=require`` — senha e dados não passam abertos
+    pela internet. URL que já traz ``sslmode`` fica como veio."""
+    u = make_url(url)
+    if u.get_backend_name() != 'postgresql' or 'sslmode' in u.query:
+        return url
+    modo = (os.environ.get('DATABASE_SSLMODE') or '').strip()
+    if not modo:
+        if not _flag('EXIGIR_DATABASE_URL', False) or _host_interno(u.host):
+            return url
+        modo = 'require'
+    return u.update_query_dict({'sslmode': modo}).render_as_string(hide_password=False)
 
 
 def _eh_sqlite(uri):
@@ -222,6 +252,8 @@ def create_app(config=None):
 
     sqlite = _eh_sqlite(app.config['SQLALCHEMY_DATABASE_URI'])
     _garantir_segredo(app, sqlite)
+    from facilities.core import cifra
+    cifra.configurar_app(app, sqlite, _flag('EXIGIR_DATABASE_URL', False))
     _conferir_limites_compartilhados(app)
     # Antes das extensões: configuração recusada não toca em nada.
     storage = get_storage(app.config['UPLOAD_FOLDER'], local_implicito=sqlite)
@@ -445,7 +477,7 @@ def _comandos(app):
         from facilities.core.admin import _senha_temporaria
         from facilities.core.models import User
         email = email.strip().lower()
-        u = User.query.filter(db.func.lower(User.email) == email).first()
+        u = User.por_email(email)
         if u is None:
             u = User(email=email, name=nome.strip() or email)
             db.session.add(u)
@@ -481,7 +513,7 @@ def _comandos(app):
                        'usando uma senha sorteada.')
         if not informada:
             senha = _senha_temporaria()
-        u = User.query.filter(db.func.lower(User.email) == email).first()
+        u = User.por_email(email)
         if u is None:
             u = User(email=email)
             db.session.add(u)
@@ -536,6 +568,39 @@ def _comandos(app):
                    f'{erros} erro(s).')
         if erros:
             raise SystemExit(1)
+
+    @app.cli.group('chaves')
+    def chaves_cli():
+        """A chave que cifra os campos sensíveis do banco (core/cifra.py)."""
+
+    @chaves_cli.command('gerar')
+    def chaves_gerar():
+        """Mostra uma chave nova para FIELD_ENCRYPTION_KEY (não grava nada)."""
+        from facilities.core.cifra import gerar_chave
+        click.echo(f'FIELD_ENCRYPTION_KEY={gerar_chave()}')
+        click.echo('Guarde uma cópia no cofre offline ANTES de usar: sem ela, os dados '
+                   'cifrados não voltam.')
+
+    @chaves_cli.command('girar')
+    def chaves_girar():
+        """Recifra todos os campos com a chave principal e refaz os índices
+        cegos. Rode depois de pôr a chave nova em FIELD_ENCRYPTION_KEY e a
+        antiga em FIELD_ENCRYPTION_OLD_KEYS; só então tire a antiga."""
+        from facilities.core.cifra_banco import girar
+        for tabela, n in girar(db.session).items():
+            click.echo(f'{tabela}: {n} linha(s) recifrada(s)')
+        db.session.commit()
+
+    @chaves_cli.command('conferir')
+    def chaves_conferir():
+        """Confere se algum campo sensível ficou sem cifra (sai com erro se sim)."""
+        from facilities.core.cifra_banco import em_claro
+        faltando = em_claro(db.session)
+        for (tabela, coluna), n in faltando.items():
+            click.echo(f'{tabela}.{coluna}: {n} valor(es) sem cifra', err=True)
+        if faltando:
+            raise SystemExit(1)
+        click.echo('Todos os campos sensíveis estão cifrados.')
 
     @app.cli.group('push')
     def push_cli():
