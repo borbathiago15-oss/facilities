@@ -58,3 +58,30 @@ def test_casca_react_no_celular_e_no_pc(servidor, navegador, perfil):
         assert pg.get_by_role('link', name='Voltar ao início').is_visible()
     finally:
         b.close()
+
+
+def test_inicio_do_campo_em_react(servidor, navegador, perfil):
+    b, ctx = abrir_contexto(navegador, perfil)
+    try:
+        pg = ctx.new_page()
+        entrar(pg, servidor['base'], 'ana@e2e.test')
+        pg.goto(servidor['base'] + '/novo/app')
+        pg.get_by_role('heading', name='Olá, Ana').wait_for()
+        # A moldura do aplicativo: navegação embaixo, sem o menu lateral do site.
+        nav = pg.get_by_role('navigation', name='Aplicativo de campo')
+        assert nav.is_visible() and pg.locator('#fc-lateral').count() == 0
+        assert pg.evaluate("document.body.classList.contains('fc-app')")
+        assert pg.evaluate('document.documentElement.scrollWidth') <= pg.viewport_size['width']
+        # O mesmo cartão do turno da tela antiga, para o mesmo endereço.
+        pg.goto(servidor['base'] + '/app/')
+        antigo = pg.locator('.fc-local-turno').first
+        nome, destino = antigo.locator('.fc-local-turno-nome').inner_text(), antigo.get_attribute('href')
+        pg.goto(servidor['base'] + '/novo/app')
+        novo = pg.locator('.fc-local-turno').first
+        novo.wait_for()
+        assert novo.locator('.fc-local-turno-nome').inner_text() == nome
+        assert novo.get_attribute('href') == destino
+        novo.click()
+        pg.wait_for_url('**' + destino.split('?')[0] + '*')
+    finally:
+        b.close()

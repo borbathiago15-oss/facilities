@@ -79,9 +79,9 @@ def _turno_por_local(locais):
     return saida
 
 
-@bp.get('/')
-@login_required
-def inicio():
+def contexto_inicio():
+    """Tudo o que o início do aplicativo mostra. Uma fonte só: a tela antiga
+    (``campo/inicio.html``) e a nova, em React (``/api/v1/campo/inicio``)."""
     from facilities.rotas import ocorrencias
     from facilities.rotas.models import TIPOS_OCORRENCIA_PUBLICA
     from facilities.equipes.servico import PERFIS_QUE_LANCAM
@@ -89,14 +89,20 @@ def inicio():
     from facilities.visitas import servico as visitas
     locais = clientes_visiveis()
     lanca = current_user._effective_role() in PERFIS_QUE_LANCAM
-    return render_template('campo/inicio.html', locais=locais, **_hoje_do_posto(locais),
-                           turno_por_local=_turno_por_local(locais),
-                           lanca_presenca=lanca,
-                           usa_material=current_user._effective_role() in PERFIS_QUE_CONSOMEM,
-                           visitas_abertas=len(visitas.abertas([c.id for c in locais],
-                                                               current_user)) if lanca else 0,
-                           ocorrencias=ocorrencias.abertas([c.id for c in locais]),
-                           tipos_ocorrencia=TIPOS_OCORRENCIA_PUBLICA)
+    return dict(locais=locais, **_hoje_do_posto(locais),
+                turno_por_local=_turno_por_local(locais),
+                lanca_presenca=lanca,
+                usa_material=current_user._effective_role() in PERFIS_QUE_CONSOMEM,
+                visitas_abertas=len(visitas.abertas([c.id for c in locais],
+                                                    current_user)) if lanca else 0,
+                ocorrencias=ocorrencias.abertas([c.id for c in locais]),
+                tipos_ocorrencia=TIPOS_OCORRENCIA_PUBLICA)
+
+
+@bp.get('/')
+@login_required
+def inicio():
+    return render_template('campo/inicio.html', **contexto_inicio())
 
 
 @bp.get('/ler-qr')

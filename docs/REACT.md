@@ -9,8 +9,10 @@ lado da antiga e a substitui depois do aceite do dono.
 
 | Fase | O que entra | Estado |
 |---|---|---|
-| 0. Base | Projeto React, API `/api/v1`, casca (menu, barra, gaveta do celular), build no CI e no Docker | este PR |
-| 1. App do técnico | Turno, rotas, leitor de QR, trabalho sem internet, fotos, GPS | a seguir |
+| 0. Base | Projeto React, API `/api/v1`, casca (menu, barra, gaveta do celular), build no CI e no Docker | no `main` (PR #32) |
+| 1a. App de campo: Início | `/novo/app`: turno por local, avisos do público, tarefas, pendências, chamados, presença, avisos no celular (`/api/v1/campo/inicio`) | este PR |
+| 1b. App de campo: turno e QR | Lista do turno, checklist, fotos antes/depois, GPS, motivo de atraso, troca de área, leitor de QR (reusa `/app/api/...`) | a seguir |
+| 1c. App de campo: sem internet | Fila do aparelho (IndexedDB) e cópia das telas para abrir sem sinal | |
 | 2. Passagem de turno | | |
 | 3. Cadastros e rotas da gestão | | |
 | 4. Chamados, equipes, materiais, visitas, preventiva, relatórios, painéis | | |
@@ -68,7 +70,11 @@ Testes: `pytest tests/test_telas_novas.py` (servidor) e
 
 1. Regra de negócio fica no Python (`facilities/<módulo>/`); a tela só mostra
    e envia. Endpoint novo em `/api/v1/<módulo>/...`, com o mesmo
-   `login_required` e as mesmas checagens de acesso da rota antiga.
+   `login_required` e as mesmas checagens de acesso da rota antiga; os dados
+   vêm da MESMA função que monta a tela antiga (ex.:
+   `campo.rotas.contexto_inicio`). As APIs JSON que já existem (as do
+   aplicativo de campo, `/app/api/...`) são reaproveitadas como estão:
+   `chamar('/app/api/...')`.
 2. Toda rota nova com id entra na varredura de isolamento
    (`tests/test_isolamento_varredura.py`).
 3. Os e2e do módulo passam a abrir a tela nova e continuam verdes nos dois
