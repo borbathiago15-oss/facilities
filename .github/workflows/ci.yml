@@ -52,6 +52,23 @@ jobs:
           python-version: '3.11'
           cache: pip
           cache-dependency-path: requirements*.txt
+      # As telas novas (React, frontend/): tipos, testes e a compilação que o
+      # Flask serve. Antes da suíte Python, que não depende dela.
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Telas novas — tipos, testes e compilação
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run tipos
+          npm test
+          npm run build
+      - name: Telas novas — dependências com vulnerabilidade conhecida
+        working-directory: frontend
+        run: npm audit --omit=dev --audit-level=high
       - run: pip install -r requirements-dev.txt pip-audit
       - name: Dependências com vulnerabilidade conhecida
         run: pip-audit -r requirements.txt --desc off

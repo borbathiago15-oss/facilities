@@ -17,6 +17,7 @@ from flask import current_app, jsonify, render_template, request
 from facilities.extensions import db
 
 TITULOS = {
+    400: 'Formulário vencido',
     403: 'Sem acesso',
     404: 'Página não encontrada',
     405: 'Ação indisponível por este caminho',
@@ -116,7 +117,20 @@ def _erro_interno(e):
         return MENSAGENS[500], 500, {'Content-Type': 'text/plain; charset=utf-8'}
 
 
+MSG_CSRF = ('A tela ficou aberta tempo demais e o envio não foi aceito, por segurança. '
+            'Recarregue a página e tente de novo.')
+
+
+def _erro_csrf(_e):
+    """O token anti-falsificação (CSRF) faltou ou venceu: antes saía a página
+    do Werkzeug, em inglês e em HTML — as telas em JavaScript liam como
+    "sem conexão"."""
+    return _responder(400, MSG_CSRF)
+
+
 def registrar(app):
+    from flask_wtf.csrf import CSRFError
     for codigo in (403, 404, 405, 413, 429):
         app.register_error_handler(codigo, _erro_http)
+    app.register_error_handler(CSRFError, _erro_csrf)
     app.register_error_handler(500, _erro_interno)

@@ -4,23 +4,15 @@
     "Menu"; static/js/base.js). Os grupos são <details>: abrem e fecham sem
     script, pelo teclado também.
 
-    Cada item aparece só para quem pode abrir a tela — a mesma regra da rota
-    (esconder não é a trava; a trava é a rota). -#}
-{% set ep = request.endpoint or '' %}
+    Quem vê cada item: ``facilities/core/menu.py`` — a mesma fonte da casca
+    das telas novas (React). Esconder não é a trava; a trava é a rota. -#}
 {% set r = current_user._effective_role() %}
 {% set cliente = r == 'cliente' %}
-{% set ve_painel = r in ('master', 'gerente', 'pleno', 'supervisor', 'visualizador') %}
-{% set ve_chamados = current_user.can_view('chamados') %}
-{% set ve_rotina = current_user.e_gestao() or r in ('supervisor', 'visualizador') %}
-{% set ve_cadastros = current_user.e_gestao() or r == 'visualizador' %}
-{% set na_rotina = ep.startswith(('rotas.', 'preventiva.', 'equipes.', 'visitas.')) %}
-{% set na_config = ep.startswith(('cadastros.', 'admin.', 'integracao.')) %}
-{% set na_cadastro = ep.startswith(('cadastros.', 'admin.', 'montagem.')) or ep in ('rotas.biblioteca', 'rotas.modelo') %}
+{% set menu = menu_do_sistema(current_user, request.endpoint) %}
 
-{% macro item(endpoint, rotulo, icone, ativo=none, url=none) -%}
-{%- set aceso = ativo if ativo is not none else ep == endpoint -%}
-<a class="fc-lat-item{% if aceso %} ativo{% endif %}" href="{{ url or url_for(endpoint) }}"{% if aceso %} aria-current="page"{% endif %}>
-  <i class="bi {{ icone }}" aria-hidden="true"></i><span>{{ rotulo }}</span>
+{% macro item(i) -%}
+<a class="fc-lat-item{% if i.ativo %} ativo{% endif %}" href="{{ i.url }}"{% if i.ativo %} aria-current="page"{% endif %}>
+  <i class="bi {{ i.icone }}" aria-hidden="true"></i><span>{{ i.rotulo }}</span>
 </a>
 {%- endmacro %}
 
@@ -31,78 +23,26 @@
     <span><b>Trino</b> Facilities<small>{{ 'Portal do cliente' if cliente else 'Grupo Trino' }}</small></span>
   </a>
   <nav class="fc-lat-nav" aria-label="Módulos">
-    {% if cliente %}
+    {% for g in menu %}
+    {% if g.fixo %}
     <div class="fc-lat-grupo-fixo">
-      <span class="fc-lat-titulo">Portal</span>
-      {{ item('portal.inicio', 'Seus locais', 'bi-buildings', ep in ('portal.inicio', 'portal.local', 'portal.chamado')) }}
-      {{ item('portal.cobrancas', 'Cobranças', 'bi-megaphone', ep in ('portal.cobrancas', 'portal.cobranca')) }}
-      {{ item('portal.relatorios', 'Relatórios', 'bi-file-earmark-bar-graph', ep in ('portal.relatorios', 'portal.relatorio')) }}
+      {% if g.titulo %}<span class="fc-lat-titulo">{{ g.titulo }}</span>{% endif %}
+      {% for i in g.itens %}{{ item(i) }}{% endfor %}
     </div>
     {% else %}
-    <div class="fc-lat-grupo-fixo">
-      <span class="fc-lat-titulo">Hoje</span>
-      {{ item('core.inicio', 'Início', 'bi-house-door') }}
-      {% if ve_painel %}{{ item('paineis.painel', 'Painel', 'bi-speedometer2') }}
-      {{ item('relatorios.inicio', 'Relatórios', 'bi-file-earmark-bar-graph', ep.startswith('relatorios.')) }}{% endif %}
-      {% if ve_chamados %}
-      {{ item('demandas.painel', 'Demandas', 'bi-inboxes', ep.startswith('demandas.')) }}
-      {{ item('cobrancas.lista', 'Cobranças do cliente', 'bi-megaphone', ep.startswith('cobrancas.')) }}
-      {% endif %}
-    </div>
-    {% if ve_chamados or current_user.can_view('diario_operacional') or ve_rotina %}
-    <details class="fc-lat-grupo" {% if not na_cadastro %}open{% endif %}>
-      <summary class="fc-lat-titulo">Operação</summary>
-      {% if ve_chamados %}{{ item('chamados.index', 'Chamados', 'bi-tools', ep.startswith('chamados.')) }}{% endif %}
-      {% if current_user.can_view('diario_operacional') %}{{ item('diario_operacional.index', 'Passagem de turno', 'bi-journal-text', ep.startswith('diario_operacional.')) }}{% endif %}
-      {% if ve_rotina %}{{ item('rotas.inicio', 'Rotina dos locais', 'bi-signpost-split', na_rotina) }}{% endif %}
+    <details class="fc-lat-grupo"{% if g.aberto %} open{% endif %}>
+      <summary class="fc-lat-titulo">{{ g.titulo }}</summary>
+      {% for i in g.itens %}{{ item(i) }}{% endfor %}
     </details>
     {% endif %}
-    {% if ve_painel %}
-    <details class="fc-lat-grupo" {% if ep.startswith('materiais.') %}open{% endif %}>
-      <summary class="fc-lat-titulo">Recursos</summary>
-      {{ item('materiais.catalogo', 'Materiais e estoque', 'bi-box-seam', ep.startswith('materiais.')) }}
-    </details>
-    {% endif %}
-    {% if ve_cadastros %}
-    {#- Cadastros: na ordem em que se monta um contrato (empresa → cliente →
-        estados → locais → estrutura e QR → pessoas → checklists). -#}
-    <details class="fc-lat-grupo" open>
-      <summary class="fc-lat-titulo">Cadastros</summary>
-      {% if r in ('master', 'gerente', 'pleno') %}
-      {{ item('centros.clientes', 'Áreas e rotas dos clientes', 'bi-diagram-2', ep.startswith('centros.')) }}
-      {{ item('montagem.inicio', 'Novo contrato', 'bi-magic', ep.startswith('montagem.') and ep not in ('montagem.convites',)) }}
-      {{ item('montagem.convites', 'Convites', 'bi-person-plus') }}
-      {% endif %}
-      {% if r == 'master' %}
-      {{ item('cadastros.empresas', 'Empresas do grupo', 'bi-building') }}
-      {{ item('cadastros.clientes', 'Clientes', 'bi-briefcase') }}
-      {{ item('cadastros.estados', 'Estados em uso', 'bi-map') }}
-      {{ item('admin.contratos', 'Locais', 'bi-geo-alt') }}
-      {% endif %}
-      {{ item('cadastros.inicio', 'Estrutura e QR dos locais', 'bi-diagram-3', ep in ('cadastros.inicio', 'cadastros.local', 'cadastros.ponto', 'cadastros.trilha', 'cadastros.trilha_local')) }}
-      {% if r == 'master' %}
-      {{ item('admin.usuarios', 'Pessoas e acessos', 'bi-people') }}
-      {% endif %}
-      {% if ve_rotina %}{{ item('rotas.biblioteca', 'Biblioteca de checklists', 'bi-book', ep == 'rotas.biblioteca') }}{% endif %}
-    </details>
-    {% if r == 'master' %}
-    <details class="fc-lat-grupo" {% if ep.startswith('integracao.') %}open{% endif %}>
-      <summary class="fc-lat-titulo">Configuração</summary>
-      {{ item('integracao.chaves', 'Integração', 'bi-plug', ep.startswith('integracao.')) }}
-    </details>
-    {% endif %}
-    {% endif %}
-    <div class="fc-lat-grupo-fixo">
-      {{ item('campo.inicio', 'Aplicativo de campo', 'bi-phone') }}
-    </div>
-    {% endif %}
+    {% endfor %}
   </nav>
   <div class="fc-lat-rodape">O posto em ordem, todo dia.</div>
 </aside>
 <div class="fc-lat-fundo" data-menu-fechar hidden></div>
 
 <header class="fc-barra">
-  <button class="fc-barra-menu" type="button" data-menu-abrir aria-controls="fc-lateral" aria-expanded="false">
+  <button class="fc-barra-menu" type="button" data-menu-abrir aria-controls="fc-lateral" aria-expanded="false" aria-label="Menu">
     <i class="bi bi-list" aria-hidden="true"></i><span>Menu</span>
   </button>
   <a class="fc-barra-marca" href="{{ url_for('portal.inicio' if cliente else 'core.inicio') }}">

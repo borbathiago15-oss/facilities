@@ -59,6 +59,10 @@ dia com `db upgrade`, e prove ida, volta e ida num Postgres antes do PR.
 Primeiros passos na tela: cadastre um contrato, as pessoas, e em
 **Passagem de Turno → Configurar** use "Começar com um modelo pronto".
 
+**Telas novas (React, em migração módulo por módulo):** `cd frontend && npm ci
+&& npm run build`, depois abra `/novo/`. Arquitetura, fases e regras:
+`docs/REACT.md`.
+
 ## Testes
 
 ```bash
@@ -66,6 +70,7 @@ pytest -q                                                        # SQLite
 TEST_DATABASE_URL=postgresql://.../facilities_testes pytest -q   # Postgres (zera o banco!)
 python scripts/ensaio_migracoes_postgres.py postgresql://.../facilities_ensaio_test
 pip install -r requirements-e2e.txt && pytest -q e2e             # navegador (celular e PC)
+cd frontend && npm run tipos && npm test                          # telas novas (React)
 ```
 
 O ensaio das migrações semeia dado em todas as tabelas novas e prova que

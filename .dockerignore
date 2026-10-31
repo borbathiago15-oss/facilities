@@ -19,3 +19,7 @@ __pycache__
 *.sqlite3
 docs
 .claude
+# Telas novas: a compilação sai do estágio "telas" do Dockerfile, nunca da
+# máquina de quem fez o build.
+frontend/node_modules
+facilities/static/app

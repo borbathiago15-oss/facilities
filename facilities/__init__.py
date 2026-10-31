@@ -319,12 +319,19 @@ def _rotas(app):
     from facilities.integracao.telas import bp as integracao_bp
     from facilities.portal.telas import bp as portal_bp, bp_interno as cobrancas_bp
     from facilities.relatorios.telas import bp as relatorios_bp
+    from facilities.telas import api as api_v1_bp, bp as telas_bp
     for bp in (core_bp, auth_bp, admin_bp, app_bp, passagem_bp, chamados_bp, cadastros_bp,
                campo_bp, rotas_bp, publico_bp, preventiva_bp, demandas_bp,
                equipes_bp, visitas_bp, materiais_bp, paineis_bp, integracao_api_bp,
                integracao_bp, portal_bp, cobrancas_bp, relatorios_bp, montagem_bp,
-               centros_bp):
+               centros_bp, telas_bp, api_v1_bp):
         app.register_blueprint(bp)
+
+
+def _quer_json():
+    """As travas de sessão respondem JSON (e não redirecionam) a quem não
+    navega: corpo JSON, envio (não-GET) e toda a API das telas novas."""
+    return request.is_json or request.method != 'GET' or request.path.startswith('/api/v1/')
 
 
 def _sessao(app):
@@ -359,7 +366,7 @@ def _sessao(app):
             return None
         from facilities.core.auth import MSG_CLIENTE_SEM_ACESSO
         from facilities.portal.servico import cliente_ativo, liberado
-        quer_json = request.is_json or request.method != 'GET'
+        quer_json = _quer_json()
         if not liberado() or not cliente_ativo(current_user):
             logout_user()
             session.clear()
@@ -400,7 +407,7 @@ def _sessao(app):
             return None
         msg = ('Para continuar, ative a segunda etapa do login: o código do aplicativo '
                'autenticador no seu celular. Leva um minuto.')
-        if request.is_json or request.method != 'GET':
+        if _quer_json():
             return jsonify({'error': msg}), 403
         flash(msg, 'warning')
         return redirect(url_for('auth.seguranca'))
@@ -409,7 +416,7 @@ def _sessao(app):
     def _troca_obrigatoria():
         if (current_user.is_authenticated and current_user.must_change_password
                 and request.endpoint not in _LIVRES_NA_TROCA):
-            if request.is_json or request.method != 'GET':
+            if _quer_json():
                 return jsonify({'error': 'Troque a sua senha antes de continuar.'}), 403
             return redirect(url_for('auth.trocar_senha'))
 
@@ -466,6 +473,8 @@ def _jinja(app):
     app.jinja_env.globals['NOME_DO_SISTEMA'] = 'Trino Facilities'
     from facilities.rotas.gps import texto as texto_gps
     app.jinja_env.globals['texto_gps'] = texto_gps
+    from facilities.core.menu import montar as menu_do_sistema
+    app.jinja_env.globals['menu_do_sistema'] = menu_do_sistema
 
 
 def _comandos(app):

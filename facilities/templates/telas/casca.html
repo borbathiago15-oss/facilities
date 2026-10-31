@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b0d0f">
+  {# As telas novas (React, ``frontend/``). Mesmo visual do site: o mesmo
+     Bootstrap, os mesmos ícones e o mesmo ``app.css`` (cores da marca). #}
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='pwa/icone-192.png') }}">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <title>{{ NOME_DO_SISTEMA }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap-icons/bootstrap-icons.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+  {% for c in css %}<link rel="stylesheet" href="{{ c }}">{% endfor %}
+  <script type="module" src="{{ js }}"></script>
+</head>
+<body class="fc-com-menu">
+  <div id="raiz"></div>
+  <noscript>Para usar o {{ NOME_DO_SISTEMA }}, ative o JavaScript do navegador.</noscript>
+</body>
+</html>
