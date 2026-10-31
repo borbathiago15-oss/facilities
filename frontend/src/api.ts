@@ -45,8 +45,11 @@ export function guardarCsrf(token: string) {
 
 const SEM_CONEXAO = 'Sem conexão com o servidor. Confira a internet e tente de novo.';
 
-/** Chama a API. 401 (sessão vencida) leva ao login e volta para esta tela. */
+/** Chama a API das telas novas (``/eu`` → ``/api/v1/eu``) ou, com o caminho
+ * inteiro, as do aplicativo de campo que já existem (``/app/api/...``).
+ * 401 (sessão vencida) leva ao login e volta para esta tela. */
 export async function chamar<T>(caminho: string, opcoes: RequestInit = {}): Promise<T> {
+  const url = caminho.startsWith('/app/') ? caminho : `/api/v1${caminho}`;
   const metodo = (opcoes.method || 'GET').toUpperCase();
   const cabecalhos = new Headers(opcoes.headers);
   cabecalhos.set('Accept', 'application/json');
@@ -56,7 +59,7 @@ export async function chamar<T>(caminho: string, opcoes: RequestInit = {}): Prom
   }
   let resp: Response;
   try {
-    resp = await fetch(`/api/v1${caminho}`, {
+    resp = await fetch(url, {
       ...opcoes,
       headers: cabecalhos,
       credentials: 'same-origin',

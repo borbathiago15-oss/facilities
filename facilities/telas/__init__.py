@@ -88,3 +88,7 @@ def eu():
 @login_required
 def nao_existe(_resto):
     abort(404)
+
+
+# As APIs de cada módulo migrado registram as rotas no ``api`` acima.
+from facilities.telas import campo as _campo  # noqa: E402,F401
