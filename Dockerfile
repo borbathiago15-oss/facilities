@@ -1,4 +1,14 @@
 # Trino Facilities — imagem de produção.
+
+# Estágio 1: as telas novas (React, frontend/). O Node só existe aqui, na
+# compilação; a imagem final não leva Node nenhum, só os arquivos prontos.
+FROM node:22-slim AS telas
+WORKDIR /frontend
+COPY frontend/package.json frontend/package-lock.json frontend/.npmrc ./
+RUN npm ci --no-audit --no-fund
+COPY frontend/ ./
+RUN npm run build -- --outDir /telas
+
 FROM python:3.11-slim
 
 # O fuso da operação: date.today() e os carimbos de hora acertam em todo o
@@ -28,6 +38,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # deploy. O que NÃO entra (.env, instance/, .venv, .git, testes) está no
 # .dockerignore.
 COPY . .
+COPY --from=telas /telas facilities/static/app
 # Só a instance/ (anexos em disco quando não há volume) precisa ser
 # gravável. O volume (/data) é acertado no entrypoint, porque só existe lá.
 RUN chmod +x docker-entrypoint.sh && mkdir -p instance && chown facilities instance

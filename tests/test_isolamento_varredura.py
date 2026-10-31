@@ -289,6 +289,10 @@ def _digital(app_module, a):
 
 
 def _valor_do_parametro(nome, ids, entidade=None, endpoint=''):
+    # As telas novas: a casca React (/novo/...) e o "não existe" da API não
+    # leem registro nenhum pelo caminho.
+    if endpoint in ('telas.casca', 'api_v1.nao_existe'):
+        return 'qualquer/coisa'
     if endpoint.startswith('publico.') and nome == 'oid':
         return ids['ocorrencia_publica']
     if endpoint.startswith('preventiva.') and nome == 'pid':
