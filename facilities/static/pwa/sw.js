@@ -12,7 +12,10 @@
 // Telas novas (React, Fase 1c): o início, o turno e o leitor do campo em
 // /novo/app… têm cópia da casca e dos dados que buscam (/api/v1/eu e
 // /api/v1/campo/…), com as mesmas regras: o mesmo cache, a mesma idade
-// máxima, e só para as próprias telas do campo.
+// máxima, e só para as próprias telas do campo. Fase 2a: a nova passagem
+// de turno em React (/novo/passagem-de-turno/turno) também, como a antiga —
+// a casca e os dados dela (/api/v1/eu e /api/v1/passagem/turno), sem idade
+// máxima (a antiga não tem) e só quando quem pede é ela.
 //
 // As cópias guardadas moram num cache à parte (TELAS) e são APAGADAS ao sair
 // do sistema e ao abrir a tela de login (static/js/fila-offline.js e
@@ -29,7 +32,8 @@
 // v4: identidade nova — ícone e página "Sem conexão" guardados de novo.
 // v6: cópia por TELA (a mais recente), com idade máxima e tempo-limite de rede.
 // v8: as telas novas do campo (React, /novo/app…) e os dados delas.
-const VERSAO = 'facilities-app-v8';
+// v9: a nova passagem de turno em React (/novo/passagem-de-turno/turno).
+const VERSAO = 'facilities-app-v9';
 const TELAS = 'trino-telas';
 const ESTATICOS = 'trino-estaticos-v3';
 const OFFLINE = '/static/pwa/offline.html';
@@ -45,6 +49,7 @@ const TELAS_SEM_INTERNET = [
   /^\/novo\/app\/?$/,
   /^\/novo\/app\/ler-qr\/?$/,
   /^\/novo\/app\/turno\/?$/,
+  /^\/novo\/passagem-de-turno\/turno\/?$/,   // a nova passagem, na tela nova (Fase 2a)
 ];
 // Os dados que essas telas novas buscam (GET). Ganham cópia no mesmo cache
 // das telas (TELAS: apagado ao sair e na tela de login), e SÓ quando quem
@@ -53,8 +58,20 @@ const TELAS_SEM_INTERNET = [
 const DADOS_SEM_INTERNET = [
   /^\/api\/v1\/eu$/,                     // quem está logado (nome, menu)
   /^\/api\/v1\/campo\/(inicio|turno|links)$/,
+  /^\/api\/v1\/passagem\/turno$/,       // a nova passagem (Fase 2a)
 ];
 const TELAS_NOVAS_DO_CAMPO = /^\/novo\/app(\/turno|\/ler-qr)?\/?$/;
+const TELA_NOVA_DA_PASSAGEM = /^\/novo\/passagem-de-turno\/turno\/?$/;
+// Que dado cada tela nova pode ter guardado: o /eu (todas), os do campo (só
+// as telas do campo) e o da passagem (só a nova passagem).
+function podeGuardar(tela, dado) {
+  if (/^\/api\/v1\/eu$/.test(dado)) {
+    return TELAS_NOVAS_DO_CAMPO.test(tela) || TELA_NOVA_DA_PASSAGEM.test(tela);
+  }
+  if (/^\/api\/v1\/campo\//.test(dado)) return TELAS_NOVAS_DO_CAMPO.test(tela);
+  if (/^\/api\/v1\/passagem\//.test(dado)) return TELA_NOVA_DA_PASSAGEM.test(tela);
+  return false;
+}
 
 self.addEventListener('install', (evento) => {
   evento.waitUntil(
@@ -142,12 +159,13 @@ function eDadoSemInternet(url) {
   return DADOS_SEM_INTERNET.some((re) => re.test(url.pathname));
 }
 
-// Um dado das telas novas: com cópia só se quem pede é uma tela nova do
-// campo; qualquer outra tela recebe a rede, como sempre.
+// Um dado das telas novas: com cópia só se quem pede é a tela nova que usa
+// aquele dado (``podeGuardar``); qualquer outra tela recebe a rede, como sempre.
 async function dadoSemInternet(evento) {
   const cliente = evento.clientId ? await self.clients.get(evento.clientId) : null;
-  const daTelaDoCampo = cliente && TELAS_NOVAS_DO_CAMPO.test(new URL(cliente.url).pathname);
-  if (!daTelaDoCampo) return fetch(evento.request);
+  const daTela = cliente && podeGuardar(new URL(cliente.url).pathname,
+    new URL(evento.request.url).pathname);
+  if (!daTela) return fetch(evento.request);
   return telaSemInternet(evento.request, () => Response.error());
 }
 
