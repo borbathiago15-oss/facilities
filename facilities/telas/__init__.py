@@ -109,3 +109,4 @@ from facilities.telas import admin as _admin  # noqa: E402,F401
 from facilities.telas import cadastros as _cadastros  # noqa: E402,F401
 from facilities.telas import campo as _campo  # noqa: E402,F401
 from facilities.telas import passagem as _passagem  # noqa: E402,F401
+from facilities.telas import rotas as _rotas  # noqa: E402,F401
