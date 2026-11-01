@@ -16,7 +16,7 @@ function dados(extra: Partial<DadosDaLeitura> = {}): DadosDaLeitura {
       { codigo: 'b', nome: 'Vidros', feito: false, observacao: 'Sem rodo', opcional: true, anexos: [] },
     ],
     anexos_gerais: [], pendencias: [], ocorrencias: [],
-    links: { painel: '/passagem-de-turno/?client_id=1', corrigir: '/passagem-de-turno/api/turnos/9/corrigir' },
+    links: { painel: '/novo/passagem-de-turno/?client_id=1', corrigir: '/passagem-de-turno/api/turnos/9/corrigir' },
     ...extra,
   };
 }

@@ -34,7 +34,7 @@ function dados(extra: Partial<DadosDaPassagem> = {}): DadosDaPassagem {
       { id: 31, titulo: 'Devolução da NF 123', referencia: 'NF 123', descricao: '', origem_turno: '1º Turno',
         origem_data: '30/10', horas: 50, dias: 2, vencida: true, alta: true, passagens: 3, ultima_tentativa: null },
     ],
-    links: { painel: '/passagem-de-turno/?client_id=1', trocar_contrato: '/novo/passagem-de-turno/turno?client_id=',
+    links: { painel: '/novo/passagem-de-turno/?client_id=1', trocar_contrato: '/novo/passagem-de-turno/turno?client_id=',
       ver_turno: '/novo/passagem-de-turno/turno/' },
     ...extra,
   };
@@ -104,7 +104,7 @@ describe('nova passagem', () => {
     await userEvent.click(screen.getByRole('button', { name: /Nova ocorrência/ }));
     await userEvent.type(document.querySelector('.o-desc') as HTMLElement, 'Pallet caído');
     await userEvent.click(screen.getByRole('button', { name: 'Encerrar turno' }));
-    await waitFor(() => expect(ir).toHaveBeenCalledWith('/passagem-de-turno/?client_id=1'));
+    await waitFor(() => expect(ir).toHaveBeenCalledWith('/novo/passagem-de-turno/?client_id=1'));
     const envio = chamadas.find((c) => c.url === '/passagem-de-turno/api/turnos')!;
     const corpo = JSON.parse(String(envio.init!.body));
     expect(corpo).toMatchObject({

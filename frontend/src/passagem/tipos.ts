@@ -110,3 +110,115 @@ export type DadosDaLeitura = {
   ocorrencias: Ocorrencia[];
   links: { painel: string; corrigir: string };
 };
+
+// ── Fase 2b: o painel, o relatório mensal e a configuração ─────────────
+// (contexto_painel, contexto_relatorio_mensal e contexto_configuracao)
+
+export type Faixa = 'ok' | 'alerta' | 'critico' | 'neutro' | string;
+
+export type LinhaDoPareto = { tipo: string; qtd: number; pct: number; acumulado: number; vital: boolean };
+export type LinhaDoComparativo = {
+  turno: string; turnos: number; pct: number | null; cumpridas: number; exigidas: number;
+  ocorrencias: number; faixa: Faixa;
+};
+export type Burndown = { labels: string[]; criadas: number[]; resolvidas: number[] };
+export type Rotina = { codigo: string; nome: string; exigida: number; cumprida: number; pct: number | null; faixa: Faixa };
+
+export type DadosDoPainel = {
+  clients: { id: number; nome: string }[];
+  client_id: number | null;
+  periodo: string;
+  turno_sel: string;
+  periodos: [string, string][];
+  area_sel: number;
+  todas_as_areas: number;
+  de: string;
+  ate: string;
+  hoje: string;
+  dados: null | {
+    periodo_label: string; inicio: string; fim: string; turno: string; n_turnos: number;
+    turnos_disponiveis: string[];
+    areas_disponiveis: { id: number; nome: string }[];
+    aderencia: { pct: number | null; cumpridas: number; exigidas: number; faixa: Faixa; meta: number };
+    resolucao: { pct: number | null; abertas: number; resolvidas: number; faixa: Faixa };
+    n_criticas: number;
+    indice_ocorrencias: { valor: number | null; delta: number | null; turnos: number; ocorrencias: number };
+    pareto: LinhaDoPareto[];
+    turnos_comparativo: LinhaDoComparativo[];
+    burndown: Burndown;
+    rotinas: Rotina[];
+    ocorrencias: {
+      id: number; tipo: string; referencia: string; descricao: string; gravidade: string;
+      quando: { dia: string | null; turno: string | null };
+      chamado: { id: number; numero: string; status_rotulo: string; url: string } | null;
+    }[];
+    criticas: {
+      id: number; titulo: string; descricao: string; prioridade: string;
+      alta: boolean; vencida: boolean; horas: number; dias: number;
+    }[];
+  };
+  turnos: { id: number; data: string; area: string; turno: string; status: string }[];
+  modelos: { id: number; nome: string; turnos: ({ nome?: string; codigo?: string } | string)[] }[];
+  pode_gravar: boolean;
+  pode_chamado: boolean;
+  pode_ver_chamado: boolean;
+  e_gestao: boolean;
+  pode_configurar: boolean;
+  nome_do_sistema: string;
+  links: { nova_passagem: string; relatorio: string | null; configurar: string; ver_turno: string };
+};
+
+export type OcorrenciaDoMes = {
+  data: string | null; dia: string | null; turno: string; tipo: string; referencia: string;
+  descricao: string; gravidade: string;
+};
+
+export type DadosDoRelatorio = {
+  cliente: { id: number; nome: string };
+  meses: [number, string][];
+  anos: number[];
+  mes: number;
+  ano: number;
+  areas: { id: number; nome: string }[];
+  area_sel: number;
+  todas_as_areas: number;
+  nome_do_sistema: string;
+  rel: {
+    area: string; competencia: string; emitido_em: string; emitido_por: string;
+    inicio: string; fim_apurado: string | null; em_andamento: boolean;
+    turnos: { total: number; por_turno: [string, number][] };
+    aderencia: { pct: number | null; cumpridas: number; exigidas: number; faixa: Faixa; meta: number };
+    pendencias: {
+      abertas: number; resolvidas: number; pct: number | null; faixa: Faixa;
+      lista_resolvidas: {
+        titulo: string; referencia: string; prioridade: string; resolucao: string; turno: string;
+        passagens: number; encerrada: string; resolvida_por: string;
+      }[];
+      lista_em_aberto: {
+        titulo: string; referencia: string; prioridade: string; descricao: string; anterior: boolean;
+        ultima_tentativa: string; turno: string; passagens: number; dias: number;
+      }[];
+    };
+    ocorrencias: {
+      total: number; mais_frequente: { tipo: string; qtd: number } | null;
+      lista: OcorrenciaDoMes[]; atencao: OcorrenciaDoMes[];
+    };
+    rotinas: Rotina[];
+    bordo: { data: string; turno: string; texto: string }[];
+  };
+  links: { painel: string; pdf: string };
+};
+
+export type AreaDoContrato = { id: number; nome: string; ativo: boolean; modelos: number };
+
+export type DadosDaConfiguracao = {
+  clients: { id: number; nome: string }[];
+  client_id: number | null;
+  configs: Modelo[];
+  areas: AreaDoContrato[];
+  usos: Record<string, number>;
+  editar: number | null;
+  modelos_prontos: { chave: string; area: string; turnos: string[] }[];
+  recados: { tipo: string; texto: string }[];
+  links: { painel: string; aqui: string; modelos_prontos: string };
+};

@@ -593,8 +593,8 @@ export function Passagem({ dados }: { dados: DadosDaPassagem }) {
           try {
             sessionStorage.setItem('fc-aviso', JSON.stringify({ texto: avisoDoEnvio(corpo, x), tipo: 'success' }));
           } catch { /* sem sessionStorage (aba privada): segue sem o recado */ }
-          // O painel é da Fase 2b: a tela de sempre (ela mostra o recado).
-          window.location.assign('/passagem-de-turno/?client_id=' + corpo.client_id);
+          // O painel novo (Fase 2b), que mostra o recado como o antigo.
+          window.location.assign('/novo/passagem-de-turno/?client_id=' + corpo.client_id);
           return null;
         });
       });
