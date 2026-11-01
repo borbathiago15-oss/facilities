@@ -84,6 +84,16 @@ Restaurar:
 Depois do primeiro backup cifrado conferido, apague os backups abertos
 antigos.
 
+## Fotos antigas no arquivo
+
+As fotos com mais de 60 dias podem sair do armazenamento principal para um
+arquivo (tela *Armazenamento de fotos*, só do administrador). O destino vem
+SÓ do ambiente (`ARQUIVO_R2_*` de um bucket separado, ou
+`ARQUIVO_FOTOS_PASTA` para teste), nunca da tela; cada foto é conferida pelo
+SHA-256 antes de sair do principal, e nenhuma linha do banco é apagada. As
+chaves do bucket do arquivo ficam só nas variáveis do serviço, como as do R2
+principal. Ver `docs/ARQUIVO_FOTOS.md`.
+
 ## Regras para quem mexe no código
 
 * Campo sensível novo: `db.Column(Cifrado())` (`facilities/core/cifra.py`),

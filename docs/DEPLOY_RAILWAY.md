@@ -152,6 +152,20 @@ Onde os dados ficam, e o que apaga:
      `railway ssh --service web` e `flask --app facilities anexos espelhar`.
    Restaurar os anexos: copiar a árvore do bucket de volta para
    `/data/uploads` (ou trocar para `STORAGE_BACKEND=r2`, que lê do bucket).
+9b2. **Arquivo das fotos antigas (opcional).** A tela *Administração do
+   sistema › Armazenamento de fotos* tira do volume as fotos com mais de 60
+   dias. O destino vem do ambiente do `web`:
+   * **Para testar o caminho:** `ARQUIVO_FOTOS_PASTA=/data/arquivo-fotos`
+     (dentro do volume, ao lado de `/data/uploads`; fora do volume ela some
+     no próximo deploy e o sistema recusa). No mesmo disco **não libera
+     espaço**: só prova que copiar, conferir e abrir funciona.
+   * **Para liberar espaço:** um bucket do R2 **separado** do principal:
+     `ARQUIVO_R2_ENDPOINT`, `ARQUIVO_R2_ACCESS_KEY_ID`,
+     `ARQUIVO_R2_SECRET_ACCESS_KEY`, `ARQUIVO_R2_BUCKET`.
+   * Com o volume, o `agendador` não enxerga as fotos: acrescente
+     `ARQUIVO_FOTOS_NO_WEB=1` no `web` para o próprio site andar com o lote a
+     cada 5 minutos.
+   Detalhes e o que o sistema recusa: `docs/ARQUIVO_FOTOS.md`.
 9c. **E-mail dos convites (opcional).** O assistente "Novo contrato"
    convida as pessoas por link. Sem servidor de e-mail, a tela abre o
    WhatsApp ou o e-mail do próprio aparelho com o texto pronto — funciona
