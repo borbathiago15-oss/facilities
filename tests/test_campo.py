@@ -86,6 +86,10 @@ def test_service_worker_guarda_as_telas_do_aplicativo():
     with open(os.path.join(RAIZ, 'facilities', 'static', 'pwa', 'sw.js'), encoding='utf-8') as f:
         sw = f.read()
     assert r'/^\/app\/?$/' in sw and r'/^\/app\/ler-qr\/?$/' in sw
+    # Fase 1c: as mesmas telas em React e os dados delas — e nada da gestão.
+    assert r'/^\/novo\/app\/turno\/?$/' in sw
+    assert r'/^\/api\/v1\/campo\/(inicio|turno|links)$/' in sw
+    assert '/novo/admin' not in sw and 'api\\/v1\\/admin' not in sw
 
 
 def test_jsqr_tem_a_licenca_conferida():

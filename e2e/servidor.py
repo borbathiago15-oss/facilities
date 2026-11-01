@@ -1,6 +1,9 @@
 """Servidor descartável para os testes de navegador (SQLite temporário).
 
-    python e2e/servidor.py <porta> <arquivo.db>
+    python e2e/servidor.py <porta> <arquivo.db> [--sem-semear]
+
+``--sem-semear``: sobe de novo sobre um banco já semeado (o teste que
+derruba o servidor para simular a falta de sinal, ``servidor['religar']``).
 
 Semeia um local com estrutura, um ponto com QR conhecido (``QR_DO_TESTE``),
 um modelo de passagem simples e as pessoas: o administrador, a Ana e a
@@ -35,7 +38,7 @@ def indice_email(email):
     return cifra._indice_com(CHAVE_CAMPOS, cifra.normalizar_email(email))
 
 
-def montar(caminho_db):
+def montar(caminho_db, semear=True):
     os.environ.update(DATABASE_URL=f'sqlite:///{caminho_db}', SECRET_KEY='e2e',
                       SESSION_COOKIE_SECURE='0', RATELIMIT_ENABLED='0',
                       MFA_OBRIGATORIO_GESTAO='0',
@@ -47,6 +50,8 @@ def montar(caminho_db):
     from facilities import create_app
     from facilities.extensions import db
     app = create_app()
+    if not semear:
+        return app
     with app.app_context():
         db.create_all()
         from facilities.core.models import Client, User
@@ -255,4 +260,4 @@ def montar(caminho_db):
 
 if __name__ == '__main__':
     porta, arquivo = int(sys.argv[1]), sys.argv[2]
-    montar(arquivo).run(host='127.0.0.1', port=porta, use_reloader=False)
+    montar(arquivo, semear='--sem-semear' not in sys.argv).run(host='127.0.0.1', port=porta, use_reloader=False)

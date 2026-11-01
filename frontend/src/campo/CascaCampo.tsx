@@ -4,6 +4,7 @@
 import { type ComponentProps, type ReactNode, useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router';
 import type { Eu } from '../api';
+import { horaDaCopia, useCopiaEmUso } from '../copia';
 import { useComSinal } from '../sinal';
 import { Presenca } from './Presenca';
 
@@ -18,6 +19,7 @@ export function Destino({ href, ...resto }: { href: string } & Omit<ComponentPro
 
 export function CascaCampo({ eu, links, children }: { eu: Eu; links: Links | null; children: ReactNode }) {
   const comSinal = useComSinal();
+  const copia = useCopiaEmUso();
   const [menu, setMenu] = useState(false);
   const local = useLocation();
 
@@ -49,7 +51,10 @@ export function CascaCampo({ eu, links, children }: { eu: Eu; links: Links | nul
             onClick={() => setMenu(!menu)}>
             <i className="bi bi-person-circle" aria-hidden="true"></i> {eu.primeiro_nome}
           </button>
-          <ul className={`dropdown-menu dropdown-menu-end${menu ? ' show' : ''}`}>
+          {/* Sem o JS do Bootstrap (Popper), ``data-bs-popper`` faz o CSS dele
+              alinhar o menu à direita do botão — sem ele, no celular, o menu
+              saía da tela pela direita e o "Sair" ficava fora de alcance. */}
+          <ul className={`dropdown-menu dropdown-menu-end${menu ? ' show' : ''}`} data-bs-popper="static">
             <li><span className="dropdown-item-text small text-muted">{eu.nome}<br />{eu.perfil}</span></li>
             <li><hr className="dropdown-divider" /></li>
             {links && <li><a className="dropdown-item" href={links.site}><i className="bi bi-display"></i> Abrir o site</a></li>}
@@ -66,7 +71,15 @@ export function CascaCampo({ eu, links, children }: { eu: Eu; links: Links | nul
         </div>
       </header>
 
-      <main className="fc-conteudo" id="conteudo">{children}</main>
+      <main className="fc-conteudo" id="conteudo">
+        {copia !== null && (
+          <div className="alert alert-warning py-2 small" role="status" data-testid="aviso-de-copia">
+            Sem sinal: esta é a cópia guardada neste aparelho às {horaDaCopia(copia)}. O que você
+            fizer fica guardado no aparelho e sobe sozinho quando o sinal voltar.
+          </div>
+        )}
+        {children}
+      </main>
 
       <Presenca />
       <nav className="fc-app-nav" aria-label="Aplicativo de campo">

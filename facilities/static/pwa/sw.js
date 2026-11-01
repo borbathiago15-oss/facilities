@@ -9,6 +9,11 @@
 // sem cópia: as outras páginas trazem dado de cliente, folha e financeiro, e
 // o celular do galpão é compartilhado.
 //
+// Telas novas (React, Fase 1c): o início, o turno e o leitor do campo em
+// /novo/app… têm cópia da casca e dos dados que buscam (/api/v1/eu e
+// /api/v1/campo/…), com as mesmas regras: o mesmo cache, a mesma idade
+// máxima, e só para as próprias telas do campo.
+//
 // As cópias guardadas moram num cache à parte (TELAS) e são APAGADAS ao sair
 // do sistema e ao abrir a tela de login (static/js/fila-offline.js e
 // app-instalavel.js) — quem pega o aparelho depois não abre a tela de quem
@@ -23,7 +28,8 @@
 // Trocar VERSAO força o navegador a instalar a versão nova e apagar a antiga.
 // v4: identidade nova — ícone e página "Sem conexão" guardados de novo.
 // v6: cópia por TELA (a mais recente), com idade máxima e tempo-limite de rede.
-const VERSAO = 'facilities-app-v7';
+// v8: as telas novas do campo (React, /novo/app…) e os dados delas.
+const VERSAO = 'facilities-app-v8';
 const TELAS = 'trino-telas';
 const ESTATICOS = 'trino-estaticos-v3';
 const OFFLINE = '/static/pwa/offline.html';
@@ -34,7 +40,21 @@ const TELAS_SEM_INTERNET = [
   /^\/app\/?$/,                         // início do aplicativo de campo
   /^\/app\/ler-qr\/?$/,                 // leitor de QR (não tem dado de ninguém)
   /^\/app\/turno\/?$/,                  // meu turno: tarefas e checklists do dia
+  // As mesmas três, nas telas novas (React, Fase 1c). A página é só a casca;
+  // o que ela mostra vem dos DADOS_SEM_INTERNET abaixo.
+  /^\/novo\/app\/?$/,
+  /^\/novo\/app\/ler-qr\/?$/,
+  /^\/novo\/app\/turno\/?$/,
 ];
+// Os dados que essas telas novas buscam (GET). Ganham cópia no mesmo cache
+// das telas (TELAS: apagado ao sair e na tela de login), e SÓ quando quem
+// pede é uma das telas novas do campo: a mesma chamada vinda de outra tela
+// (a da gestão, por exemplo) passa direto, sem cópia.
+const DADOS_SEM_INTERNET = [
+  /^\/api\/v1\/eu$/,                     // quem está logado (nome, menu)
+  /^\/api\/v1\/campo\/(inicio|turno|links)$/,
+];
+const TELAS_NOVAS_DO_CAMPO = /^\/novo\/app(\/turno|\/ler-qr)?\/?$/;
 
 self.addEventListener('install', (evento) => {
   evento.waitUntil(
@@ -74,7 +94,8 @@ function eTelaSemInternet(url) {
 // não prende a tela: depois de ESPERA_DA_REDE, vale a cópia.
 const IDADE_MAXIMA_MS = 20 * 60 * 60 * 1000;
 const ESPERA_DA_REDE_MS = 8000;
-const COM_IDADE_MAXIMA = [/^\/app\/?$/, /^\/app\/turno\/?$/];
+const COM_IDADE_MAXIMA = [/^\/app\/?$/, /^\/app\/turno\/?$/,
+  /^\/novo\/app\/?$/, /^\/novo\/app\/turno\/?$/, /^\/api\/v1\/campo\/(inicio|turno)$/];
 
 function chaveDaTela(url) {
   return url.origin + url.pathname;
@@ -87,7 +108,12 @@ function comLimite(promessa, ms) {
   });
 }
 
-async function telaSemInternet(pedido) {
+// ``semCopia``: o que responder sem rede e sem cópia boa — a página "Sem
+// conexão" para as telas; para os dados, a falha de rede de sempre (a tela
+// mostra "Sem conexão com o servidor").
+const PAGINA_SEM_CONEXAO = () => caches.match(OFFLINE, { cacheName: VERSAO });
+
+async function telaSemInternet(pedido, semCopia = PAGINA_SEM_CONEXAO) {
   const url = new URL(pedido.url);
   const rede = fetch(pedido);
   try {
@@ -108,8 +134,21 @@ async function telaSemInternet(pedido) {
     const velha = COM_IDADE_MAXIMA.some((re) => re.test(url.pathname)) && idade > IDADE_MAXIMA_MS;
     if (guardada && !velha) return guardada;
     // Rede só lenta (não caída) e sem cópia boa: espera a rede mesmo.
-    try { return await rede; } catch (e2) { return caches.match(OFFLINE, { cacheName: VERSAO }); }
+    try { return await rede; } catch (e2) { return semCopia(); }
   }
+}
+
+function eDadoSemInternet(url) {
+  return DADOS_SEM_INTERNET.some((re) => re.test(url.pathname));
+}
+
+// Um dado das telas novas: com cópia só se quem pede é uma tela nova do
+// campo; qualquer outra tela recebe a rede, como sempre.
+async function dadoSemInternet(evento) {
+  const cliente = evento.clientId ? await self.clients.get(evento.clientId) : null;
+  const daTelaDoCampo = cliente && TELAS_NOVAS_DO_CAMPO.test(new URL(cliente.url).pathname);
+  if (!daTelaDoCampo) return fetch(evento.request);
+  return telaSemInternet(evento.request, () => Response.error());
 }
 
 // Rede primeiro (o cache HTTP do navegador continua valendo, então é rápido
@@ -153,6 +192,10 @@ self.addEventListener('fetch', (evento) => {
   }
   if (url.pathname.startsWith('/static/')) {
     evento.respondWith(estatico(pedido));
+    return;
+  }
+  if (eDadoSemInternet(url)) {
+    evento.respondWith(dadoSemInternet(evento));
   }
   // Chamadas de API e o resto: do navegador, como sempre foi.
 });
