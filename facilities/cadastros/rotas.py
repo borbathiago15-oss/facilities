@@ -48,32 +48,42 @@ def _local_para_alterar(cid):
 
 
 def _gravar(funcao, *args, sucesso=None, destino):
-    """Roda a regra; erro de cadastro volta à tela com a mensagem."""
+    """Roda a regra e deixa o recado (``flash``); erro de cadastro vira o
+    recado em vermelho. Devolve o endereço de volta: a tela antiga redireciona
+    para ele; a API das telas novas (``telas/cadastros.py``) devolve o recado
+    e o endereço em JSON."""
     try:
         obj = funcao(*args)
         db.session.commit()
     except CadastroInvalido as erro:
         db.session.rollback()
         flash(str(erro), 'danger')
-        return redirect(destino)
+        return destino
     if sucesso:
         flash(sucesso(obj) if callable(sucesso) else sucesso, 'success')
-    return redirect(destino)
+    return destino
 
 
 # ── Início dos cadastros ──────────────────────────────────────────────────
 
+def exigir_consulta():
+    if _perfil() not in PERFIS_QUE_CONSULTAM:
+        raise Forbidden('Os cadastros são feitos pela gestão.')
+
+
+def contexto_inicio():
+    """O que a tela "Cadastros" mostra: a antiga (``inicio.html``) e a nova
+    (React, ``/api/v1/cadastros/inicio``) saem daqui."""
+    exigir_consulta()
+    return dict(locais=clientes_visiveis(), e_admin=_perfil() == 'master',
+                n_empresas=Empresa.query.count(), n_clientes=Contratante.query.count(),
+                n_estados=Estado.query.filter_by(is_active=True).count())
+
+
 @bp.get('/cadastros/')
 @login_required
 def inicio():
-    if _perfil() not in PERFIS_QUE_CONSULTAM:
-        raise Forbidden('Os cadastros são feitos pela gestão.')
-    locais = clientes_visiveis()
-    return render_template('cadastros/inicio.html', locais=locais,
-                           e_admin=_perfil() == 'master',
-                           n_empresas=Empresa.query.count(),
-                           n_clientes=Contratante.query.count(),
-                           n_estados=Estado.query.filter_by(is_active=True).count())
+    return render_template('cadastros/inicio.html', **contexto_inicio())
 
 
 # ── Empresas ──────────────────────────────────────────────────────────────
@@ -82,15 +92,22 @@ def inicio():
 @login_required
 @admin_required
 def empresas():
-    lista = Empresa.query.order_by(Empresa.is_active.desc(), Empresa.nome).all()
-    return render_template('cadastros/empresas.html', empresas=lista)
+    return render_template('cadastros/empresas.html', **contexto_empresas())
+
+
+def contexto_empresas():
+    return dict(empresas=Empresa.query.order_by(Empresa.is_active.desc(), Empresa.nome).all())
 
 
 @bp.post('/cadastros/empresas')
 @login_required
 @admin_required
 def criar_empresa():
-    return _gravar(servico.salvar_empresa, None, request.form, current_user,
+    return redirect(acao_criar_empresa(request.form))
+
+
+def acao_criar_empresa(dados):
+    return _gravar(servico.salvar_empresa, None, dados, current_user,
                    sucesso=lambda e: f'Empresa {e.nome} cadastrada.',
                    destino=url_for('cadastros.empresas'))
 
@@ -99,8 +116,12 @@ def criar_empresa():
 @login_required
 @admin_required
 def editar_empresa(eid):
+    return redirect(acao_editar_empresa(eid, request.form))
+
+
+def acao_editar_empresa(eid, dados):
     e = db.get_or_404(Empresa, eid)
-    return _gravar(servico.salvar_empresa, e, request.form, current_user,
+    return _gravar(servico.salvar_empresa, e, dados, current_user,
                    sucesso='Empresa atualizada.', destino=url_for('cadastros.empresas'))
 
 
@@ -108,8 +129,12 @@ def editar_empresa(eid):
 @login_required
 @admin_required
 def ativo_empresa(eid):
+    return redirect(acao_ativo_empresa(eid, request.form))
+
+
+def acao_ativo_empresa(eid, dados):
     e = db.get_or_404(Empresa, eid)
-    ativo = request.form.get('ativo') == '1'
+    ativo = dados.get('ativo') == '1'
     return _gravar(servico.definir_ativo_simples, 'empresa', e, ativo, current_user,
                    sucesso='Empresa reativada.' if ativo else 'Empresa desativada.',
                    destino=url_for('cadastros.empresas'))
@@ -121,23 +146,31 @@ def ativo_empresa(eid):
 @login_required
 @admin_required
 def clientes():
+    return render_template('cadastros/clientes.html', **contexto_clientes())
+
+
+def contexto_clientes():
     lista = (Contratante.query.order_by(Contratante.is_active.desc(), Contratante.nome).all())
     from facilities.rotas.models import TIPOS_OCORRENCIA_PUBLICA
     from facilities.chamados.models import PRAZO_POR_PRIORIDADE, PRIORIDADES
-    return render_template('cadastros/clientes.html', clientes=lista,
-                           empresas=Empresa.query.order_by(Empresa.nome).all(),
-                           gerentes=servico.gerentes_possiveis(),
-                           tipos_ocorrencia=TIPOS_OCORRENCIA_PUBLICA, prazos_de=servico.prazos_de,
-                           regua_de=servico.regua_de, prioridades=PRIORIDADES,
-                           regua_padrao={k: int(v.total_seconds() // 3600)
-                                         for k, v in PRAZO_POR_PRIORIDADE.items()})
+    return dict(clientes=lista,
+                empresas=Empresa.query.order_by(Empresa.nome).all(),
+                gerentes=servico.gerentes_possiveis(),
+                tipos_ocorrencia=TIPOS_OCORRENCIA_PUBLICA, prazos_de=servico.prazos_de,
+                regua_de=servico.regua_de, prioridades=PRIORIDADES,
+                regua_padrao={k: int(v.total_seconds() // 3600)
+                              for k, v in PRAZO_POR_PRIORIDADE.items()})
 
 
 @bp.post('/cadastros/clientes')
 @login_required
 @admin_required
 def criar_cliente():
-    return _gravar(servico.salvar_contratante, None, request.form, current_user,
+    return redirect(acao_criar_cliente(request.form))
+
+
+def acao_criar_cliente(dados):
+    return _gravar(servico.salvar_contratante, None, dados, current_user,
                    sucesso=lambda c: (f'Cliente {c.nome} cadastrado. Agora ligue os locais '
                                       'dele em Locais.'),
                    destino=url_for('cadastros.clientes'))
@@ -147,8 +180,12 @@ def criar_cliente():
 @login_required
 @admin_required
 def editar_cliente(cid):
+    return redirect(acao_editar_cliente(cid, request.form))
+
+
+def acao_editar_cliente(cid, dados):
     c = db.get_or_404(Contratante, cid)
-    return _gravar(servico.salvar_contratante, c, request.form, current_user,
+    return _gravar(servico.salvar_contratante, c, dados, current_user,
                    sucesso='Cliente atualizado.', destino=url_for('cadastros.clientes'))
 
 
@@ -156,8 +193,12 @@ def editar_cliente(cid):
 @login_required
 @admin_required
 def ativo_cliente(cid):
+    return redirect(acao_ativo_cliente(cid, request.form))
+
+
+def acao_ativo_cliente(cid, dados):
     c = db.get_or_404(Contratante, cid)
-    ativo = request.form.get('ativo') == '1'
+    ativo = dados.get('ativo') == '1'
     return _gravar(servico.definir_ativo_simples, 'contratante', c, ativo, current_user,
                    sucesso='Cliente reativado.' if ativo else 'Cliente desativado.',
                    destino=url_for('cadastros.clientes'))
@@ -169,16 +210,23 @@ def ativo_cliente(cid):
 @login_required
 @admin_required
 def estados():
-    lista = Estado.query.order_by(Estado.is_active.desc(), Estado.nome).all()
-    return render_template('cadastros/estados.html', estados=lista)
+    return render_template('cadastros/estados.html', **contexto_estados())
+
+
+def contexto_estados():
+    return dict(estados=Estado.query.order_by(Estado.is_active.desc(), Estado.nome).all())
 
 
 @bp.post('/cadastros/estados/<int:eid>/ativo')
 @login_required
 @admin_required
 def ativo_estado(eid):
+    return redirect(acao_ativo_estado(eid, request.form))
+
+
+def acao_ativo_estado(eid, dados):
     e = db.get_or_404(Estado, eid)
-    ativo = request.form.get('ativo') == '1'
+    ativo = dados.get('ativo') == '1'
     return _gravar(servico.definir_estado_ativo, e, ativo, current_user,
                    sucesso=lambda x: f'{x.nome} {"ativado" if ativo else "desativado"}.',
                    destino=url_for('cadastros.estados'))
@@ -189,13 +237,17 @@ def ativo_estado(eid):
 @bp.get('/cadastros/locais/<int:cid>')
 @login_required
 def local(cid):
+    return render_template('cadastros/local.html',
+                           **contexto_local(cid, request.args.get('inativos') == '1'))
+
+
+def contexto_local(cid, com_inativos):
     loc = _local_para_ler(cid)
-    com_inativos = request.args.get('inativos') == '1'
-    return render_template('cadastros/local.html', local=loc,
-                           setores=servico.arvore(loc, com_inativos=com_inativos),
-                           todos_setores=servico.arvore(loc, com_inativos=False),
-                           com_inativos=com_inativos,
-                           pode_alterar=_perfil() in PERFIS_QUE_ESTRUTURAM)
+    return dict(local=loc,
+                setores=servico.arvore(loc, com_inativos=com_inativos),
+                todos_setores=servico.arvore(loc, com_inativos=False),
+                com_inativos=com_inativos,
+                pode_alterar=_perfil() in PERFIS_QUE_ESTRUTURAM)
 
 
 _SALVAR = {
@@ -206,25 +258,33 @@ _SALVAR = {
 }
 
 
-def _destino_local(loc):
-    sufixo = '?inativos=1' if request.form.get('inativos') == '1' else ''
+def _destino_local(loc, dados):
+    sufixo = '?inativos=1' if dados.get('inativos') == '1' else ''
     return url_for('cadastros.local', cid=loc.id) + sufixo
 
 
 @bp.post('/cadastros/locais/<int:cid>/<entidade>')
 @login_required
 def criar_item(cid, entidade):
+    return redirect(acao_criar_item(cid, entidade, request.form))
+
+
+def acao_criar_item(cid, entidade, dados):
     loc = _local_para_alterar(cid)
     if entidade not in _SALVAR:
         abort(404)
-    return _gravar(_SALVAR[entidade], loc, None, request.form, current_user,
+    return _gravar(_SALVAR[entidade], loc, None, dados, current_user,
                    sucesso=lambda o: f'{ENTIDADES[entidade]} "{o.nome}" cadastrado.',
-                   destino=_destino_local(loc))
+                   destino=_destino_local(loc, dados))
 
 
 @bp.post('/cadastros/locais/<int:cid>/<entidade>/<int:oid>')
 @login_required
 def editar_item(cid, entidade, oid):
+    return redirect(acao_editar_item(cid, entidade, oid, request.form))
+
+
+def acao_editar_item(cid, entidade, oid, dados):
     loc = _local_para_alterar(cid)
     if entidade not in _SALVAR:
         abort(404)
@@ -232,13 +292,18 @@ def editar_item(cid, entidade, oid):
         obj = servico.item_do_local(entidade, oid, loc)
     except CadastroInvalido:
         abort(404)
-    return _gravar(_SALVAR[entidade], loc, obj, request.form, current_user,
-                   sucesso=f'{ENTIDADES[entidade]} atualizado.', destino=_destino_local(loc))
+    return _gravar(_SALVAR[entidade], loc, obj, dados, current_user,
+                   sucesso=f'{ENTIDADES[entidade]} atualizado.',
+                   destino=_destino_local(loc, dados))
 
 
 @bp.post('/cadastros/locais/<int:cid>/<entidade>/<int:oid>/ativo')
 @login_required
 def ativo_item(cid, entidade, oid):
+    return redirect(acao_ativo_item(cid, entidade, oid, request.form))
+
+
+def acao_ativo_item(cid, entidade, oid, dados):
     loc = _local_para_alterar(cid)
     if entidade not in _SALVAR:
         abort(404)
@@ -246,11 +311,11 @@ def ativo_item(cid, entidade, oid):
         obj = servico.item_do_local(entidade, oid, loc)
     except CadastroInvalido:
         abort(404)
-    ativo = request.form.get('ativo') == '1'
+    ativo = dados.get('ativo') == '1'
     msg = (f'{ENTIDADES[entidade]} reativado.' if ativo else
            f'{ENTIDADES[entidade]} desativado (com o que estava dentro dele).')
     return _gravar(servico.definir_ativo, entidade, obj, ativo, current_user,
-                   sucesso=msg, destino=_destino_local(loc))
+                   sucesso=msg, destino=_destino_local(loc, dados))
 
 
 @bp.get('/cadastros/locais/<int:cid>/etiquetas.pdf')
@@ -286,22 +351,25 @@ def etiquetas(cid):
 @login_required
 @admin_required
 def trilha():
-    entidade = request.args.get('entidade') or None
-    if entidade not in ENTIDADES:
+    return render_template('cadastros/trilha.html',
+                           **contexto_trilha(request.args.get('entidade') or None))
+
+
+def contexto_trilha(entidade=None, cid=None):
+    """O histórico do grupo (só o administrador, com o filtro por tipo) ou o
+    de um local (``cid``: quem lê o local)."""
+    loc = _local_para_ler(cid) if cid is not None else None
+    if entidade not in ENTIDADES or loc is not None:
         entidade = None
-    lista = servico.eventos(entidade=entidade)
-    return render_template('cadastros/trilha.html', eventos=lista, local=None,
-                           entidade=entidade, entidades=ENTIDADES, acoes=ACOES,
-                           diferencas=servico.diferencas)
+    lista = servico.eventos(client_id=loc.id) if loc else servico.eventos(entidade=entidade)
+    return dict(eventos=lista, local=loc, entidade=entidade, entidades=ENTIDADES, acoes=ACOES,
+                diferencas=servico.diferencas)
 
 
 @bp.get('/cadastros/locais/<int:cid>/trilha')
 @login_required
 def trilha_local(cid):
-    loc = _local_para_ler(cid)
-    lista = servico.eventos(client_id=loc.id)
-    return render_template('cadastros/trilha.html', eventos=lista, local=loc, entidade=None,
-                           entidades=ENTIDADES, acoes=ACOES, diferencas=servico.diferencas)
+    return render_template('cadastros/trilha.html', **contexto_trilha(cid=cid))
 
 
 # ── O endereço do QR ──────────────────────────────────────────────────────

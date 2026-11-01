@@ -52,6 +52,15 @@ def _local(cid):
     return loc
 
 
+def _erro(erro, destino):
+    """O recado em vermelho e o endereço de volta. As ações devolvem o
+    endereço: a tela antiga redireciona para ele; a API das telas novas
+    (``telas/cadastros.py``) devolve o recado e o endereço em JSON."""
+    db.session.rollback()
+    flash(str(erro), 'danger')
+    return destino
+
+
 def _passos(atual, local=None, cliente=None):
     return {'atual': atual, 'local': local, 'cliente': cliente or (local.contratante
                                                                     if local else None)}
@@ -62,45 +71,55 @@ def _passos(atual, local=None, cliente=None):
 @bp.get('/novo-contrato')
 @login_required
 def inicio():
+    return render_template('cadastros/novo_contrato/cliente.html', **contexto_inicio())
+
+
+def contexto_inicio():
+    """As telas antiga e nova (React, ``/api/v1/cadastros/novo-contrato...``)
+    saem das funções ``contexto_*``."""
     _exigir_montagem()
     clientes = montagem.clientes_da_montagem(current_user)
     locais = clientes_visiveis()
     por_cliente = {}
     for loc in locais:
         por_cliente.setdefault(loc.contratante_id, []).append(loc)
-    return render_template('cadastros/novo_contrato/cliente.html', clientes=clientes,
-                           por_cliente=por_cliente, passos=_passos(1),
-                           pode_criar=montagem.pode_criar_cliente(current_user),
-                           empresas=Empresa.query.filter_by(is_active=True)
-                           .order_by(Empresa.nome).all(),
-                           andamento=montagem.andamento)
+    return dict(clientes=clientes, por_cliente=por_cliente, passos=_passos(1),
+                pode_criar=montagem.pode_criar_cliente(current_user),
+                empresas=Empresa.query.filter_by(is_active=True).order_by(Empresa.nome).all(),
+                andamento=montagem.andamento)
 
 
 @bp.post('/novo-contrato/cliente')
 @login_required
 def criar_cliente():
+    return redirect(acao_criar_cliente(request.form, request.files))
+
+
+def acao_criar_cliente(dados, arquivos):
     _exigir_montagem()
     try:
-        cli = montagem.criar_cliente(request.form, current_user)
+        cli = montagem.criar_cliente(dados, current_user)
         db.session.flush()
-        montagem.salvar_logo(cli, request.files.get('logo'), current_user)
+        montagem.salvar_logo(cli, arquivos.get('logo'), current_user)
         db.session.commit()
     except CadastroInvalido as erro:
-        db.session.rollback()
-        flash(str(erro), 'danger')
-        return redirect(url_for('montagem.inicio'))
+        return _erro(erro, url_for('montagem.inicio'))
     flash(f'Cliente {cli.nome} cadastrado. Agora o primeiro local dele.', 'success')
-    return redirect(url_for('montagem.novo_local', ctid=cli.id))
+    return url_for('montagem.novo_local', ctid=cli.id)
 
 
 @bp.post('/novo-contrato/cliente/<int:ctid>/logo')
 @login_required
 def trocar_logo(ctid):
+    return redirect(acao_trocar_logo(ctid, request.files))
+
+
+def acao_trocar_logo(ctid, arquivos):
     cli = _cliente(ctid)
     if not montagem.pode_criar_cliente(current_user):
         raise Forbidden('A logo do cliente é trocada pelo gerente ou pelo administrador.')
     try:
-        if not montagem.salvar_logo(cli, request.files.get('logo'), current_user):
+        if not montagem.salvar_logo(cli, arquivos.get('logo'), current_user):
             raise CadastroInvalido('Escolha o arquivo da logo.')
         db.session.commit()
     except CadastroInvalido as erro:
@@ -108,7 +127,7 @@ def trocar_logo(ctid):
         flash(str(erro), 'danger')
     else:
         flash('Logo salva. Ela já sai nas etiquetas de QR deste cliente.', 'success')
-    return redirect(url_for('montagem.novo_local', ctid=cli.id))
+    return url_for('montagem.novo_local', ctid=cli.id)
 
 
 @bp.get('/cadastros/clientes/<int:ctid>/logo.png')
@@ -135,25 +154,30 @@ def logo(ctid):
 @bp.get('/novo-contrato/cliente/<int:ctid>/local')
 @login_required
 def novo_local(ctid):
+    return render_template('cadastros/novo_contrato/local.html', **contexto_novo_local(ctid))
+
+
+def contexto_novo_local(ctid):
     cli = _cliente(ctid)
-    return render_template('cadastros/novo_contrato/local.html', cliente=cli,
-                           estados=montagem.estados_ativos(), passos=_passos(2, cliente=cli),
-                           pode_logo=montagem.pode_criar_cliente(current_user))
+    return dict(cliente=cli, estados=montagem.estados_ativos(), passos=_passos(2, cliente=cli),
+                pode_logo=montagem.pode_criar_cliente(current_user))
 
 
 @bp.post('/novo-contrato/cliente/<int:ctid>/local')
 @login_required
 def criar_local(ctid):
+    return redirect(acao_criar_local(ctid, request.form))
+
+
+def acao_criar_local(ctid, dados):
     cli = _cliente(ctid)
     try:
-        loc = montagem.criar_local(cli, request.form, current_user)
+        loc = montagem.criar_local(cli, dados, current_user)
         db.session.commit()
     except CadastroInvalido as erro:
-        db.session.rollback()
-        flash(str(erro), 'danger')
-        return redirect(url_for('montagem.novo_local', ctid=cli.id))
+        return _erro(erro, url_for('montagem.novo_local', ctid=cli.id))
     flash(f'Local {loc.name} cadastrado. Agora a estrutura: onde ficam os QR.', 'success')
-    return redirect(url_for('montagem.estrutura', cid=loc.id))
+    return url_for('montagem.estrutura', cid=loc.id)
 
 
 # ── Passo 3: estrutura e QR ───────────────────────────────────────────────
@@ -161,19 +185,24 @@ def criar_local(ctid):
 @bp.get('/novo-contrato/<int:cid>/estrutura')
 @login_required
 def estrutura(cid):
+    return render_template('cadastros/novo_contrato/estrutura.html', **contexto_estrutura(cid))
+
+
+def contexto_estrutura(cid):
     loc = _local(cid)
-    return render_template('cadastros/novo_contrato/estrutura.html', local=loc,
-                           setores=servico.arvore(loc), andamento=montagem.andamento(loc),
-                           numeros=montagem.numeros_dos_pontos(loc.id),
-                           passos=_passos(3, local=loc))
+    return dict(local=loc, setores=servico.arvore(loc), andamento=montagem.andamento(loc),
+                numeros=montagem.numeros_dos_pontos(loc.id), passos=_passos(3, local=loc))
 
 
 @bp.post('/novo-contrato/<int:cid>/estrutura')
 @login_required
 def criar_estrutura(cid):
     """Cadastro rápido: um setor, um ambiente e os pontos com QR de uma vez."""
+    return redirect(acao_criar_estrutura(cid, request.form))
+
+
+def acao_criar_estrutura(cid, f):
     loc = _local(cid)
-    f = request.form
     try:
         setor_id = f.get('setor_id') or ''
         if setor_id.isdigit():
@@ -199,27 +228,29 @@ def criar_estrutura(cid):
             servico.salvar_ponto(loc, None, dados, current_user)
         db.session.commit()
     except CadastroInvalido as erro:
-        db.session.rollback()
-        flash(str(erro), 'danger')
-        return redirect(url_for('montagem.estrutura', cid=loc.id))
+        return _erro(erro, url_for('montagem.estrutura', cid=loc.id))
     flash(f'{ambiente.nome}: {len(nomes)} ponto(s) com QR cadastrado(s).', 'success')
-    return redirect(url_for('montagem.estrutura', cid=loc.id))
+    return url_for('montagem.estrutura', cid=loc.id)
 
 
 # ── Passo 4: equipe e convites ────────────────────────────────────────────
 
-def _form_convite(loc, erro_dados=None):
+def contexto_equipe(loc, erro_dados=None):
     perfis = [(p, PERFIS[p]) for p in montagem.perfis_que_convida(current_user)]
-    return render_template('cadastros/novo_contrato/equipe.html', local=loc, perfis=perfis,
-                           superiores=montagem.superiores_para(current_user),
-                           locais=montagem._locais_permitidos(current_user),
-                           clientes=montagem.clientes_da_montagem(current_user),
-                           convites=montagem.convites_do_local(loc),
-                           equipe=sorted((u for u in loc.linked_users
-                                          if u.is_active and not u.is_deleted),
-                                         key=lambda u: u.name),
-                           andamento=montagem.andamento(loc), perfis_nome=PERFIS,
-                           dados=erro_dados or {}, passos=_passos(4, local=loc))
+    return dict(local=loc, perfis=perfis,
+                superiores=montagem.superiores_para(current_user),
+                locais=montagem._locais_permitidos(current_user),
+                clientes=montagem.clientes_da_montagem(current_user),
+                convites=montagem.convites_do_local(loc),
+                equipe=sorted((u for u in loc.linked_users if u.is_active and not u.is_deleted),
+                              key=lambda u: u.name),
+                andamento=montagem.andamento(loc), perfis_nome=PERFIS,
+                dados=erro_dados or {}, passos=_passos(4, local=loc))
+
+
+def _form_convite(loc, erro_dados=None):
+    return render_template('cadastros/novo_contrato/equipe.html',
+                           **contexto_equipe(loc, erro_dados))
 
 
 @bp.get('/novo-contrato/<int:cid>/equipe')
@@ -228,15 +259,19 @@ def equipe(cid):
     return _form_convite(_local(cid))
 
 
-def _mostrar_link(convite, token, local=None, enviado=None):
+def contexto_convite_criado(convite, token, local=None, enviado=None):
     link = url_for('montagem.aceitar', token=token, _external=True)
-    return render_template('cadastros/novo_contrato/convite_criado.html', convite=convite,
-                           link=link, local=local, enviado=enviado,
-                           whatsapp=montagem.link_whatsapp(convite, link),
-                           email=montagem.link_email(convite, link),
-                           perfil=PERFIS.get(convite.role, convite.role),
-                           locais=montagem.locais_do_convite(convite),
-                           passos=_passos(4, local=local) if local else None)
+    return dict(convite=convite, link=link, local=local, enviado=enviado,
+                whatsapp=montagem.link_whatsapp(convite, link),
+                email=montagem.link_email(convite, link),
+                perfil=PERFIS.get(convite.role, convite.role),
+                locais=montagem.locais_do_convite(convite),
+                passos=_passos(4, local=local) if local else None)
+
+
+def _mostrar_link(convite, token, local=None, enviado=None):
+    return render_template('cadastros/novo_contrato/convite_criado.html',
+                           **contexto_convite_criado(convite, token, local, enviado))
 
 
 def _enviar_por_email(convite, token):
@@ -254,25 +289,37 @@ def _enviar_por_email(convite, token):
 def convidar(cid):
     loc = _local(cid)
     try:
-        convite, token = montagem.criar_convite(current_user, request.form)
-        db.session.commit()
+        convite, token, enviado = gravar_convite(request.form)
     except CadastroInvalido as erro:
-        db.session.rollback()
         flash(str(erro), 'danger')
         return _form_convite(loc, request.form), 400
-    enviado = _enviar_por_email(convite, token)
     # A página com o link responde ao POST (sem redirecionar): o link não
     # passa pelo cookie de sessão nem pelo histórico do navegador.
     return _mostrar_link(convite, token, local=loc, enviado=enviado)
 
 
+def gravar_convite(dados):
+    """Grava o convite e tenta o e-mail: ``(convite, token, enviado)``. A
+    recusa (``CadastroInvalido``) sai com a sessão já desfeita."""
+    try:
+        convite, token = montagem.criar_convite(current_user, dados)
+        db.session.commit()
+    except CadastroInvalido:
+        db.session.rollback()
+        raise
+    return convite, token, _enviar_por_email(convite, token)
+
+
 @bp.get('/convites')
 @login_required
 def convites():
+    return render_template('cadastros/novo_contrato/convites.html', **contexto_convites())
+
+
+def contexto_convites():
     _exigir_montagem()
-    return render_template('cadastros/novo_contrato/convites.html',
-                           convites=montagem.convites_visiveis(current_user),
-                           perfis_nome=PERFIS, locais_do=montagem.locais_do_convite)
+    return dict(convites=montagem.convites_visiveis(current_user),
+                perfis_nome=PERFIS, locais_do=montagem.locais_do_convite)
 
 
 def _convite(conv_id):
@@ -286,6 +333,10 @@ def _convite(conv_id):
 @bp.post('/convites/<int:conv_id>/cancelar')
 @login_required
 def cancelar_convite(conv_id):
+    return redirect(acao_cancelar_convite(conv_id))
+
+
+def acao_cancelar_convite(conv_id):
     c = _convite(conv_id)
     try:
         montagem.cancelar(c, current_user)
@@ -294,7 +345,7 @@ def cancelar_convite(conv_id):
     except CadastroInvalido as erro:
         db.session.rollback()
         flash(str(erro), 'danger')
-    return redirect(url_for('montagem.convites'))
+    return url_for('montagem.convites')
 
 
 @bp.post('/convites/<int:conv_id>/novo-link')
@@ -302,13 +353,22 @@ def cancelar_convite(conv_id):
 def novo_link(conv_id):
     c = _convite(conv_id)
     try:
-        token = montagem.renovar(c, current_user)
-        db.session.commit()
+        token, enviado = gravar_novo_link(c)
     except CadastroInvalido as erro:
-        db.session.rollback()
         flash(str(erro), 'danger')
         return redirect(url_for('montagem.convites'))
-    return _mostrar_link(c, token, enviado=_enviar_por_email(c, token))
+    return _mostrar_link(c, token, enviado=enviado)
+
+
+def gravar_novo_link(c):
+    """Link novo para o convite e o e-mail: ``(token, enviado)``."""
+    try:
+        token = montagem.renovar(c, current_user)
+        db.session.commit()
+    except CadastroInvalido:
+        db.session.rollback()
+        raise
+    return token, _enviar_por_email(c, token)
 
 
 # ── O link do convite (público) ───────────────────────────────────────────
