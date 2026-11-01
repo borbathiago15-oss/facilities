@@ -85,8 +85,9 @@ def test_administrador_cadastra_e_monta_a_estrutura(servidor, navegador, perfil,
         # com o mesmo QR.
         secao = pg.locator('section', has=pg.get_by_role('heading', name='Armazém ' + perfil))
         secao.locator('summary', has_text='+ Cadastrar ambiente neste setor').click()
-        secao.get_by_label('Nome do ambiente').fill('Doca 2')
-        secao.get_by_role('button', name='Cadastrar ambiente').click()
+        novo = secao.locator('form', has=pg.locator('input[id^="anomen"]'))
+        novo.locator('input[id^="anomen"]').fill('Doca 2')
+        novo.get_by_role('button', name='Cadastrar ambiente').click()
         pg.wait_for_selector('text=Ambiente "Doca 2" cadastrado.')
         [(pid, qr)] = servidor['sql']("SELECT id, codigo_qr FROM pontos_inspecao WHERE nome = 'Portão da doca'")
         pg.locator('details', has=pg.locator(f'#pmov{pid}')).locator('summary').click()
