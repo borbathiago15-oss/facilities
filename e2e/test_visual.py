@@ -39,3 +39,22 @@ def test_login_menu_e_telas_sem_rolagem_lateral(servidor, navegador, perfil):
             assert pg.locator('.fc-lat-item.ativo').count() <= 1
     finally:
         b.close()
+
+
+def test_nova_passagem_sem_rolagem_lateral(servidor, navegador, perfil, passagem):
+    """A nova passagem (Fase 2a: antiga e nova) no menu da gestão: sem rolagem
+    lateral e com no máximo um item do menu marcado."""
+    from conftest import abrir
+    b, ctx = abrir_contexto(navegador, perfil)
+    try:
+        pg = ctx.new_page()
+        entrar(pg, servidor['base'], 'admin@e2e.test')
+        abrir(pg, servidor['base'] + passagem + '/turno', 'passagem')
+        pg.get_by_role('heading', name='Nova passagem de turno').wait_for()
+        caixa = pg.locator('#fc-lateral').bounding_box()
+        assert (caixa['x'] >= 0) == (perfil == 'pc')        # no celular, a gaveta fechada
+        largura = pg.evaluate('document.documentElement.scrollWidth')
+        assert largura <= pg.viewport_size['width'], f'a nova passagem rola de lado ({largura}px)'
+        assert pg.locator('.fc-lat-item.ativo').count() <= 1
+    finally:
+        b.close()

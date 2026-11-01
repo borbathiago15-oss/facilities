@@ -4,16 +4,17 @@ que tinham JavaScript embutido continuam funcionando, no celular e no PC.
 A fixture ``_sem_violacao_de_csp`` do conftest reprova se o navegador
 bloquear qualquer coisa.
 """
-from conftest import abrir_contexto, entrar
+from conftest import abrir_contexto, entrar, tela_pronta
 
 
-def test_passagem_funciona_sem_script_embutido(servidor, navegador, perfil):
+def test_passagem_funciona_sem_script_embutido(servidor, navegador, perfil, passagem):
     b, ctx = abrir_contexto(navegador, perfil)
     try:
         pg = ctx.new_page()
         entrar(pg, servidor['base'], 'ana@e2e.test')
-        r = pg.goto(servidor['base'] + '/passagem-de-turno/turno')
+        r = pg.goto(servidor['base'] + passagem + '/turno')
         assert "script-src 'self'" in r.headers['content-security-policy']
+        tela_pronta(pg, 'passagem')
         pg.wait_for_load_state('networkidle')
         pg.get_by_role('button', name='Nova pendência').click()
         assert pg.locator('.pending-row').count() == 1

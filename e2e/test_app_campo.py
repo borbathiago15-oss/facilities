@@ -64,13 +64,13 @@ def _turnos(servidor, email):
         'WHERE u.email_index = ? AND t.status = ?', servidor['indice'](email), 'encerrado')
 
 
-def test_sem_sinal_guarda_e_sobe_uma_vez(servidor, navegador, perfil):
+def test_sem_sinal_guarda_e_sobe_uma_vez(servidor, navegador, perfil, passagem):
     b, ctx = abrir_contexto(navegador, perfil)
     try:
         pg = ctx.new_page()
         pg.on('dialog', lambda d: d.accept())
         entrar(pg, servidor['base'], 'ana@e2e.test')
-        pg.goto(servidor['base'] + '/passagem-de-turno/turno')
+        abrir(pg, servidor['base'] + passagem + '/turno', 'passagem')
         pg.wait_for_load_state('networkidle')
         ctx.set_offline(True)
         _encerrar_passagem_sem_navegar(pg, '1º Turno')
@@ -93,13 +93,13 @@ def _encerrar_passagem_sem_navegar(pg, turno):
     pg.get_by_role('button', name='Encerrar turno').click()
 
 
-def test_celular_compartilhado_nao_mistura_os_envios(servidor, navegador, perfil):
+def test_celular_compartilhado_nao_mistura_os_envios(servidor, navegador, perfil, passagem):
     b, ctx = abrir_contexto(navegador, perfil)
     try:
         pg = ctx.new_page()
         pg.on('dialog', lambda d: d.accept())
         entrar(pg, servidor['base'], 'ana@e2e.test')
-        pg.goto(servidor['base'] + '/passagem-de-turno/turno')
+        abrir(pg, servidor['base'] + passagem + '/turno', 'passagem')
         pg.wait_for_load_state('networkidle')
         # A Ana encerra sem sinal; o sinal volta mas o envio da passagem não
         # passa (bloqueado aqui), e ela entrega o celular para a Mariana.
