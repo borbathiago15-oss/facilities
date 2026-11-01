@@ -45,24 +45,39 @@ def _porta_livre():
     return porta
 
 
-@pytest.fixture()
-def servidor():
-    """Um servidor novo por teste: banco limpo e fila sem resto do anterior."""
-    fd, banco = tempfile.mkstemp(suffix='.db')
-    os.close(fd)
-    porta = _porta_livre()
-    proc = subprocess.Popen([sys.executable, os.path.join(AQUI, 'servidor.py'), str(porta), banco],
-                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+def _subir(porta, banco, *extra):
+    proc = subprocess.Popen([sys.executable, os.path.join(AQUI, 'servidor.py'), str(porta), banco,
+                             *extra], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     base = f'http://127.0.0.1:{porta}'
     for _ in range(100):
         try:
             urllib.request.urlopen(base + '/healthz', timeout=1)
-            break
+            return proc
         except Exception:
             time.sleep(0.1)
-    else:
-        proc.kill()
-        pytest.fail('o servidor de teste não subiu')
+    proc.kill()
+    pytest.fail('o servidor de teste não subiu')
+
+
+@pytest.fixture()
+def servidor():
+    """Um servidor novo por teste: banco limpo e fila sem resto do anterior.
+
+    ``desligar``/``religar``: a falta de sinal de verdade. O ``set_offline``
+    do Playwright não alcança o service worker — com ele só, as telas com
+    cópia (sw.js) continuariam vindo da rede."""
+    fd, banco = tempfile.mkstemp(suffix='.db')
+    os.close(fd)
+    porta = _porta_livre()
+    base = f'http://127.0.0.1:{porta}'
+    atual = {'proc': _subir(porta, banco)}
+
+    def desligar():
+        atual['proc'].terminate()
+        atual['proc'].wait(timeout=10)
+
+    def religar():
+        atual['proc'] = _subir(porta, banco, '--sem-semear')
 
     def consultar(sql, *args):
         con = sqlite3.connect(banco)
@@ -72,9 +87,10 @@ def servidor():
             con.close()
 
     from servidor import indice_email
-    yield {'base': base, 'sql': consultar, 'qr': QR_DO_TESTE, 'indice': indice_email}
-    proc.terminate()
-    proc.wait(timeout=10)
+    yield {'base': base, 'sql': consultar, 'qr': QR_DO_TESTE, 'indice': indice_email,
+           'desligar': desligar, 'religar': religar}
+    atual['proc'].terminate()
+    atual['proc'].wait(timeout=10)
     os.remove(banco)
 
 
