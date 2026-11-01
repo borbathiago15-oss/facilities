@@ -34,5 +34,14 @@ if [ "${ANEXOS_ESPELHO_R2:-0}" = "1" ]; then
       flask --app facilities anexos espelhar || echo "anexos espelhar: falhou (o site segue)"
     done ) &
 fi
+# Arquivo das fotos antigas (ARQUIVO_FOTOS_NO_WEB=1): o lote que o
+# administrador começa na tela anda aqui, a cada 5 minutos, quando as fotos
+# estão no volume deste serviço (o agendador do Railway não o enxerga).
+if [ "${ARQUIVO_FOTOS_NO_WEB:-0}" = "1" ]; then
+  ( while true; do
+      sleep "${ARQUIVO_FOTOS_INTERVALO:-300}"
+      flask --app facilities anexos arquivar || echo "anexos arquivar: falhou (o site segue)"
+    done ) &
+fi
 exec gunicorn app:app --bind "0.0.0.0:${PORT:-8080}" --workers "${WEB_CONCURRENCY:-2}" \
   --threads 4 --timeout 60 --access-logfile -

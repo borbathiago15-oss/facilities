@@ -295,6 +295,22 @@ SEMENTES = [
 # Fases depois da cifra: o e-mail já não serve de filtro (está cifrado);
 # use o id, ou um campo que não é cifrado (ex.: ``name``).
 SEMENTES_DEPOIS_DA_CIFRA = [
+    # Arquivo das fotos (01/11/2026): o prazo, um lote, uma foto arquivada e
+    # uma que falhou.
+    "INSERT INTO arquivo_fotos_ajustes (id,dias,atualizado_em,atualizado_por) "
+    "SELECT 1,90,now(),u.id FROM users u WHERE u.name='Gerente'",
+    "INSERT INTO arquivo_fotos_lotes (iniciado_por,iniciado_em,concluido_em,dias,corte_em,"
+    "destino,situacao,previstas,arquivadas,bytes_arquivados,tentativas_com_erro,"
+    "nao_arquivadas,ultimo_erro,ultima_rodada_em) SELECT u.id,now(),now(),90,"
+    "now() - interval '90 days','Cloudflare R2, bucket arquivo','concluido_com_falhas',2,1,"
+    "123456,3,1,'chamado_anexos #2: OSError: fora do ar',now() FROM users u "
+    "WHERE u.name='Gerente'",
+    "INSERT INTO fotos_arquivadas (storage_key,origem,origem_id,tamanho,sha256,arquivada_em,"
+    "lote_id,removida_do_principal_em) SELECT 'chamados/1/a.jpg','chamado_anexos',1,123456,"
+    "repeat('a',64),now(),l.id,now() FROM arquivo_fotos_lotes l",
+    "INSERT INTO arquivo_fotos_falhas (storage_key,origem,origem_id,lote_id,tentativas,erro,em) "
+    "SELECT 'chamados/1/b.jpg','chamado_anexos',2,l.id,3,'OSError: fora do ar',now() "
+    "FROM arquivo_fotos_lotes l",
 ]
 
 

@@ -52,6 +52,8 @@ def aplicar(agora_utc=None):
                 # Arquivo já sumiu ou armazenamento fora: o registro fica
                 # como está e a próxima rodada tenta de novo.
                 continue
+            from facilities.arquivo_fotos.servico import esquecer
+            esquecer(oc.foto_key)          # se estava no arquivo, saiu de lá também
             oc.foto_key = None
             oc.foto_mime = None
             resumo['fotos'] += 1
