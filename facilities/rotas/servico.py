@@ -932,6 +932,7 @@ def rodar(origem='comando', agora_utc=None):
     db.session.add(reg)
     db.session.flush()
     from facilities.chamados.servico import avisar_prazos, lembrar_confirmacao
+    from facilities.arquivo_fotos import servico as arquivo_fotos
     from facilities.core import retencao
     from facilities.preventiva.servico import gerar_ordens
     from facilities.rotas import presenca
@@ -957,6 +958,8 @@ def rodar(origem='comando', agora_utc=None):
         ('confirmação dos chamados', lambda: lembrar_confirmacao(agora_utc)),
         ('tarefas perdidas', _perdidas),
         ('retenção', lambda: retencao.aplicar(agora_utc)),
+        # O lote que o administrador começou na tela "Armazenamento de fotos".
+        ('arquivo das fotos', lambda: arquivo_fotos.rodada(agora_utc)),
     )
     for nome, etapa in etapas:
         try:

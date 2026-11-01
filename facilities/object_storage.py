@@ -167,3 +167,138 @@ def espelhar_no_r2(base_dir):
             except Exception:
                 erros += 1
     return copiados, ja, erros
+
+
+# ── Arquivo das fotos antigas (decisão do dono, 01/11/2026) ───────────────
+#
+# As fotos passadas do prazo saem do armazenamento principal para um destino
+# de arquivo, configurado SÓ pelo ambiente (nunca digitado na tela):
+#
+# * ``ARQUIVO_R2_ENDPOINT``, ``ARQUIVO_R2_ACCESS_KEY_ID``,
+#   ``ARQUIVO_R2_SECRET_ACCESS_KEY``, ``ARQUIVO_R2_BUCKET`` (e o opcional
+#   ``ARQUIVO_R2_PREFIX``): um bucket do Cloudflare R2 SEPARADO do principal;
+# * ``ARQUIVO_FOTOS_PASTA``: uma pasta do servidor. Serve para testar o
+#   caminho; no mesmo disco das fotos não libera espaço nenhum.
+#
+# Quem lê não muda: ``ComArquivo`` procura no principal e, se não achar,
+# no arquivo. Toda tela, antiga ou nova, continua mostrando a foto.
+
+_ARQUIVO_R2_VARS = ('ARQUIVO_R2_ENDPOINT', 'ARQUIVO_R2_ACCESS_KEY_ID',
+                    'ARQUIVO_R2_SECRET_ACCESS_KEY', 'ARQUIVO_R2_BUCKET')
+
+
+class ComArquivo:
+    """O armazenamento que o app usa: grava no principal; lê do principal e,
+    se a chave não estiver lá (foto arquivada), do arquivo. Apagar apaga nos
+    dois (quem apaga quer o arquivo fora de vez: a retenção, a troca da
+    logo, o anexo retirado da passagem).
+
+    ``arquivo`` é ``None`` quando não há destino configurado (ou ele foi
+    recusado: ``info['problema']`` diz por quê)."""
+
+    def __init__(self, principal, arquivo=None, info=None):
+        self.principal = principal
+        self.arquivo = arquivo
+        self.info = info or {'tipo': None, 'rotulo': '', 'mesmo_disco': False,
+                             'problema': None}
+
+    def save(self, key, data, content_type=None):
+        self.principal.save(key, data, content_type)
+
+    def load(self, key):
+        try:
+            return self.principal.load(key)
+        except NotFound:
+            if self.arquivo is None:
+                raise
+            return self.arquivo.load(key)
+
+    def delete(self, key):
+        self.principal.delete(key)
+        if self.arquivo is not None:
+            self.arquivo.delete(key)
+
+    def exists(self, key):
+        if self.principal.exists(key):
+            return True
+        return self.arquivo is not None and self.arquivo.exists(key)
+
+
+def _disco(caminho):
+    """O dispositivo onde ``caminho`` (ou a pasta existente mais próxima
+    acima dele) mora."""
+    p = os.path.abspath(caminho)
+    while not os.path.exists(p):
+        acima = os.path.dirname(p)
+        if acima == p:
+            return None
+        p = acima
+    return os.stat(p).st_dev
+
+
+def _dentro(a, b):
+    a, b = os.path.abspath(a), os.path.abspath(b)
+    return os.path.commonpath([a, b]) in (a, b)
+
+
+def arquivo_do_ambiente(principal):
+    """O destino do arquivo, lido do ambiente → (storage ou None, info).
+
+    Nunca derruba o boot: configuração incompleta ou perigosa vira
+    ``info['problema']`` (a tela mostra) e o arquivo fica indisponível. É
+    recusado o destino que é o MESMO lugar do principal — arquivar ali
+    gravaria a cópia por cima do original e depois apagaria os dois."""
+    info = {'tipo': None, 'rotulo': '', 'mesmo_disco': False, 'problema': None}
+    r2 = {v: (os.environ.get(v) or '').strip() for v in _ARQUIVO_R2_VARS}
+    pasta = (os.environ.get('ARQUIVO_FOTOS_PASTA') or '').strip()
+    algum_r2 = any(r2.values())
+    if algum_r2 and pasta:
+        info['problema'] = ('Há dois destinos no ambiente (ARQUIVO_FOTOS_PASTA e as '
+                            'ARQUIVO_R2_*). Deixe só um.')
+        return None, info
+    if algum_r2:
+        info['tipo'] = 'r2'
+        faltam = [v for v, x in r2.items() if not x]
+        if faltam:
+            info['problema'] = 'Faltam as variáveis ' + ', '.join(faltam) + '.'
+            return None, info
+        bucket = r2['ARQUIVO_R2_BUCKET']
+        info['rotulo'] = f'Cloudflare R2, bucket {bucket}'
+        if (isinstance(principal, R2Storage) and principal.bucket == bucket
+                and (os.environ.get('R2_ENDPOINT') or '').strip() == r2['ARQUIVO_R2_ENDPOINT']):
+            info['problema'] = ('O bucket do arquivo é o mesmo das fotos do dia a dia. '
+                                'Crie um bucket separado para o arquivo.')
+            return None, info
+        try:
+            return R2Storage(r2['ARQUIVO_R2_ENDPOINT'], r2['ARQUIVO_R2_ACCESS_KEY_ID'],
+                             r2['ARQUIVO_R2_SECRET_ACCESS_KEY'], bucket,
+                             prefix=os.environ.get('ARQUIVO_R2_PREFIX', '')), info
+        except Exception as ex:                 # noqa: BLE001 — vira aviso na tela
+            info['problema'] = f'Não foi possível preparar o bucket do arquivo ({type(ex).__name__}).'
+            return None, info
+    if not pasta:
+        return None, info
+    info['tipo'] = 'pasta'
+    pasta = os.path.abspath(pasta)
+    info['rotulo'] = f'Pasta {pasta} no servidor'
+    if isinstance(principal, LocalStorage):
+        base = principal.base
+        if _dentro(pasta, base):
+            info['problema'] = ('A pasta do arquivo não pode ficar dentro da pasta das fotos '
+                                '(nem conter ela). Use uma pasta ao lado, por exemplo '
+                                f'{os.path.join(os.path.dirname(os.path.abspath(base)), "arquivo-fotos")}.')
+            return None, info
+        if not os.path.isdir(base):
+            info['problema'] = ('Este servidor não enxerga a pasta das fotos '
+                                f'({os.path.abspath(base)}): o arquivo só roda onde ela está.')
+            return None, info
+        info['mesmo_disco'] = _disco(pasta) == _disco(base)
+    # Num contêiner, pasta fora do volume das fotos some no próximo deploy —
+    # com as fotos arquivadas dentro. Outro disco só com a confirmação
+    # escrita de quem configurou.
+    if not info['mesmo_disco'] and os.environ.get('ARQUIVO_FOTOS_PASTA_OUTRO_DISCO', '') != '1':
+        info['problema'] = ('A pasta do arquivo está em outro disco que o das fotos. Se esse '
+                            'disco é permanente (não some num novo deploy), confirme com '
+                            'ARQUIVO_FOTOS_PASTA_OUTRO_DISCO=1.')
+        return None, info
+    return LocalStorage(pasta), info

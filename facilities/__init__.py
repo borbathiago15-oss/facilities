@@ -29,7 +29,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 
 from facilities import tempo
 from facilities.extensions import csrf, db, limiter, login_manager, migrate
-from facilities.object_storage import get_storage
+from facilities.object_storage import ComArquivo, arquivo_do_ambiente, get_storage
 
 log = logging.getLogger(__name__)
 
@@ -257,6 +257,9 @@ def create_app(config=None):
     _conferir_limites_compartilhados(app)
     # Antes das extensões: configuração recusada não toca em nada.
     storage = get_storage(app.config['UPLOAD_FOLDER'], local_implicito=sqlite)
+    # As fotos arquivadas (facilities/arquivo_fotos/) continuam abrindo: quem lê
+    # procura no principal e, se não achar, no destino do arquivo.
+    storage = ComArquivo(storage, *arquivo_do_ambiente(storage))
     _atras_de_proxy(app, _saltos_de_proxy())
 
     db.init_app(app)
@@ -294,6 +297,7 @@ def _modelos(app):
     from facilities.integracao import models as _int  # noqa: F401
     from facilities.portal import models as _por  # noqa: F401
     from facilities.relatorios import models as _rel  # noqa: F401
+    from facilities.arquivo_fotos import models as _arq  # noqa: F401
 
 
 def _rotas(app):
@@ -577,6 +581,21 @@ def _comandos(app):
                    f'{erros} erro(s).')
         if erros:
             raise SystemExit(1)
+
+    @anexos_cli.command('arquivar')
+    def anexos_arquivar():
+        """Um passo do arquivo das fotos antigas (o lote que o administrador
+        começou na tela "Armazenamento de fotos"). É o mesmo passo da rodada do
+        agendador, para rodar no serviço que enxerga as fotos (no Railway com
+        volume, o web: ARQUIVO_FOTOS_NO_WEB=1)."""
+        from facilities.arquivo_fotos.servico import rodada
+        r = rodada()
+        db.session.commit()
+        if r is None:
+            click.echo('anexos arquivar: nenhum lote em andamento que este servidor possa tocar.')
+            return
+        click.echo(f"anexos arquivar: {r['arquivadas']} foto(s) arquivada(s), "
+                   f"{r['removidas']} removida(s) do principal, {r['falhas']} com erro.")
 
     @app.cli.group('chaves')
     def chaves_cli():

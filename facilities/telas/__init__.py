@@ -33,10 +33,7 @@ def _manifesto():
         return None
 
 
-@bp.get('/novo/', defaults={'caminho': ''})
-@bp.get('/novo/<path:caminho>')
-@login_required
-def casca(caminho):
+def _casca():
     manifesto = _manifesto()
     if manifesto is None or ENTRADA not in manifesto:
         # O servidor sem as telas compiladas: em desenvolvimento, rodar
@@ -47,6 +44,23 @@ def casca(caminho):
                            js=url_for('static', filename=f'app/{entrada["file"]}'),
                            css=[url_for('static', filename=f'app/{c}')
                                 for c in entrada.get('css', [])])
+
+
+@bp.get('/novo/', defaults={'caminho': ''})
+@bp.get('/novo/<path:caminho>')
+@login_required
+def casca(caminho):
+    return _casca()
+
+
+@bp.get('/novo/admin/armazenamento')
+@login_required
+def armazenamento():
+    """A tela "Armazenamento de fotos": só do administrador. Endpoint próprio
+    para o menu (``core/menu.py``) e para recusar já na entrada."""
+    if current_user._effective_role() != 'master':
+        abort(403)
+    return _casca()
 
 
 @api.get('/eu')
@@ -91,4 +105,5 @@ def nao_existe(_resto):
 
 
 # As APIs de cada módulo migrado registram as rotas no ``api`` acima.
+from facilities.telas import admin as _admin  # noqa: E402,F401
 from facilities.telas import campo as _campo  # noqa: E402,F401

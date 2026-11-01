@@ -40,6 +40,8 @@ def montar(caminho_db):
                       SESSION_COOKIE_SECURE='0', RATELIMIT_ENABLED='0',
                       MFA_OBRIGATORIO_GESTAO='0',
                       STORAGE_BACKEND='local', UPLOAD_FOLDER=tempfile.mkdtemp(),
+                      # O arquivo das fotos antigas numa pasta ao lado (mesmo disco).
+                      ARQUIVO_FOTOS_PASTA=tempfile.mkdtemp(),
                       CLIENTE_EXTERNO_LIBERADO='1',
                       FIELD_ENCRYPTION_KEY=CHAVE_CAMPOS)
     from facilities import create_app

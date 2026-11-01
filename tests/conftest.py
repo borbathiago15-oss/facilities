@@ -144,13 +144,15 @@ def clean_transactional_data(app_module):
         from facilities.integracao import models as integracao_models
         from facilities.portal import models as portal_models
         from facilities.relatorios import models as relatorios_models
+        from facilities.arquivo_fotos import models as arquivo_models
         app_module.db.session.execute(integracao_models.chave_locais.delete())
         app_module.app.config['CLIENTE_EXTERNO_LIBERADO'] = False
         app_module.app.config['MFA_OBRIGATORIO_GESTAO'] = False
         # A área aponta para o checklist dela (cadastro simplificado): solta
         # antes de apagar os checklists.
         cadastros_models.PontoInspecao.query.update({'checklist_id': None})
-        for model in (relatorios_models.MODELOS_EM_ORDEM_DE_LIMPEZA
+        for model in (arquivo_models.MODELOS_EM_ORDEM_DE_LIMPEZA
+                      + relatorios_models.MODELOS_EM_ORDEM_DE_LIMPEZA
                       + portal_models.MODELOS_EM_ORDEM_DE_LIMPEZA
                       + integracao_models.MODELOS_EM_ORDEM_DE_LIMPEZA
                       + materiais_models.MODELOS_EM_ORDEM_DE_LIMPEZA
