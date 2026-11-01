@@ -1,13 +1,20 @@
 // A moldura do aplicativo de campo: topo curto, o selo "Sem sinal", a pessoa,
 // a faixa do pedido de presença e a navegação embaixo, ao alcance do polegar.
 // As mesmas classes da tela antiga (campo/base_app.html).
-import { type ReactNode, useEffect, useState } from 'react';
+import { type ComponentProps, type ReactNode, useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router';
 import type { Eu } from '../api';
 import { useComSinal } from '../sinal';
 import { Presenca } from './Presenca';
 
 type Links = { ler_qr: string; site: string; instalar: string; passagem: string | null; chamados: string | null };
+
+/** Um endereço do servidor: o das telas novas (``/novo/...``) abre sem
+ * recarregar a página; o das telas de sempre, como link comum. */
+export function Destino({ href, ...resto }: { href: string } & Omit<ComponentProps<'a'>, 'href'>) {
+  if (href.startsWith('/novo/')) return <Link to={href.slice('/novo'.length)} {...resto} />;
+  return <a href={href} {...resto} />;
+}
 
 export function CascaCampo({ eu, links, children }: { eu: Eu; links: Links | null; children: ReactNode }) {
   const comSinal = useComSinal();
@@ -25,6 +32,7 @@ export function CascaCampo({ eu, links, children }: { eu: Eu; links: Links | nul
   }, []);
 
   const noInicio = local.pathname === '/app' || local.pathname === '/app/';
+  const noLeitor = /^\/app\/ler-qr\/?$/.test(local.pathname);
 
   return (
     <>
@@ -65,7 +73,11 @@ export function CascaCampo({ eu, links, children }: { eu: Eu; links: Links | nul
         <Link to="/app" className={noInicio ? 'ativo' : undefined} aria-current={noInicio ? 'page' : undefined}>
           <i className="bi bi-house" aria-hidden="true"></i><span>Início</span>
         </Link>
-        {links && <a href={links.ler_qr}><i className="bi bi-qr-code-scan" aria-hidden="true"></i><span>Ler QR</span></a>}
+        {links && (
+          <Destino href={links.ler_qr} className={noLeitor ? 'ativo' : undefined} aria-current={noLeitor ? 'page' : undefined}>
+            <i className="bi bi-qr-code-scan" aria-hidden="true"></i><span>Ler QR</span>
+          </Destino>
+        )}
         {links?.passagem && <a href={links.passagem}><i className="bi bi-journal-check" aria-hidden="true"></i><span>Passagem</span></a>}
         {links?.chamados && <a href={links.chamados}><i className="bi bi-tools" aria-hidden="true"></i><span>Chamados</span></a>}
       </nav>

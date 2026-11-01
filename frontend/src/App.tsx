@@ -3,6 +3,8 @@ import { Route, Routes } from 'react-router';
 import { buscarEu } from './api';
 import { Casca } from './Casca';
 import { PaginaInicioCampo } from './campo/PaginaInicioCampo';
+import { PaginaLerQr } from './campo/PaginaLerQr';
+import { PaginaTurno } from './campo/turno/PaginaTurno';
 import { Inicio } from './paginas/Inicio';
 import { NaoEncontrada } from './paginas/NaoEncontrada';
 
@@ -25,6 +27,8 @@ export function App() {
     <Routes>
       {/* O aplicativo de campo tem a moldura própria (topo curto, navegação embaixo). */}
       <Route path="/app" element={<PaginaInicioCampo eu={eu.data} />} />
+      <Route path="/app/turno" element={<PaginaTurno eu={eu.data} />} />
+      <Route path="/app/ler-qr" element={<PaginaLerQr eu={eu.data} />} />
       <Route path="*" element={
         <Casca eu={eu.data}>
           <Routes>

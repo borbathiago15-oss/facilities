@@ -86,3 +86,14 @@ export function buscarEu() {
     return eu;
   });
 }
+
+/** O ``fetch`` como as telas antigas do aplicativo usam (``/app/api/...``):
+ * a mesma sessão e o CSRF no cabeçalho, mas a resposta volta crua — quem
+ * chama decide o que é falta de sinal (``TrinoFila.ehFalhaDeConexao``) e o
+ * que é recusa do servidor. Sem sinal, a promessa falha. */
+export function enviarBruto(url: string, opcoes: RequestInit = {}): Promise<Response> {
+  const metodo = (opcoes.method || 'GET').toUpperCase();
+  const cabecalhos = new Headers(opcoes.headers);
+  if (metodo !== 'GET' && csrf) cabecalhos.set('X-CSRFToken', csrf);
+  return fetch(url, { ...opcoes, headers: cabecalhos, credentials: 'same-origin' });
+}
