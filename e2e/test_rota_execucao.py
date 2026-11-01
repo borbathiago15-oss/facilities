@@ -40,7 +40,7 @@ def test_ana_le_o_qr_e_faz_o_checklist(servidor, navegador, perfil, campo, tmp_p
     try:
         pg = ctx.new_page()
         entrar(pg, servidor['base'], 'ana@e2e.test')
-        abrir(pg, servidor['base'] + campo + '/ler-qr', 'ler-qr')
+        pg.goto(servidor['base'] + campo + '/ler-qr')     # a câmera lê na hora
         pg.wait_for_url(f'**{campo}/turno?ponto=*', timeout=20000)
         tela_pronta(pg)
         assert pg.get_by_role('heading', name='Porta do banheiro').is_visible()

@@ -37,7 +37,10 @@ def test_a_camera_le_o_qr_e_abre_o_ponto(servidor, navegador, perfil, campo):
     try:
         pg = ctx.new_page()
         entrar(pg, servidor['base'], 'ana@e2e.test')
-        abrir(pg, servidor['base'] + campo + '/ler-qr', 'ler-qr')
+        # A câmera lê na hora: a tela do leitor pode sair antes de ser vista
+        # (a nova carrega o pedaço do campo e já liga a câmera). O que vale é
+        # chegar ao turno do ponto.
+        pg.goto(servidor['base'] + campo + '/ler-qr')
         pg.wait_for_url(f'**{campo}/turno?ponto=' + servidor['qr'], timeout=20000)
         tela_pronta(pg)
         assert pg.get_by_role('heading', name='Porta do banheiro').is_visible()

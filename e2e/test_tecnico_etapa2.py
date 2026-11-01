@@ -66,7 +66,7 @@ def test_chegada_turno_checklist_e_proxima_tarefa(servidor, navegador, campo, tm
         assert pg.locator('#turno-ponto button').count() == 0
         _capturar(pg, '02-confirme-a-chegada')
         # A câmera lê o QR da entrada: chegada registrada e o turno do local.
-        abrir(pg, base + campo + '/ler-qr', 'ler-qr')
+        pg.goto(base + campo + '/ler-qr')     # a câmera lê na hora
         pg.wait_for_url(f'**{campo}/turno?local=*', timeout=20000)
         pg.wait_for_selector('text=Você chegou ao GL Armazém 2 às')
         assert pg.locator('.fc-roteiro-n').count() == 2
