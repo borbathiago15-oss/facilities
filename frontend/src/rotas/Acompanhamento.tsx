@@ -138,6 +138,7 @@ export function Dia({ dados }: { dados: DadosDoDia }) {
               {o.resolvida ? <>{o.resolvida.quem} · {o.resolvida.hora}{o.resolvida.resolucao && `: ${o.resolvida.resolucao}`}</>
                 : dados.pode_atender && (
                   <form method="post" className="d-inline-flex gap-1 m-0" onSubmit={submeter(`${API}/ocorrencias/${o.id}/resolver`)}>
+                    <input type="hidden" name="data" value={dados.data} />
                     <label className="visually-hidden" htmlFor={`res${o.id}`}>O que foi feito</label>
                     <input className="form-control form-control-sm" id={`res${o.id}`} name="resolucao" placeholder="O que foi feito" maxLength={300} />
                     <button className="btn btn-sm btn-outline-success" type="submit" disabled={ocupado}>Resolvida</button>

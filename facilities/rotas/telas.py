@@ -453,7 +453,10 @@ def copiar(cid):
 
 def acao_copiar(cid, dados):
     loc = _local(cid, montar=True)
-    origem = db.get_or_404(ChecklistModelo, int(dados.get('modelo_id') or 0))
+    # O id vem do seletor da tela; vazio, inexistente ou que não é número
+    # (envio montado à mão) é "não encontrado", nunca erro do servidor.
+    bruto = str(dados.get('modelo_id') or '')
+    origem = db.get_or_404(ChecklistModelo, int(bruto) if bruto.isdigit() else 0)
     return _gravar(servico.copiar_da_biblioteca, origem, loc.id, current_user,
                    sucesso=lambda m: f'"{m.nome}" copiado para este local. Ajuste o que '
                                      'precisar e publique.',

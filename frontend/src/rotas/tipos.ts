@@ -35,7 +35,7 @@ export type RotaModelo = {
 
 export type DadosDaRotaPronta = {
   modelo: RotaModelo | null;
-  linhas: { setor: string; ambiente: string; checklist_id: number | null; horarios: string; quantidade: number }[];
+  linhas: { setor: string; ambiente: string; checklist_id: number | null; horarios: string; quantidade: number; tempo_previsto_min: number | '' }[];
   checklists: { id: number; nome: string }[];
   dias: Dias;
   pode_montar: boolean;
@@ -45,7 +45,7 @@ export type DadosDeAplicar = {
   local: { id: number; nome: string };
   opcoes: { id: number; segmento: string; nome: string }[];
   modelo: RotaModelo | null;
-  linhas: { setor: string; ambiente: string; checklist_id: number; checklist: string; horarios: string }[];
+  linhas: { setor: string; ambiente: string; checklist_id: number; checklist: string; horarios: string; tempo_previsto_min: number | '' }[];
   dias: Dias;
 };
 

@@ -39,7 +39,8 @@
         <td><label class="visually-hidden" for="s{{ i }}">Setor</label><input class="form-control form-control-sm" id="s{{ i }}" name="setor" maxlength="120" value="{{ ln.setor }}"></td>
         <td><label class="visually-hidden" for="a{{ i }}">Ambiente</label><input class="form-control form-control-sm" id="a{{ i }}" name="ambiente" maxlength="120" value="{{ ln.ambiente }}"></td>
         <td class="small">{{ ln.checklist }}<input type="hidden" name="checklist_id" value="{{ ln.checklist_id }}"></td>
-        <td><label class="visually-hidden" for="h{{ i }}">Horários</label><input class="form-control form-control-sm" id="h{{ i }}" name="horarios" maxlength="300" value="{{ ln.horarios }}"></td>
+        <td><label class="visually-hidden" for="h{{ i }}">Horários</label><input class="form-control form-control-sm" id="h{{ i }}" name="horarios" maxlength="300" value="{{ ln.horarios }}">
+          <input type="hidden" name="tempo_previsto_min" value="{{ ln.tempo_previsto_min or '' }}"></td>
       </tr>
       {% endfor %}
       </tbody>

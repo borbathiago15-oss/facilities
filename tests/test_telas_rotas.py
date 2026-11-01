@@ -15,6 +15,7 @@ import html as html_mod
 import io
 import re
 import uuid
+from datetime import timedelta
 
 import pytest
 
@@ -275,7 +276,8 @@ def test_rotas_prontas_trazem_os_dados_da_tela_antiga(app_module, cena, auth_cli
     assert d['modelo']['nome'] == 'Rota pronta de teste' and d['modelo']['dias_semana'] == '12345'
     assert [ln['ambiente'] for ln in d['linhas']] == re.findall(r'name="ambiente" maxlength="120" value="([^"]*)"', antigo)
     assert d['linhas'][0]['quantidade'] == 2 and d['linhas'][-1] == {
-        'setor': '', 'ambiente': '', 'checklist_id': None, 'horarios': '', 'quantidade': 1}
+        'setor': '', 'ambiente': '', 'checklist_id': None, 'horarios': '', 'quantidade': 1,
+        'tempo_previsto_min': ''}
     assert [m['nome'] for m in d['checklists']] == ['Checklist da biblioteca']
     d = c.get('/api/v1/rotas/biblioteca/rotas/nova').get_json()
     assert d['modelo'] is None and len(d['linhas']) == 3
@@ -705,3 +707,107 @@ def test_dentro_das_telas_novas_os_links_sao_os_novos(app_module, cena, auth_cli
     d = c.get(f'/api/v1/cadastros/novo-contrato/{a}/estrutura').get_json()
     assert d['links']['rotas'] == f'/novo/rotas/locais/{a}'
     assert d['links']['importar'] == f'/novo/rotas/locais/{a}/importar-plano'
+
+
+# ── Correções dos defeitos da tela antiga achados na Fase 3b ─────────────
+
+def _campos(html, acao):
+    """Os campos do formulário que posta em ``acao``, como o navegador manda
+    (nome → lista de valores, na ordem; caixa desmarcada não vai)."""
+    from html.parser import HTMLParser
+
+    class Leitor(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.dentro, self.campos, self.select, self.opcao = False, {}, None, None
+
+        def handle_starttag(self, tag, attrs):
+            a = dict(attrs)
+            if tag == 'form' and a.get('action') == acao:
+                self.dentro = True
+            elif not self.dentro or 'disabled' in a:
+                return
+            elif tag == 'input' and a.get('name'):
+                if a.get('type') in ('checkbox', 'radio') and 'checked' not in a:
+                    return
+                self.campos.setdefault(a['name'], []).append(a.get('value', ''))
+            elif tag == 'textarea' and a.get('name'):
+                self.campos.setdefault(a['name'], []).append('')
+            elif tag == 'select' and a.get('name'):
+                self.select, self.opcao = a['name'], None
+            elif tag == 'option' and self.select:
+                if self.opcao is None or 'selected' in a:
+                    self.opcao = a.get('value', '')
+
+        def handle_endtag(self, tag):
+            if tag == 'form':
+                self.dentro = False
+            elif tag == 'select' and self.select:
+                self.campos.setdefault(self.select, []).append(self.opcao or '')
+                self.select = None
+
+    leitor = Leitor()
+    leitor.feed(html)
+    assert leitor.campos, acao
+    leitor.campos.pop('csrf_token', None)
+    return leitor.campos
+
+
+def test_salvar_e_aplicar_rota_pronta_mantem_o_tempo_previsto(app_module, cena, auth_client):
+    """O formulário da rota pronta não tem campo para o tempo previsto: antes,
+    salvar (ou aplicar no local) devolvia cada linha ao padrão do tipo de
+    ambiente. Agora o tempo vai junto, nas duas telas."""
+    from app import db
+    from facilities.rotas.models import Rota, RotaModelo
+    c, rmid = auth_client, cena['pronta']
+    with app_module.app.app_context():
+        db.session.get(RotaModelo, rmid).itens[0].tempo_previsto_min = 47
+        db.session.commit()
+    url = f'/rotas/biblioteca/rotas/{rmid}'
+    form = _campos(c.get(url).get_data(as_text=True), url)
+    assert form['tempo_previsto_min'][0] == '47'
+    _antiga(c, url, data=form)
+    with app_module.app.app_context():
+        assert db.session.get(RotaModelo, rmid).itens[0].tempo_previsto_min == 47
+    # A tela nova recebe o tempo nas linhas e manda de volta do mesmo jeito.
+    d = c.get(f'/api/v1{url}').get_json()
+    assert d['linhas'][0]['tempo_previsto_min'] == 47
+    _nova(c, f'/api/v1{url}', data=form)
+    with app_module.app.app_context():
+        assert db.session.get(RotaModelo, rmid).itens[0].tempo_previsto_min == 47
+    # Aplicar no local: a rota criada leva o tempo da linha.
+    pagina = f"/rotas/locais/{cena['local']}/rota-pronta?modelo={rmid}"
+    acao = f"/rotas/locais/{cena['local']}/rota-pronta/{rmid}"
+    html = c.get(pagina).get_data(as_text=True)
+    form = _campos(html, acao)
+    assert form['tempo_previsto_min'] == ['47', '47']          # quantidade 2
+    assert c.get(f'/api/v1{pagina}').get_json()['linhas'][0]['tempo_previsto_min'] == 47
+    form['nome'] = ['Rota aplicada com tempo']
+    _antiga(c, acao, data=form)
+    with app_module.app.app_context():
+        rota = Rota.query.filter_by(nome='Rota aplicada com tempo').one()
+        assert [i.tempo_previsto_min for i in rota.itens] == [47, 47]
+
+
+def test_resolver_ocorrencia_volta_para_o_dia_que_estava_aberto(app_module, cena, auth_client):
+    """A ocorrência em aberto aparece em todos os dias; resolvida a partir de
+    um dia passado, a tela volta para aquele dia (antes, ia para hoje)."""
+    c, cid, oid = auth_client, cena['local'], cena['ocorrencia']
+    ontem = (tempo.hoje() - timedelta(days=1)).isoformat()
+    pagina = f'/rotas/locais/{cid}/dia?data={ontem}'
+    acao = f'/rotas/ocorrencias/{oid}/resolver'
+    form = _campos(c.get(pagina).get_data(as_text=True), acao)
+    assert form['data'] == [ontem]
+    _, destino, _ = _antiga(c, acao, data={**form, 'resolucao': 'Feito'})
+    assert destino == f'/rotas/locais/{cid}/dia?data={ontem}'
+    r, j = _nova(c, f'/api/v1{acao}', json={'resolucao': 'x', 'data': ontem})
+    assert j['destino'] == f'/novo/rotas/locais/{cid}/dia?data={ontem}'
+    # Sem o dia, ou com um dia que não é data: hoje, como antes.
+    _, destino, _ = _antiga(c, acao, data={'resolucao': 'x', 'data': 'ontem'})
+    assert destino == f'/rotas/locais/{cid}/dia'
+
+
+def test_copiar_com_id_que_nao_e_numero_e_nao_encontrado(app_module, cena, auth_client):
+    """Antes, ``modelo_id`` que não é número dava erro do servidor (500)."""
+    for url in (f"/rotas/locais/{cena['local']}/copiar", f"/api/v1/rotas/locais/{cena['local']}/copiar"):
+        assert auth_client.post(url, data={'modelo_id': 'abc'}).status_code == 404
