@@ -34,7 +34,10 @@
               {% for c in checklists %}<option value="{{ c.id }}" {% if ln.checklist_id == c.id %}selected{% endif %}>{{ c.nome }}</option>{% endfor %}
             </select></td>
           <td><label class="visually-hidden" for="h{{ i }}">Horários</label><input class="form-control form-control-sm" id="h{{ i }}" name="horarios" maxlength="300" value="{{ ln.horarios or '' }}" placeholder="08:00, 12:00"{% if not editavel %} readonly{% endif %}></td>
-          <td><label class="visually-hidden" for="q{{ i }}">Quantidade</label><input class="form-control form-control-sm" id="q{{ i }}" name="quantidade" type="number" min="1" max="10" value="{{ ln.quantidade or 1 }}"{% if not editavel %} readonly{% endif %}></td>
+          <td><label class="visually-hidden" for="q{{ i }}">Quantidade</label><input class="form-control form-control-sm" id="q{{ i }}" name="quantidade" type="number" min="1" max="10" value="{{ ln.quantidade or 1 }}"{% if not editavel %} readonly{% endif %}>
+            {#- O tempo previsto da linha (sem campo nesta tela): vai junto para não
+                voltar ao padrão do tipo de ambiente ao salvar. -#}
+            <input type="hidden" name="tempo_previsto_min" value="{{ ln.tempo_previsto_min or '' }}"></td>
         </tr>
       {% endfor %}
       </tbody>

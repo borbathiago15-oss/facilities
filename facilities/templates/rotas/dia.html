@@ -54,6 +54,7 @@
       {% elif pode_atender %}
       <form method="post" action="{{ url_for('publico.ocorrencia_no_site', oid=o.id, acao='resolver') }}" class="d-inline-flex gap-1 m-0">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="data" value="{{ data.isoformat() }}">
         <label class="visually-hidden" for="res{{ o.id }}">O que foi feito</label>
         <input class="form-control form-control-sm" id="res{{ o.id }}" name="resolucao" placeholder="O que foi feito" maxlength="300">
         <button class="btn btn-sm btn-outline-success" type="submit">Resolvida</button>

@@ -12,6 +12,7 @@
   problemas marcados do checklist do ponto) e registra o autor logado.
 """
 import io
+from datetime import datetime
 
 from flask import (Blueprint, abort, flash, jsonify, redirect, render_template, request,
                    send_file, url_for)
@@ -146,10 +147,18 @@ def api_ocorrencia(oid, acao):
 @bp.post('/rotas/ocorrencias/<int:oid>/<acao>')
 @login_required
 def ocorrencia_no_site(oid, acao):
-    return redirect(acao_ocorrencia_no_site(oid, acao))
+    return redirect(acao_ocorrencia_no_site(oid, acao, request.form.get('data')))
 
 
-def acao_ocorrencia_no_site(oid, acao):
+def _dia_valido(bruto):
+    """O dia (AAAA-MM-DD) da página de onde veio o envio, ou None."""
+    try:
+        return datetime.strptime(bruto or '', '%Y-%m-%d').date().isoformat()
+    except ValueError:
+        return None
+
+
+def acao_ocorrencia_no_site(oid, acao, dia=None):
     """O envio do acompanhamento do dia: a tela antiga redireciona para o
     endereço devolvido; a nova (``/api/v1/rotas/ocorrencias/...``, Fase 3b)
     recebe o recado e o endereço em JSON."""
@@ -162,7 +171,10 @@ def acao_ocorrencia_no_site(oid, acao):
     except RegraDaRota as erro:
         db.session.rollback()
         flash(erro.mensagem, 'danger')
-    return url_for('rotas.dia', cid=oc.client_id)
+    # Volta para o dia que a pessoa estava vendo (a ocorrência em aberto aparece
+    # em todos os dias); sem dia, o de hoje, como antes.
+    dia = _dia_valido(dia)
+    return url_for('rotas.dia', cid=oc.client_id, **({'data': dia} if dia else {}))
 
 
 @bp.get('/rotas/ocorrencias/<int:oid>/foto')

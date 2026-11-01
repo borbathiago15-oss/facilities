@@ -193,7 +193,9 @@ def _api_rota_pronta(rmid):
         'linhas': [{'setor': ln.get('setor') or '', 'ambiente': ln.get('ambiente') or '',
                     'checklist_id': ln.get('checklist_id'),
                     'horarios': ln.get('horarios') or '',
-                    'quantidade': ln.get('quantidade') or 1} for ln in c['linhas']],
+                    'quantidade': ln.get('quantidade') or 1,
+                    'tempo_previsto_min': ln.get('tempo_previsto_min') or ''}
+                   for ln in c['linhas']],
         'checklists': [{'id': m.id, 'nome': m.nome} for m in c['checklists']],
         'dias': _dias(c['dias']),
         'pode_montar': c['pode_montar'],
@@ -222,7 +224,9 @@ def api_rotas_aplicar_rota_pronta(cid):
         'modelo': _rota_modelo(c['modelo']),
         'linhas': [{'setor': ln['setor'], 'ambiente': ln['ambiente'],
                     'checklist_id': ln['checklist_id'], 'checklist': ln['checklist'],
-                    'horarios': ln['horarios']} for ln in c['linhas']],
+                    'horarios': ln['horarios'],
+                    'tempo_previsto_min': ln.get('tempo_previsto_min') or ''}
+                   for ln in c['linhas']],
         'dias': _dias(c['dias']),
     })
 
@@ -639,4 +643,4 @@ def api_rotas_chamado_da_nc(nid):
 @api.post('/rotas/ocorrencias/<int:oid>/<acao>')
 @login_required
 def api_rotas_ocorrencia(oid, acao):
-    return _feito(publico.acao_ocorrencia_no_site(oid, acao))
+    return _feito(publico.acao_ocorrencia_no_site(oid, acao, _dados().get('data')))

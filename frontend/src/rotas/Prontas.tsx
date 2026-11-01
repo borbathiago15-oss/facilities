@@ -46,7 +46,9 @@ export function RotaPronta({ dados }: { dados: DadosDaRotaPronta }) {
                         {dados.checklists.map((c) => <option value={c.id} key={c.id}>{c.nome}</option>)}
                       </select></td>
                     <td><label className="visually-hidden" htmlFor={`h${i}`}>Horários</label><input className="form-control form-control-sm" id={`h${i}`} name="horarios" maxLength={300} defaultValue={ln.horarios} placeholder="08:00, 12:00" readOnly={ro} /></td>
-                    <td><label className="visually-hidden" htmlFor={`q${i}`}>Quantidade</label><input className="form-control form-control-sm" id={`q${i}`} name="quantidade" type="number" min={1} max={10} defaultValue={ln.quantidade} readOnly={ro} /></td>
+                    <td><label className="visually-hidden" htmlFor={`q${i}`}>Quantidade</label><input className="form-control form-control-sm" id={`q${i}`} name="quantidade" type="number" min={1} max={10} defaultValue={ln.quantidade} readOnly={ro} />
+                      {/* O tempo previsto da linha vai junto: sem ele, salvar volta ao padrão. */}
+                      <input type="hidden" name="tempo_previsto_min" value={ln.tempo_previsto_min} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -118,7 +120,8 @@ export function Aplicar({ dados }: { dados: DadosDeAplicar }) {
                       <td><label className="visually-hidden" htmlFor={`s${i}`}>Setor</label><input className="form-control form-control-sm" id={`s${i}`} name="setor" maxLength={120} defaultValue={ln.setor} /></td>
                       <td><label className="visually-hidden" htmlFor={`a${i}`}>Ambiente</label><input className="form-control form-control-sm" id={`a${i}`} name="ambiente" maxLength={120} defaultValue={ln.ambiente} /></td>
                       <td className="small">{ln.checklist}<input type="hidden" name="checklist_id" value={ln.checklist_id} /></td>
-                      <td><label className="visually-hidden" htmlFor={`h${i}`}>Horários</label><input className="form-control form-control-sm" id={`h${i}`} name="horarios" maxLength={300} defaultValue={ln.horarios} /></td>
+                      <td><label className="visually-hidden" htmlFor={`h${i}`}>Horários</label><input className="form-control form-control-sm" id={`h${i}`} name="horarios" maxLength={300} defaultValue={ln.horarios} />
+                        <input type="hidden" name="tempo_previsto_min" value={ln.tempo_previsto_min} /></td>
                     </tr>
                   ))}
                 </tbody>
