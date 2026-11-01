@@ -5,6 +5,7 @@ import { Casca } from './Casca';
 import { PaginaInicioCampo } from './campo/PaginaInicioCampo';
 import { PaginaLerQr } from './campo/PaginaLerQr';
 import { PaginaTurno } from './campo/turno/PaginaTurno';
+import { PaginaArmazenamento } from './paginas/admin/PaginaArmazenamento';
 import { Inicio } from './paginas/Inicio';
 import { NaoEncontrada } from './paginas/NaoEncontrada';
 
@@ -33,6 +34,7 @@ export function App() {
         <Casca eu={eu.data}>
           <Routes>
             <Route path="/" element={<Inicio eu={eu.data} />} />
+            <Route path="/admin/armazenamento" element={<PaginaArmazenamento />} />
             <Route path="*" element={<NaoEncontrada inicio={eu.data.links.inicio} />} />
           </Routes>
         </Casca>

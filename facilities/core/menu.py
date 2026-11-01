@@ -93,14 +93,18 @@ def grupos(user):
         cad.append(('cadastros.inicio', 'Estrutura e QR dos locais', 'bi-diagram-3',
                     ('=cadastros.inicio', '=cadastros.local', '=cadastros.ponto',
                      '=cadastros.trilha', '=cadastros.trilha_local')))
-        if r == 'master':
-            cad.append(('admin.usuarios', 'Pessoas e acessos', 'bi-people', ()))
         if ve_rotina:
             cad.append(('rotas.biblioteca', 'Biblioteca de checklists', 'bi-book', ()))
         saida.append({'titulo': 'Cadastros', 'sempre_aberto': True, 'itens': cad})
         if r == 'master':
             saida.append({'titulo': 'Configuração', 'aberto_em': ('integracao.',), 'itens': [
                 ('integracao.chaves', 'Integração', 'bi-plug', ('integracao.',))]})
+
+    if r == 'master':
+        # Pedido do dono (01/11/2026): o que é do sistema, não da operação.
+        saida.append({'titulo': 'Administração do sistema', 'sempre_aberto': True, 'itens': [
+            ('admin.usuarios', 'Pessoas e acessos', 'bi-people', ()),
+            ('telas.armazenamento', 'Armazenamento de fotos', 'bi-hdd-stack', ())]})
 
     saida.append({'titulo': '', 'fixo': True, 'itens': [
         ('campo.inicio', 'Aplicativo de campo', 'bi-phone', ())]})
