@@ -1,5 +1,6 @@
 // Conversa com o servidor (Flask, /api/v1). Mesma sessão do site (cookie) e
 // o mesmo CSRF, no cabeçalho X-CSRFToken. Sem token novo, sem porta nova.
+import { anotar, guardadaEm } from './copia';
 
 export type ItemDoMenu = {
   endpoint: string;
@@ -43,6 +44,9 @@ export function guardarCsrf(token: string) {
   csrf = token;
 }
 
+// Os endereços cuja última resposta veio da cópia do aparelho (sem sinal).
+const copiasLidas = new Set<string>();
+
 const SEM_CONEXAO = 'Sem conexão com o servidor. Confira a internet e tente de novo.';
 
 /** Chama a API das telas novas (``/eu`` → ``/api/v1/eu``) ou, com o caminho
@@ -67,6 +71,7 @@ export async function chamar<T>(caminho: string, opcoes: RequestInit = {}): Prom
   } catch {
     throw new ErroDaApi(0, SEM_CONEXAO);
   }
+  if (metodo === 'GET') anotar(url, resp);
   if (resp.status === 401) {
     const volta = window.location.pathname + window.location.search;
     window.location.assign(`/login?next=${encodeURIComponent(volta)}`);
@@ -77,11 +82,20 @@ export async function chamar<T>(caminho: string, opcoes: RequestInit = {}): Prom
     const msg = (dados && (dados.error || dados.erro)) || 'Algo deu errado. Tente de novo.';
     throw new ErroDaApi(resp.status, msg);
   }
+  if (metodo === 'GET' && guardadaEm(resp) !== null) copiasLidas.add(url);
+  else copiasLidas.delete(url);
   return dados as T;
 }
 
+/** Quem está logado. Vindo da cópia do aparelho (sem sinal), confere com o
+ * dono da casca (``<meta name="usuario-id">``, a mesma marca da fila): uma
+ * cópia que não é da mesma pessoa não aparece. */
 export function buscarEu() {
   return chamar<Eu>('/eu').then((eu) => {
+    const dono = document.querySelector<HTMLMetaElement>('meta[name="usuario-id"]')?.content;
+    if (copiasLidas.has('/api/v1/eu') && dono && dono !== String(eu.id)) {
+      throw new ErroDaApi(0, SEM_CONEXAO);
+    }
     guardarCsrf(eu.csrf);
     return eu;
   });
