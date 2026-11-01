@@ -81,6 +81,22 @@ def test_administrador_cadastra_e_monta_a_estrutura(servidor, navegador, perfil,
         secao.get_by_role('button', name='Cadastrar ponto').click()
         pg.wait_for_selector('text=Ponto "Portão da doca" cadastrado.')
         _sem_rolagem_lateral(pg, 'estrutura do local')
+        # Mudar o ponto de ambiente: ele sai da Doca 1 e vai para a Doca 2,
+        # com o mesmo QR.
+        secao = pg.locator('section', has=pg.get_by_role('heading', name='Armazém ' + perfil))
+        secao.locator('summary', has_text='+ Cadastrar ambiente neste setor').click()
+        novo = secao.locator('form', has=pg.locator('input[id^="anomen"]'))
+        novo.locator('input[id^="anomen"]').fill('Doca 2')
+        novo.get_by_role('button', name='Cadastrar ambiente').click()
+        pg.wait_for_selector('text=Ambiente "Doca 2" cadastrado.')
+        [(pid, qr)] = servidor['sql']("SELECT id, codigo_qr FROM pontos_inspecao WHERE nome = 'Portão da doca'")
+        pg.locator('details', has=pg.locator(f'#pmov{pid}')).locator('summary').click()
+        pg.select_option(f'#pmov{pid}', label=f'Armazém {perfil} · Doca 2')
+        pg.locator('form', has=pg.locator(f'#pmov{pid}')).get_by_role('button', name='Salvar').click()
+        pg.wait_for_selector('text=Ponto atualizado.')
+        assert servidor['sql'](
+            "SELECT a.nome, p.codigo_qr FROM pontos_inspecao p JOIN ambientes a ON a.id = p.ambiente_id"
+            " WHERE p.nome = 'Portão da doca'") == [('Doca 2', qr)]
         secao = pg.locator('section', has=pg.get_by_role('heading', name='Armazém ' + perfil))
         secao.get_by_role('button', name='Desativar').first.click()
         pg.wait_for_selector('text=Setor desativado (com o que estava dentro dele).')

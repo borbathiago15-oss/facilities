@@ -90,7 +90,8 @@ describe('a estrutura do local', () => {
     const corpo = chamadas[0].init!.body as FormData;
     expect(corpo.get('nome')).toBe('Armazém');
     expect(corpo.get('inativos')).toBe('1');
-    expect(screen.getByTestId('onde')).toHaveTextContent('/cadastros/locais/1?inativos=1');
+    // A navegação vem depois da resposta: esperar por ela, não supor que já veio.
+    await waitFor(() => expect(screen.getByTestId('onde')).toHaveTextContent('/cadastros/locais/1?inativos=1'));
   });
 });
 
