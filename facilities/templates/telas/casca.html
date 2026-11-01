@@ -21,7 +21,8 @@
   {% for c in css %}<link rel="stylesheet" href="{{ c }}">{% endfor %}
   {# A fila do aparelho sem internet (window.TrinoFila) e a redução das fotos
      (window.TrinoFoto), as mesmas das telas antigas: o "Meu turno" guarda e
-     reenvia por elas (a fila nova, em React, é a Fase 1c). #}
+     reenvia por elas. Sem sinal, a casca e os dados abrem da cópia do aparelho
+     (static/pwa/sw.js, Fase 1c). #}
   <script src="{{ url_for('static', filename='js/fila-offline.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/foto-leve.js') }}" defer></script>
   <script type="module" src="{{ js }}"></script>
