@@ -15,7 +15,7 @@ from werkzeug.utils import secure_filename
 from facilities.extensions import db
 from facilities.core.acesso import allowed_client_ids_or_none, clientes_visiveis, module_required
 from facilities.core.anexos import (ANEXO_ASSINATURA, ANEXO_MAX, ANEXO_TIPOS,
-                                    imagem_aceitavel, storage)
+                                    foto_leve, imagem_aceitavel, storage)
 from facilities.chamados import servico
 from facilities.chamados.models import (
     CATEGORIAS, ORDEM_DA_PRIORIDADE, PRIORIDADES, RESOLVIDO, STATUS, STATUS_CONTA_PRAZO,
@@ -259,6 +259,7 @@ def _guardar_anexos(ch, arquivos, momento):
             recusados.append(arq.filename)
             continue
         chave = f'chamados/{ch.id}/{uuid.uuid4().hex}.{ext}'
+        dados = foto_leve(dados, ext)
         storage().save(chave, dados, ANEXO_TIPOS[ext])
         db.session.add(ChamadoAnexo(chamado=ch, nome=nome[:200], mime=ANEXO_TIPOS[ext],
                                     tamanho=len(dados), storage_key=chave, momento=momento,

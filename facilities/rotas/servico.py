@@ -1261,7 +1261,7 @@ def ler_imagem(arquivo):
 
     Também usada pela visita de supervisão (Fase 10)."""
     from facilities.core.anexos import (ANEXO_ASSINATURA, ANEXO_MAX, ANEXO_TIPOS,
-                                        imagem_aceitavel)
+                                        foto_leve, imagem_aceitavel)
     nome = (getattr(arquivo, 'filename', '') or 'foto.jpg').lower()
     ext = nome.rsplit('.', 1)[-1] if '.' in nome else 'jpg'
     ext = 'jpg' if ext == 'jpeg' else ext
@@ -1270,7 +1270,7 @@ def ler_imagem(arquivo):
             not any(dados.startswith(a) for a in ANEXO_ASSINATURA[ext]) or \
             not imagem_aceitavel(dados, ext):
         raise RegraDaRota('Uma das fotos não é imagem (ou é grande demais). Tire de novo.')
-    return dados, ext, ANEXO_TIPOS[ext]
+    return foto_leve(dados, ext), ext, ANEXO_TIPOS[ext]
 
 
 def _guardar_foto(execucao, arquivo, momento, item_codigo=None):
