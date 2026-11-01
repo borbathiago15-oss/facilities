@@ -53,11 +53,51 @@ def imagem_aceitavel(dados, ext):
     return 0 < largura * altura <= PIXELS_MAX
 
 
-# Foto que chega do público pelo QR (sem login): reduzida no servidor para
-# este lado maior, para o armazenamento não ser enchido por quem não é da
-# equipe (auditoria N-06). Para a equipe, o aplicativo já reduz antes de
-# enviar (static/js/foto-leve.js).
-LADO_MAX_PUBLICO = 1600
+# Foto leve (decisão do dono, 01/11/2026: o volume de fotos é o que mais
+# cresce no sistema). Toda foto guardada fica com no máximo este lado maior —
+# o celular já reduz antes de enviar (static/js/foto-leve.js, os mesmos
+# números) e o servidor reduz de novo o que chegar maior (aparelho antigo,
+# redução que falhou, foto do público). 1280 px ainda mostram sujeira, piso e
+# etiqueta de equipamento; a foto sai com cerca de metade do peso de antes.
+LADO_MAX_FOTO = 1280
+QUALIDADE_FOTO = 75
+# Foto que já é leve passa como veio: não se perde qualidade à toa.
+FOTO_LEVE_BYTES = 350 * 1024
+LADO_MAX_PUBLICO = LADO_MAX_FOTO
+
+
+def foto_leve(dados, ext):
+    """A foto da equipe reduzida a ``LADO_MAX_FOTO`` no lado maior, no MESMO
+    formato (JPEG continua JPEG, PNG continua PNG): o nome do arquivo e o
+    controle de reenvio de quem chama não mudam. Não é imagem, já é leve, ou
+    a redução falhou (ou ficou maior) → os dados como vieram: nunca se perde
+    a foto por causa da redução. Quem chama já conferiu assinatura e tamanho
+    em pixels (``imagem_aceitavel``)."""
+    ext = (ext or '').lower()
+    if ext not in IMAGENS:
+        return dados
+    from PIL import Image, ImageOps
+    try:
+        with Image.open(io.BytesIO(dados)) as im:
+            if max(im.size) <= LADO_MAX_FOTO and len(dados) <= FOTO_LEVE_BYTES:
+                return dados
+            im = ImageOps.exif_transpose(im)
+            im.thumbnail((LADO_MAX_FOTO, LADO_MAX_FOTO))
+            saida = io.BytesIO()
+            if ext in ('jpg', 'jpeg'):
+                if im.mode not in ('RGB', 'L'):
+                    im = im.convert('RGB')
+                im.save(saida, format='JPEG', quality=QUALIDADE_FOTO, optimize=True)
+            elif ext == 'webp':
+                im.save(saida, format='WEBP', quality=QUALIDADE_FOTO)
+            else:
+                im.save(saida, format='PNG', optimize=True)
+    except Exception:
+        current_app.logger.warning('foto leve: não foi possível reduzir (%s, %d bytes)',
+                                   ext, len(dados))
+        return dados
+    reduzida = saida.getvalue()
+    return reduzida if len(reduzida) < len(dados) else dados
 
 
 def reduzir_imagem(dados, ext, lado_max=LADO_MAX_PUBLICO):
@@ -71,7 +111,7 @@ def reduzir_imagem(dados, ext, lado_max=LADO_MAX_PUBLICO):
             im = im.convert('RGB')
         im.thumbnail((lado_max, lado_max))
         saida = io.BytesIO()
-        im.save(saida, format='JPEG', quality=82, optimize=True)
+        im.save(saida, format='JPEG', quality=QUALIDADE_FOTO, optimize=True)
     return saida.getvalue(), 'jpg'
 
 

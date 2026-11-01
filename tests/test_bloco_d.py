@@ -127,7 +127,7 @@ def test_foto_do_publico_e_reduzida_no_servidor(app_module, cena):
         guardada = storage().load(oc.foto_key)
         assert len(guardada) < len(original)
         with Image.open(io.BytesIO(guardada)) as im:
-            assert max(im.size) <= 1600
+            assert max(im.size) <= 1280
 
 
 def test_qr_publico_tem_teto_por_dia():
@@ -158,7 +158,7 @@ def test_foto_de_camera_de_celular_passa_e_fica_reduzida(app_module, cena):
     with app_module.app.app_context():
         guardada = storage().load(OcorrenciaPublica.query.one().foto_key)
         with Image.open(io.BytesIO(guardada)) as im:
-            assert max(im.size) <= 1600
+            assert max(im.size) <= 1280
 
 
 # ── Retenção ──────────────────────────────────────────────────────────────

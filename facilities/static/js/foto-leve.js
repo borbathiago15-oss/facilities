@@ -4,12 +4,14 @@
  * A câmera do celular entrega 4 a 12 MB por foto. No galpão, com 4G fraco,
  * isso é o upload que não termina — e, sem internet, é a fila do aparelho
  * (Fase 3) enchendo. Para provar "o 5S não foi feito" ou "o extintor está
- * vencido", 1600 px no lado maior sobram: é mais do que a tela de quem vai
- * abrir a evidência.
+ * vencido", 1280 px no lado maior sobram: é mais do que a tela de quem vai
+ * abrir a evidência. (Era 1600 até 01/11/2026: o volume de fotos é o que
+ * mais cresce no sistema; o servidor reduz de novo o que chegar maior, com
+ * os mesmos números — facilities/core/anexos.py, ``foto_leve``.)
  *
  * Regras:
  *  - só IMAGEM é mexida; PDF, Excel e Word passam como vieram;
- *  - foto que já é leve (até 600 KB e 1600 px) passa como veio — não se
+ *  - foto que já é leve (até 350 KB e 1280 px) passa como veio — não se
  *    perde qualidade à toa;
  *  - o resultado é JPEG. Isso também tira a localização GPS e os outros
  *    metadados que a câmera grava na foto, e transforma a foto HEIC do
@@ -22,9 +24,9 @@
 (function () {
   'use strict';
 
-  var LADO_MAX = 1600;
-  var LEVE_BYTES = 600 * 1024;
-  var QUALIDADE = 0.82;
+  var LADO_MAX = 1280;
+  var LEVE_BYTES = 350 * 1024;
+  var QUALIDADE = 0.75;
 
   function ehImagem(f) {
     return f && ((f.type && f.type.indexOf('image/') === 0) ||
