@@ -72,7 +72,8 @@ def test_inicio_do_campo_em_react(servidor, navegador, perfil):
         assert nav.is_visible() and pg.locator('#fc-lateral').count() == 0
         assert pg.evaluate("document.body.classList.contains('fc-app')")
         assert pg.evaluate('document.documentElement.scrollWidth') <= pg.viewport_size['width']
-        # O mesmo cartão do turno da tela antiga, para o mesmo endereço.
+        # O mesmo cartão do turno da tela antiga, para o mesmo destino — na
+        # tela nova (Fase 1b: /novo/app/turno e /novo/app/ler-qr).
         pg.goto(servidor['base'] + '/app/')
         antigo = pg.locator('.fc-local-turno').first
         nome, destino = antigo.locator('.fc-local-turno-nome').inner_text(), antigo.get_attribute('href')
@@ -80,8 +81,9 @@ def test_inicio_do_campo_em_react(servidor, navegador, perfil):
         novo = pg.locator('.fc-local-turno').first
         novo.wait_for()
         assert novo.locator('.fc-local-turno-nome').inner_text() == nome
-        assert novo.get_attribute('href') == destino
+        assert novo.get_attribute('href') == '/novo' + destino
         novo.click()
-        pg.wait_for_url('**' + destino.split('?')[0] + '*')
+        pg.wait_for_url('**/novo' + destino.split('?')[0] + '*')
+        pg.wait_for_selector('[data-tela-pronta]', state='attached')
     finally:
         b.close()
