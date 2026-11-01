@@ -323,8 +323,9 @@ def _valor_do_parametro(nome, ids, entidade=None, endpoint=''):
                     'rmid': ids['rota_pronta'], 'acao': 'retirar'}
         if nome in por_rota:
             return por_rota[nome]
-    if endpoint.startswith('centros.'):
+    if endpoint.startswith(('centros.', 'telas.centros_', 'api_v1.api_centros_')):
         # Cadastro simplificado (27/10/2026): centro de custo = local; área = ponto.
+        # Também nas telas novas (Fase 3a: /novo/centros/... e /api/v1/cadastros/centros/...).
         por_centro = {'cid': ids['local'], 'ctid': ids['cliente'], 'rid': ids['rota'],
                       'iid': ids['item'], 'pid': ids['ponto']}
         if nome in por_centro:
@@ -472,6 +473,11 @@ def test_a_marca_aparece_para_quem_e_de_a(app_module, local_a):
     assert MARCA in c.get('/api/v1/passagem/painel' + q + '&periodo=30d').get_data(as_text=True)
     assert MARCA in c.get('/api/v1/passagem/relatorio-mensal' + q).get_data(as_text=True)
     assert MARCA in c.get('/api/v1/passagem/configuracao' + q).get_data(as_text=True)
+    # Fase 3a: a estrutura do local, o centro de custo e a rota nos cadastros novos.
+    a = local_a['local']
+    assert MARCA in c.get(f'/api/v1/cadastros/locais/{a}').get_data(as_text=True)
+    assert MARCA in c.get(f'/api/v1/cadastros/novo-contrato/{a}/estrutura').get_data(as_text=True)
+    assert MARCA in c.get(f"/api/v1/cadastros/centros/{a}/rotas/{local_a['rota']}").get_data(as_text=True)
 
 
 def test_a_marca_aparece_para_o_cliente_de_a(app_module, local_a):

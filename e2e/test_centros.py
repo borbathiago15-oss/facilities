@@ -1,16 +1,17 @@
 """Cadastro simplificado (27/10/2026), num navegador de verdade (celular e PC):
 o gerente abre o cliente, cria o centro de custo, escreve as áreas e digita a
-rota em linhas — "06:00 · Banheiro 01"."""
-from conftest import abrir_contexto, entrar
+rota em linhas — "06:00 · Banheiro 01". Nas telas antigas e nas novas (React,
+Fase 3a: os mesmos endereços abaixo de ``/novo``)."""
+from conftest import abrir, abrir_contexto, entrar
 
 
-def test_cliente_centro_areas_e_rota(servidor, navegador, perfil):
+def test_cliente_centro_areas_e_rota(servidor, navegador, perfil, cadastros):
     base = servidor['base']
     b, ctx = abrir_contexto(navegador, perfil)
     try:
         pg = ctx.new_page()
         entrar(pg, base, 'gerente@e2e.test')
-        pg.goto(base + '/clientes')
+        abrir(pg, base + cadastros + '/clientes', 'centros-clientes')
         pg.get_by_role('link', name='Abrir o cliente').first.click()
         pg.wait_for_selector('text=Novo centro de custo')
         if not pg.locator('#name').is_visible():

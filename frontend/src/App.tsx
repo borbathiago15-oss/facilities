@@ -1,6 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { Route, Routes } from 'react-router';
 import { buscarEu } from './api';
+import { PaginaClientes, PaginaEmpresas, PaginaEstados, PaginaInicio as PaginaCadastros, PaginaTrilha } from './cadastros/Cadastros';
+import { PaginaCentro, PaginaCentrosCliente, PaginaCentrosClientes, PaginaRota } from './cadastros/Centros';
+import { PaginaLocal, PaginaTrilhaDoLocal } from './cadastros/Local';
+import {
+  PaginaConvites, PaginaEquipe, PaginaEstrutura, PaginaNovoContrato, PaginaNovoLocal,
+} from './cadastros/NovoContrato';
 import { Casca } from './Casca';
 import { PaginaInicioCampo } from './campo/PaginaInicioCampo';
 import { PaginaLerQr } from './campo/PaginaLerQr';
@@ -45,6 +51,22 @@ export function App() {
             <Route path="/passagem-de-turno/configuracao" element={<PaginaConfiguracao />} />
             <Route path="/passagem-de-turno/turno" element={<PaginaPassagem />} />
             <Route path="/passagem-de-turno/turno/:id" element={<PaginaVerTurno />} />
+            <Route path="/cadastros" element={<PaginaCadastros />} />
+            <Route path="/cadastros/empresas" element={<PaginaEmpresas />} />
+            <Route path="/cadastros/clientes" element={<PaginaClientes />} />
+            <Route path="/cadastros/estados" element={<PaginaEstados />} />
+            <Route path="/cadastros/trilha" element={<PaginaTrilha />} />
+            <Route path="/cadastros/locais/:id" element={<PaginaLocal />} />
+            <Route path="/cadastros/locais/:id/trilha" element={<PaginaTrilhaDoLocal />} />
+            <Route path="/clientes" element={<PaginaCentrosClientes />} />
+            <Route path="/clientes/:id" element={<PaginaCentrosCliente />} />
+            <Route path="/centros/:id" element={<PaginaCentro />} />
+            <Route path="/centros/:id/rotas/:rota" element={<PaginaRota />} />
+            <Route path="/novo-contrato" element={<PaginaNovoContrato />} />
+            <Route path="/novo-contrato/cliente/:id/local" element={<PaginaNovoLocal />} />
+            <Route path="/novo-contrato/:id/estrutura" element={<PaginaEstrutura />} />
+            <Route path="/novo-contrato/:id/equipe" element={<PaginaEquipe />} />
+            <Route path="/convites" element={<PaginaConvites />} />
             <Route path="*" element={<NaoEncontrada inicio={eu.data.links.inicio} />} />
           </Routes>
         </Casca>
