@@ -4,6 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#0b0d0f">
+  {# Dono dos envios guardados sem internet (static/js/fila-offline.js): a
+     fila só sobe o que foi escrito por quem está logado neste aparelho. #}
+  <meta name="usuario-id" content="{{ current_user.id }}">
   {# As telas novas (React, ``frontend/``). Mesmo visual do site: o mesmo
      Bootstrap, os mesmos ícones e o mesmo ``app.css`` (cores da marca). #}
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='pwa/icone-192.png') }}">
@@ -16,6 +19,11 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap-icons/bootstrap-icons.min.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
   {% for c in css %}<link rel="stylesheet" href="{{ c }}">{% endfor %}
+  {# A fila do aparelho sem internet (window.TrinoFila) e a redução das fotos
+     (window.TrinoFoto), as mesmas das telas antigas: o "Meu turno" guarda e
+     reenvia por elas (a fila nova, em React, é a Fase 1c). #}
+  <script src="{{ url_for('static', filename='js/fila-offline.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/foto-leve.js') }}" defer></script>
   <script type="module" src="{{ js }}"></script>
 </head>
 <body class="fc-com-menu">

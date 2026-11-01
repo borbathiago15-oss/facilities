@@ -8,6 +8,8 @@
 * o menu da API é o mesmo das telas antigas (``core/menu.py``) e não leva
   e-mail nem dado de mais ninguém.
 """
+import re
+
 import pytest
 
 from facilities import telas
@@ -36,7 +38,14 @@ def test_casca_entrega_o_react_sem_script_inline(auth_client, compilado):
         assert '/static/app/assets/main-abc123.css' in html
         assert '/static/css/app.css' in html            # a mesma marca do site
         assert "script-src 'self'" in r.headers['Content-Security-Policy']
-        assert html.count('<script') == 1
+        # Só scripts do próprio site, nenhum embutido: a entrada e os de
+        # sempre do aplicativo (a fila sem internet e a redução das fotos).
+        scripts = re.findall(r'<script\b[^>]*>', html)
+        assert scripts == ['<script src="/static/js/fila-offline.js" defer>',
+                           '<script src="/static/js/foto-leve.js" defer>',
+                           '<script type="module" src="/static/app/assets/main-abc123.js">']
+        assert re.findall(r'<script\b[^>]*>([^<]+)</script>', html) == []
+        assert '<meta name="usuario-id"' in html          # o dono dos envios guardados
         assert r.headers['Cache-Control'] == 'no-store'
 
 
