@@ -464,6 +464,9 @@ def test_a_marca_aparece_para_quem_e_de_a(app_module, local_a):
     c = fabrica.entrar(app_module, 'varredura.dono@trino.com')
     assert MARCA in c.get(f"/chamados/{local_a['chamado']}").get_data(as_text=True)
     assert MARCA in c.get(f"/cadastros/locais/{local_a['local']}").get_data(as_text=True)
+    # A Passagem de turno nas telas novas (Fase 2a): a nova passagem e a leitura.
+    assert MARCA in c.get(f"/api/v1/passagem/turno?client_id={local_a['local']}").get_data(as_text=True)
+    assert MARCA in c.get(f"/api/v1/passagem/turno/{local_a['turno']}").get_data(as_text=True)
 
 
 def test_a_marca_aparece_para_o_cliente_de_a(app_module, local_a):

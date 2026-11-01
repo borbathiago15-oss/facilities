@@ -7,8 +7,9 @@
 * ``/api/v1/campo/links``: os endereços da moldura (o leitor de QR não tem
   outro dado).
 
-Os endereços do turno e do leitor de QR apontam para as telas novas
-(``/novo/app/...``): quem está nelas continua nelas. Os demais, para as telas
+Os endereços do turno, do leitor de QR e da passagem de turno apontam para
+as telas novas (``/novo/app/...``, ``/novo/passagem-de-turno/...``): quem
+está nelas continua nelas. Os demais, para as telas
 de sempre, até cada uma ser migrada. As ações continuam nas APIs do
 aplicativo que já existem (``/app/api/...``).
 """
@@ -28,13 +29,19 @@ def _nova(caminho, **params):
     return url_for('telas.casca', caminho=caminho, **params)
 
 
+def _passagem(caminho, **params):
+    """A passagem de turno nas telas novas (Fase 2a)."""
+    from facilities.telas.passagem import nova
+    return nova(caminho, **params)
+
+
 def _links():
     u = current_user
     return {
         'ler_qr': _nova('app/ler-qr'),
         'site': url_for('core.inicio'),
         'instalar': url_for('campo.instalar'),
-        'passagem': url_for('diario_operacional.turno') if u.can_access('diario_operacional') else None,
+        'passagem': _passagem('turno') if u.can_access('diario_operacional') else None,
         'chamados': url_for('chamados.index') if u.can_view('chamados') else None,
     }
 
@@ -91,19 +98,18 @@ def campo_inicio():
         'tarefas': [{
             'id': t.id, 'titulo': t.titulo, 'turno': t.turno,
             'data': t.data_turno.strftime('%d/%m'),
-            'url': url_for('diario_operacional.turno', client_id=t.client_id),
+            'url': _passagem('turno', client_id=t.client_id),
         } for t in c['tarefas']],
         'pendencias': [{
             'id': p.id, 'titulo': p.titulo, 'desde': _hora(p.created_at, '%d/%m'),
-            'url': url_for('diario_operacional.turno', client_id=p.client_id)
-            + f'#pendencia-{p.id}',
+            'url': _passagem('turno', client_id=p.client_id) + f'#pendencia-{p.id}',
         } for p in c['pendencias']],
         'chamados': ([{
             'id': ch.id, 'titulo': ch.titulo, 'prazo': _hora(ch.prazo, '%d/%m %H:%M'),
             'url': url_for('chamados.ver', chamado_id=ch.id),
         } for ch in c['chamados']] if ve_chamados else None),
         'passagem': ([{'nome': loc.name,
-                       'url': url_for('diario_operacional.turno', client_id=loc.id)}
+                       'url': _passagem('turno', client_id=loc.id)}
                       for loc in c['locais']] if passagem else None),
         'links': _links(),
     })
