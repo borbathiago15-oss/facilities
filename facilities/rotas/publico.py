@@ -146,6 +146,13 @@ def api_ocorrencia(oid, acao):
 @bp.post('/rotas/ocorrencias/<int:oid>/<acao>')
 @login_required
 def ocorrencia_no_site(oid, acao):
+    return redirect(acao_ocorrencia_no_site(oid, acao))
+
+
+def acao_ocorrencia_no_site(oid, acao):
+    """O envio do acompanhamento do dia: a tela antiga redireciona para o
+    endereço devolvido; a nova (``/api/v1/rotas/ocorrencias/...``, Fase 3b)
+    recebe o recado e o endereço em JSON."""
     oc = _ocorrencia_da_carteira(oid)
     try:
         _agir(oc, acao)
@@ -155,7 +162,7 @@ def ocorrencia_no_site(oid, acao):
     except RegraDaRota as erro:
         db.session.rollback()
         flash(erro.mensagem, 'danger')
-    return redirect(url_for('rotas.dia', cid=oc.client_id))
+    return url_for('rotas.dia', cid=oc.client_id)
 
 
 @bp.get('/rotas/ocorrencias/<int:oid>/foto')

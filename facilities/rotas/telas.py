@@ -81,18 +81,21 @@ def _rota(rid, montar=False):
 
 
 def _gravar(funcao, *args, sucesso=None, destino, replanejar=None):
+    """Grava, deixa o recado e devolve o endereço de volta. A tela antiga
+    redireciona para ele; a API das telas novas (``telas/rotas.py``) devolve
+    o recado e o endereço em JSON (Fase 3b)."""
     try:
         obj = funcao(*args)
         db.session.commit()
     except RegraDaRota as erro:
         db.session.rollback()
         flash(erro.mensagem, 'danger')
-        return redirect(destino)
+        return destino
     if sucesso:
         flash(sucesso(obj) if callable(sucesso) else sucesso, 'success')
     if replanejar is not None:
         _replanejar(replanejar)
-    return redirect(destino)
+    return destino
 
 
 def _replanejar(rota):
@@ -120,20 +123,32 @@ def _replanejar(rota):
               'feito ficou como estava.', 'info')
 
 
+# As telas antiga e nova (React, Fase 3b: ``/novo/rotas/...`` e
+# ``/api/v1/rotas/...``) saem das MESMAS funções: ``contexto_*`` monta os
+# dados da página; ``acao_*`` faz o envio (a regra, o commit e o recado) e
+# devolve o endereço de volta.
+
 # ── Início e local ────────────────────────────────────────────────────────
 
 @bp.get('/rotas/')
 @login_required
 def inicio():
+    return render_template('rotas/inicio.html', **contexto_inicio())
+
+
+def contexto_inicio():
     if not _pode_acompanhar():
         raise Forbidden('As rotas são acompanhadas pela gestão.')
-    return render_template('rotas/inicio.html', locais=clientes_visiveis(),
-                           pode_montar=_pode_montar())
+    return dict(locais=clientes_visiveis(), pode_montar=_pode_montar())
 
 
 @bp.get('/rotas/locais/<int:cid>')
 @login_required
 def local(cid):
+    return render_template('rotas/local.html', **contexto_local(cid))
+
+
+def contexto_local(cid):
     loc = _local(cid)
     modelos = (ChecklistModelo.query.filter_by(client_id=loc.id)
                .order_by(ChecklistModelo.is_active.desc(), ChecklistModelo.nome).all())
@@ -142,11 +157,11 @@ def local(cid):
                   .order_by(ChecklistModelo.nome).all())
     rotas = Rota.query.filter_by(client_id=loc.id).order_by(Rota.is_active.desc(),
                                                             Rota.hora_inicio).all()
-    return render_template('rotas/local.html', local=loc, modelos=modelos,
-                           biblioteca=[b for b in biblioteca if b.versao_atual],
-                           rotas=rotas, pode_montar=_pode_montar(),
-                           ve_estrutura=_pode_montar() or _perfil() == 'visualizador',
-                           dias=servico.DIAS_DA_SEMANA)
+    return dict(local=loc, modelos=modelos,
+                biblioteca=[b for b in biblioteca if b.versao_atual],
+                rotas=rotas, pode_montar=_pode_montar(),
+                ve_estrutura=_pode_montar() or _perfil() == 'visualizador',
+                dias=servico.DIAS_DA_SEMANA)
 
 
 # ── Rotas prontas da biblioteca ───────────────────────────────────────────
@@ -180,6 +195,10 @@ def _checklists_da_biblioteca():
 @bp.get('/rotas/biblioteca/rotas/<int:rmid>')
 @login_required
 def rota_pronta(rmid=None):
+    return render_template('rotas/rota_pronta.html', **contexto_rota_pronta(rmid))
+
+
+def contexto_rota_pronta(rmid=None):
     if rmid is None and _perfil() != 'master':
         raise Forbidden('A biblioteca da Trino é mantida pelo administrador.')
     m = _rota_pronta(rmid) if rmid else None
@@ -187,36 +206,42 @@ def rota_pronta(rmid=None):
                'horarios': it.horarios, 'quantidade': it.quantidade,
                'tempo_previsto_min': it.tempo_previsto_min or ''}
               for it in (m.itens if m else [])]
-    return render_template('rotas/rota_pronta.html', modelo=m,
-                           linhas=linhas + [{}] * LINHAS_EM_BRANCO_ROTA,
-                           checklists=_checklists_da_biblioteca(), dias=servico.DIAS_DA_SEMANA,
-                           pode_montar=_perfil() == 'master')
+    return dict(modelo=m, linhas=linhas + [{}] * LINHAS_EM_BRANCO_ROTA,
+                checklists=_checklists_da_biblioteca(), dias=servico.DIAS_DA_SEMANA,
+                pode_montar=_perfil() == 'master')
 
 
 @bp.post('/rotas/biblioteca/rotas/nova')
 @bp.post('/rotas/biblioteca/rotas/<int:rmid>')
 @login_required
 def salvar_rota_pronta(rmid=None):
+    return redirect(acao_salvar_rota_pronta(rmid, request.form))
+
+
+def acao_salvar_rota_pronta(rmid, dados):
     from facilities.rotas import rotas_prontas
     if _perfil() != 'master':
         raise Forbidden('A biblioteca da Trino é mantida pelo administrador.')
     m = _rota_pronta(rmid) if rmid else None
     destino = url_for('rotas.rota_pronta', rmid=rmid) if rmid else url_for('rotas.rota_pronta')
     try:
-        m = rotas_prontas.salvar_modelo(m, _com_dias(request.form),
-                                        _linhas_do_formulario(request.form))
+        m = rotas_prontas.salvar_modelo(m, _com_dias(dados), _linhas_do_formulario(dados))
         db.session.commit()
     except RegraDaRota as erro:
         db.session.rollback()
         flash(erro.mensagem, 'danger')
-        return redirect(destino)
+        return destino
     flash(f'Rota pronta "{m.nome}" salva. Os locais que já aplicaram não mudam.', 'success')
-    return redirect(url_for('rotas.rota_pronta', rmid=m.id))
+    return url_for('rotas.rota_pronta', rmid=m.id)
 
 
 @bp.post('/rotas/biblioteca/rotas/<int:rmid>/ativo')
 @login_required
 def ativo_rota_pronta(rmid):
+    return redirect(acao_ativo_rota_pronta(rmid))
+
+
+def acao_ativo_rota_pronta(rmid):
     if _perfil() != 'master':
         raise Forbidden('A biblioteca da Trino é mantida pelo administrador.')
     m = _rota_pronta(rmid)
@@ -224,51 +249,57 @@ def ativo_rota_pronta(rmid):
     db.session.commit()
     flash('Rota pronta reativada.' if m.is_active else
           'Rota pronta desativada: some da lista de quem aplica. Nada se apaga.', 'success')
-    return redirect(url_for('rotas.biblioteca'))
+    return url_for('rotas.biblioteca')
 
 
 @bp.get('/rotas/locais/<int:cid>/rota-pronta')
 @login_required
 def aplicar_rota_pronta(cid):
+    return render_template('rotas/aplicar_rota_pronta.html',
+                           **contexto_aplicar_rota_pronta(cid, request.args.get('modelo', '')))
+
+
+def contexto_aplicar_rota_pronta(cid, bruto):
     from facilities.rotas import rotas_prontas
     from facilities.rotas.models import RotaModelo
     loc = _local(cid, montar=True)
     opcoes = (RotaModelo.query.filter_by(is_active=True)
               .order_by(RotaModelo.segmento, RotaModelo.nome).all())
-    bruto = request.args.get('modelo', '')
     escolhido = next((o for o in opcoes if str(o.id) == bruto), None)
-    return render_template('rotas/aplicar_rota_pronta.html', local=loc, opcoes=opcoes,
-                           modelo=escolhido, dias=servico.DIAS_DA_SEMANA,
-                           linhas=rotas_prontas.linhas_da_previa(escolhido) if escolhido
-                           else [])
+    return dict(local=loc, opcoes=opcoes, modelo=escolhido, dias=servico.DIAS_DA_SEMANA,
+                linhas=rotas_prontas.linhas_da_previa(escolhido) if escolhido else [])
 
 
 @bp.post('/rotas/locais/<int:cid>/rota-pronta/<int:rmid>')
 @login_required
 def aplicar_rota_pronta_post(cid, rmid):
+    return redirect(acao_aplicar_rota_pronta(cid, rmid, request.form))
+
+
+def acao_aplicar_rota_pronta(cid, rmid, dados):
     from facilities.rotas import rotas_prontas
     from facilities.rotas.models import RotaModelo
     loc = _local(cid, montar=True)
     m = db.get_or_404(RotaModelo, rmid)
     if not m.is_active:
         abort(404)
-    marcadas = set(request.form.getlist('incluir'))
-    linhas = [ln for i, ln in enumerate(_linhas_do_formulario(request.form))
+    marcadas = set(dados.getlist('incluir'))
+    linhas = [ln for i, ln in enumerate(_linhas_do_formulario(dados))
               if str(i) in marcadas]
     try:
-        rota, r = rotas_prontas.aplicar(m, loc, _com_dias(request.form), linhas, current_user)
+        rota, r = rotas_prontas.aplicar(m, loc, _com_dias(dados), linhas, current_user)
         db.session.commit()
         servico.replanejar(rota)
         db.session.commit()
     except RegraDaRota as erro:
         db.session.rollback()
         flash(erro.mensagem, 'danger')
-        return redirect(url_for('rotas.aplicar_rota_pronta', cid=loc.id, modelo=m.id))
+        return url_for('rotas.aplicar_rota_pronta', cid=loc.id, modelo=m.id)
     flash(f'Rota "{rota.nome}" criada com {r["itens"]} ponto(s) de checklist. Novos neste '
           f'local: {r["ambientes"]} ambiente(s), {r["pontos"]} ponto(s) com QR e '
           f'{r["checklists"]} checklist(s). Falta a escala: quem faz esta rota. A '
           'confirmação de presença começa desligada.', 'success')
-    return redirect(url_for('rotas.rota', rid=rota.id))
+    return url_for('rotas.rota', rid=rota.id)
 
 
 # ── Plano de limpeza do cliente (planilha) ────────────────────────────────
@@ -276,40 +307,55 @@ def aplicar_rota_pronta_post(cid, rmid):
 @bp.get('/rotas/locais/<int:cid>/importar-plano')
 @login_required
 def importar_plano(cid):
+    return render_template('rotas/importar_plano.html', **contexto_importar_plano(cid))
+
+
+def contexto_importar_plano(cid):
     loc = _local(cid, montar=True)
-    return render_template('rotas/importar_plano.html', local=loc, previa=None,
-                           dias=servico.DIAS_DA_SEMANA)
+    return dict(local=loc, previa=None, dias=servico.DIAS_DA_SEMANA)
 
 
 @bp.post('/rotas/locais/<int:cid>/importar-plano')
 @login_required
 def importar_plano_previa(cid):
     """Recebe a planilha, guarda e mostra a prévia (nada é criado ainda)."""
+    destino, contexto = acao_importar_plano_previa(cid, request.files)
+    if destino:
+        return redirect(destino)
+    return render_template('rotas/importar_plano.html', **contexto)
+
+
+def acao_importar_plano_previa(cid, arquivos):
+    """→ (endereço de volta, None) na recusa; (None, a página da prévia) no
+    sucesso: a prévia é a resposta do envio, como na tela antiga."""
     from facilities.rotas import plano_limpeza
     loc = _local(cid, montar=True)
     try:
-        chave, plano = plano_limpeza.guardar_planilha(loc, request.files.get('arquivo'))
+        chave, plano = plano_limpeza.guardar_planilha(loc, arquivos.get('arquivo'))
         previa = plano_limpeza.planejar(plano, loc)
     except RegraDaRota as erro:
         flash(erro.mensagem, 'danger')
-        return redirect(url_for('rotas.importar_plano', cid=loc.id))
-    return render_template('rotas/importar_plano.html', local=loc, previa=previa, chave=chave,
-                           dias=servico.DIAS_DA_SEMANA,
-                           ja_existem=plano_limpeza.rotas_que_ja_existem(previa, loc))
+        return url_for('rotas.importar_plano', cid=loc.id), None
+    return None, dict(local=loc, previa=previa, chave=chave, dias=servico.DIAS_DA_SEMANA,
+                      ja_existem=plano_limpeza.rotas_que_ja_existem(previa, loc))
 
 
 @bp.post('/rotas/locais/<int:cid>/importar-plano/criar')
 @login_required
 def importar_plano_criar(cid):
     """Cria no local o que a prévia mostrou (a planilha guardada pela chave)."""
+    return redirect(acao_importar_plano_criar(cid, request.form))
+
+
+def acao_importar_plano_criar(cid, dados):
     from facilities.rotas import plano_limpeza
     loc = _local(cid, montar=True)
     try:
-        plano = plano_limpeza.ler_guardada(loc, request.form.get('chave'))
+        plano = plano_limpeza.ler_guardada(loc, dados.get('chave'))
         previa = plano_limpeza.planejar(plano, loc)
         inicio = datetime.utcnow()
         resumo = plano_limpeza.aplicar(previa, loc, current_user,
-                                       substituir=request.form.get('substituir') == '1')
+                                       substituir=dados.get('substituir') == '1')
         db.session.commit()
         # As rotas novas começam a valer agora (sem tarefa nascendo atrasada).
         for nova in Rota.query.filter(Rota.client_id == loc.id, Rota.created_at >= inicio):
@@ -318,12 +364,12 @@ def importar_plano_criar(cid):
     except RegraDaRota as erro:
         db.session.rollback()
         flash(erro.mensagem, 'danger')
-        return redirect(url_for('rotas.importar_plano', cid=loc.id))
+        return url_for('rotas.importar_plano', cid=loc.id)
     flash(f'Plano importado: {resumo["rotas"]} rota(s) com {resumo["itens"]} atividade(s). '
           f'Novos neste local: {resumo["setores"]} setor(es), {resumo["ambientes"]} bloco(s), '
           f'{resumo["pontos"]} ponto(s) com QR e {resumo["checklists"]} checklist(s). Falta a '
           'escala: quem faz cada rota.', 'success')
-    return redirect(url_for('rotas.local', cid=loc.id))
+    return url_for('rotas.local', cid=loc.id)
 
 
 # ── Checklists ────────────────────────────────────────────────────────────
@@ -331,6 +377,10 @@ def importar_plano_criar(cid):
 @bp.get('/rotas/biblioteca')
 @login_required
 def biblioteca():
+    return render_template('rotas/biblioteca.html', **contexto_biblioteca())
+
+
+def contexto_biblioteca():
     if not _pode_acompanhar():
         raise Forbidden('Sem acesso aos checklists.')
     from facilities.rotas.models import RotaModelo
@@ -338,13 +388,16 @@ def biblioteca():
                .order_by(ChecklistModelo.is_active.desc(), ChecklistModelo.nome).all())
     rotas_prontas = (RotaModelo.query.order_by(RotaModelo.is_active.desc(),
                                                RotaModelo.segmento, RotaModelo.nome).all())
-    return render_template('rotas/biblioteca.html', modelos=modelos,
-                           rotas_prontas=rotas_prontas, pode_montar=_perfil() == 'master')
+    return dict(modelos=modelos, rotas_prontas=rotas_prontas, pode_montar=_perfil() == 'master')
 
 
 @bp.post('/rotas/biblioteca/modelos-prontos')
 @login_required
 def instalar_modelos_prontos():
+    return redirect(acao_instalar_modelos_prontos())
+
+
+def acao_instalar_modelos_prontos():
     from facilities.rotas.biblioteca_pronta import semear
     if _perfil() != 'master':
         raise Forbidden('A biblioteca da Trino é mantida pelo administrador.')
@@ -352,43 +405,55 @@ def instalar_modelos_prontos():
     db.session.commit()
     flash(f'{len(criados)} modelo(s) instalado(s): {", ".join(criados)}.' if criados
           else 'Os modelos prontos já estavam na biblioteca.', 'success')
-    return redirect(url_for('rotas.biblioteca'))
+    return url_for('rotas.biblioteca')
 
 
 @bp.post('/rotas/biblioteca')
 @login_required
 def criar_na_biblioteca():
+    return redirect(acao_criar_na_biblioteca(request.form))
+
+
+def acao_criar_na_biblioteca(dados):
     if _perfil() != 'master':
         raise Forbidden('A biblioteca da Trino é mantida pelo administrador.')
     try:
-        m = servico.criar_modelo(None, request.form, current_user)
+        m = servico.criar_modelo(None, dados, current_user)
         db.session.commit()
     except RegraDaRota as erro:
         db.session.rollback()
         flash(erro.mensagem, 'danger')
-        return redirect(url_for('rotas.biblioteca'))
-    return redirect(url_for('rotas.modelo', mid=m.id))
+        return url_for('rotas.biblioteca')
+    return url_for('rotas.modelo', mid=m.id)
 
 
 @bp.post('/rotas/locais/<int:cid>/modelos')
 @login_required
 def criar_modelo(cid):
+    return redirect(acao_criar_modelo(cid, request.form))
+
+
+def acao_criar_modelo(cid, dados):
     loc = _local(cid, montar=True)
     try:
-        m = servico.criar_modelo(loc.id, request.form, current_user)
+        m = servico.criar_modelo(loc.id, dados, current_user)
         db.session.commit()
     except RegraDaRota as erro:
         db.session.rollback()
         flash(erro.mensagem, 'danger')
-        return redirect(url_for('rotas.local', cid=loc.id))
-    return redirect(url_for('rotas.modelo', mid=m.id))
+        return url_for('rotas.local', cid=loc.id)
+    return url_for('rotas.modelo', mid=m.id)
 
 
 @bp.post('/rotas/locais/<int:cid>/copiar')
 @login_required
 def copiar(cid):
+    return redirect(acao_copiar(cid, request.form))
+
+
+def acao_copiar(cid, dados):
     loc = _local(cid, montar=True)
-    origem = db.get_or_404(ChecklistModelo, int(request.form.get('modelo_id') or 0))
+    origem = db.get_or_404(ChecklistModelo, int(dados.get('modelo_id') or 0))
     return _gravar(servico.copiar_da_biblioteca, origem, loc.id, current_user,
                    sucesso=lambda m: f'"{m.nome}" copiado para este local. Ajuste o que '
                                      'precisar e publique.',
@@ -398,14 +463,17 @@ def copiar(cid):
 @bp.get('/rotas/modelos/<int:mid>')
 @login_required
 def modelo(mid):
+    return render_template('rotas/modelo.html', **contexto_modelo(mid))
+
+
+def contexto_modelo(mid):
     m = _modelo(mid)
     v = m.versao_atual
     itens = servico.itens_da_versao(v) if v else []
     pode = (_perfil() == 'master') if m.client_id is None else _pode_montar()
-    return render_template('rotas/modelo.html', modelo=m, itens=itens,
-                           linhas=itens + [{}] * LINHAS_EM_BRANCO, tipos=TIPOS_DE_ITEM,
-                           pode_montar=pode, documentos=servico.documentos_ativos(m),
-                           limite_docs=servico.DOCUMENTOS_POR_CHECKLIST)
+    return dict(modelo=m, itens=itens, linhas=itens + [{}] * LINHAS_EM_BRANCO,
+                tipos=TIPOS_DE_ITEM, pode_montar=pode, documentos=servico.documentos_ativos(m),
+                limite_docs=servico.DOCUMENTOS_POR_CHECKLIST)
 
 
 def _itens_do_formulario(form, arquivos=None, modelo=None):
@@ -435,21 +503,24 @@ def _itens_do_formulario(form, arquivos=None, modelo=None):
 @bp.post('/rotas/modelos/<int:mid>')
 @login_required
 def publicar(mid):
+    return redirect(acao_publicar(mid, request.form, request.files))
+
+
+def acao_publicar(mid, dados, arquivos):
     m = _modelo(mid, montar=True)
     try:
-        itens = servico.normalizar_itens(_itens_do_formulario(request.form, request.files, m),
-                                          modelo=m)
-        v, publicou = servico.publicar(m, itens, request.form, current_user)
+        itens = servico.normalizar_itens(_itens_do_formulario(dados, arquivos, m), modelo=m)
+        v, publicou = servico.publicar(m, itens, dados, current_user)
         m.is_active = True
         db.session.commit()
     except RegraDaRota as erro:
         db.session.rollback()
         flash(erro.mensagem, 'danger')
-        return redirect(url_for('rotas.modelo', mid=m.id))
+        return url_for('rotas.modelo', mid=m.id)
     flash(f'Versão {v.numero} publicada. As tarefas geradas daqui em diante usam esta '
           'versão; o que já foi feito continua com as perguntas da época.' if publicou
           else 'Nada mudou: a versão publicada continua a mesma.', 'success')
-    return redirect(url_for('rotas.modelo', mid=m.id))
+    return url_for('rotas.modelo', mid=m.id)
 
 
 # ── POP / FIT do checklist ────────────────────────────────────────────────
@@ -457,8 +528,12 @@ def publicar(mid):
 @bp.post('/rotas/modelos/<int:mid>/documentos')
 @login_required
 def anexar_documento(mid):
+    return redirect(acao_anexar_documento(mid, request.files))
+
+
+def acao_anexar_documento(mid, arquivos):
     m = _modelo(mid, montar=True)
-    return _gravar(servico.anexar_documento, m, request.files.get('arquivo'), current_user,
+    return _gravar(servico.anexar_documento, m, arquivos.get('arquivo'), current_user,
                    sucesso=lambda d: f'"{d.nome}" guardado. Quem faz o checklist vê o resumo '
                    'e pode abrir o documento completo.',
                    destino=url_for('rotas.modelo', mid=m.id))
@@ -467,6 +542,10 @@ def anexar_documento(mid):
 @bp.post('/rotas/documentos/<int:did>/<acao>')
 @login_required
 def acao_documento(did, acao):
+    return redirect(acao_mudar_documento(did, acao))
+
+
+def acao_mudar_documento(did, acao):
     from facilities.rotas.models import ChecklistDocumento
     doc = db.get_or_404(ChecklistDocumento, did)
     m = _modelo(doc.modelo_id, montar=True)
@@ -483,7 +562,7 @@ def acao_documento(did, acao):
                else f'"{doc.nome}" voltou a ser só da equipe.')
     db.session.commit()
     flash(msg, 'success')
-    return redirect(url_for('rotas.modelo', mid=m.id))
+    return url_for('rotas.modelo', mid=m.id)
 
 
 def enviar_documento(doc):
@@ -517,41 +596,53 @@ def documento(did):
 @bp.get('/rotas/locais/<int:cid>/feriados')
 @login_required
 def feriados(cid):
+    return render_template('rotas/feriados.html',
+                           **contexto_feriados(cid, request.args.get('ano')))
+
+
+def contexto_feriados(cid, bruto):
     from facilities.rotas import feriados as fer
     loc = _local(cid)
     try:
-        ano = int(request.args.get('ano') or tempo.hoje().year)
+        ano = int(bruto or tempo.hoje().year)
     except ValueError:
         ano = tempo.hoje().year
     ano = min(max(ano, 2000), 2100)
     rotas_param = (Rota.query.filter_by(client_id=loc.id, is_active=True,
                                         funciona_em_feriado=False).order_by(Rota.nome).all())
-    return render_template('rotas/feriados.html', local=loc, ano=ano,
-                           lista=fer.do_ano(loc.id, ano), hoje=tempo.hoje(),
-                           rotas_param=rotas_param, pode_montar=_pode_montar())
+    return dict(local=loc, ano=ano, lista=fer.do_ano(loc.id, ano), hoje=tempo.hoje(),
+                rotas_param=rotas_param, pode_montar=_pode_montar())
 
 
 @bp.post('/rotas/locais/<int:cid>/feriados')
 @login_required
 def criar_feriado(cid):
+    return redirect(acao_criar_feriado(cid, request.form))
+
+
+def acao_criar_feriado(cid, dados):
     from facilities.rotas import feriados as fer
     loc = _local(cid, montar=True)
     try:
-        f = fer.cadastrar(loc, request.form, current_user)
+        f = fer.cadastrar(loc, dados, current_user)
         db.session.commit()
     except fer.FeriadoInvalido as erro:
         db.session.rollback()
         flash(str(erro), 'danger')
-        return redirect(url_for('rotas.feriados', cid=loc.id))
+        return url_for('rotas.feriados', cid=loc.id)
     flash(f'{f.nome} ({f.data.strftime("%d/%m/%Y")}) cadastrado. As rotas que não funcionam em '
           'feriado não geram tarefa nesse dia.', 'success')
     _replanejar_local(loc)
-    return redirect(url_for('rotas.feriados', cid=loc.id, ano=f.data.year))
+    return url_for('rotas.feriados', cid=loc.id, ano=f.data.year)
 
 
 @bp.post('/rotas/locais/<int:cid>/feriados/<int:fid>/remover')
 @login_required
 def remover_feriado(cid, fid):
+    return redirect(acao_remover_feriado(cid, fid))
+
+
+def acao_remover_feriado(cid, fid):
     from facilities.rotas import feriados as fer
     loc = _local(cid, montar=True)
     try:
@@ -561,10 +652,10 @@ def remover_feriado(cid, fid):
     except fer.FeriadoInvalido as erro:
         db.session.rollback()
         flash(str(erro), 'danger')
-        return redirect(url_for('rotas.feriados', cid=loc.id))
+        return url_for('rotas.feriados', cid=loc.id)
     flash('Feriado removido.', 'success')
     _replanejar_local(loc)
-    return redirect(url_for('rotas.feriados', cid=loc.id, ano=ano))
+    return url_for('rotas.feriados', cid=loc.id, ano=ano)
 
 
 def _replanejar_local(loc):
@@ -579,19 +670,23 @@ def _replanejar_local(loc):
 @bp.post('/rotas/locais/<int:cid>/rotas')
 @login_required
 def criar_rota(cid):
+    return redirect(acao_criar_rota(cid, request.form))
+
+
+def acao_criar_rota(cid, dados):
     loc = _local(cid, montar=True)
     try:
-        r = servico.salvar_rota(loc, None, _com_dias(request.form))
+        r = servico.salvar_rota(loc, None, _com_dias(dados))
         db.session.commit()
     except RegraDaRota as erro:
         db.session.rollback()
         flash(erro.mensagem, 'danger')
-        return redirect(url_for('rotas.local', cid=loc.id))
+        return url_for('rotas.local', cid=loc.id)
     servico.replanejar(r)
     db.session.commit()
     flash('Rota criada. Agora inclua as atividades (ponto, checklist e horários) e escale '
           'quem executa.', 'success')
-    return redirect(url_for('rotas.rota', rid=r.id))
+    return url_for('rotas.rota', rid=r.id)
 
 
 def _com_dias(form):
@@ -603,24 +698,31 @@ def _com_dias(form):
 @bp.get('/rotas/<int:rid>')
 @login_required
 def rota(rid):
+    return render_template('rotas/rota.html', **contexto_rota(rid))
+
+
+def contexto_rota(rid):
     r = _rota(rid)
     pontos = (PontoInspecao.query.filter_by(client_id=r.client_id, is_active=True)
               .order_by(PontoInspecao.nome).all())
     modelos = (ChecklistModelo.query.filter_by(client_id=r.client_id, is_active=True)
                .order_by(ChecklistModelo.nome).all())
-    return render_template('rotas/rota.html', rota=r, pontos=pontos,
-                           modelos=[m for m in modelos if m.versao_atual],
-                           pessoas=servico.pessoas_escalaveis(r.client_id),
-                           pode_montar=_pode_montar(), dias=servico.DIAS_DA_SEMANA,
-                           hoje=tempo.hoje().isoformat(),
-                           horarios=lambda it: servico.horarios_do_item(r, it, tempo.hoje()))
+    return dict(rota=r, pontos=pontos, modelos=[m for m in modelos if m.versao_atual],
+                pessoas=servico.pessoas_escalaveis(r.client_id),
+                pode_montar=_pode_montar(), dias=servico.DIAS_DA_SEMANA,
+                hoje=tempo.hoje().isoformat(),
+                horarios=lambda it: servico.horarios_do_item(r, it, tempo.hoje()))
 
 
 @bp.post('/rotas/<int:rid>')
 @login_required
 def editar_rota(rid):
+    return redirect(acao_editar_rota(rid, request.form))
+
+
+def acao_editar_rota(rid, dados):
     r = _rota(rid, montar=True)
-    return _gravar(servico.salvar_rota, r.local, r, _com_dias(request.form),
+    return _gravar(servico.salvar_rota, r.local, r, _com_dias(dados),
                    sucesso='Rota atualizada. Vale a partir de agora.',
                    destino=url_for('rotas.rota', rid=r.id), replanejar=r)
 
@@ -628,26 +730,34 @@ def editar_rota(rid):
 @bp.post('/rotas/<int:rid>/ativo')
 @login_required
 def ativo_rota(rid):
+    return redirect(acao_ativo_rota(rid, request.form))
+
+
+def acao_ativo_rota(rid, dados):
     r = _rota(rid, montar=True)
-    r.is_active = request.form.get('ativo') == '1'
+    r.is_active = dados.get('ativo') == '1'
     db.session.commit()
     flash('Rota reativada.' if r.is_active else
           'Rota desativada: não gera mais tarefas (o histórico fica).', 'success')
     _replanejar(r)
-    return redirect(url_for('rotas.rota', rid=r.id))
+    return url_for('rotas.rota', rid=r.id)
 
 
 @bp.post('/rotas/<int:rid>/itens')
 @login_required
 def criar_item(rid):
+    return redirect(acao_criar_item(rid, request.form))
+
+
+def acao_criar_item(rid, dados):
     r = _rota(rid, montar=True)
-    ids = request.form.getlist('ponto_id')
+    ids = dados.getlist('ponto_id')
     if len(ids) > 1:
-        return _gravar(servico.salvar_itens_em_lote, r, ids, _com_dias(request.form),
+        return _gravar(servico.salvar_itens_em_lote, r, ids, _com_dias(dados),
                        sucesso=f'{len(ids)} pontos incluídos na rota, com o mesmo checklist e '
                                'os mesmos horários.',
                        destino=url_for('rotas.rota', rid=r.id), replanejar=r)
-    return _gravar(servico.salvar_item, r, None, _com_dias(request.form),
+    return _gravar(servico.salvar_item, r, None, _com_dias(dados),
                    sucesso='Atividade incluída na rota.', destino=url_for('rotas.rota', rid=r.id),
                    replanejar=r)
 
@@ -655,17 +765,21 @@ def criar_item(rid):
 @bp.post('/rotas/<int:rid>/itens/<int:iid>')
 @login_required
 def editar_item(rid, iid):
+    return redirect(acao_editar_item(rid, iid, request.form))
+
+
+def acao_editar_item(rid, iid, dados):
     r = _rota(rid, montar=True)
     it = db.get_or_404(RotaItem, iid)
     if it.rota_id != r.id:
         abort(404)
-    if request.form.get('ativo') in ('0', '1'):
-        it.is_active = request.form.get('ativo') == '1'
+    if dados.get('ativo') in ('0', '1'):
+        it.is_active = dados.get('ativo') == '1'
         db.session.commit()
         flash('Atividade reativada.' if it.is_active else 'Atividade tirada da rota.', 'success')
         _replanejar(r)
-        return redirect(url_for('rotas.rota', rid=r.id))
-    return _gravar(servico.salvar_item, r, it, _com_dias(request.form),
+        return url_for('rotas.rota', rid=r.id)
+    return _gravar(servico.salvar_item, r, it, _com_dias(dados),
                    sucesso='Atividade atualizada.', destino=url_for('rotas.rota', rid=r.id),
                    replanejar=r)
 
@@ -673,8 +787,12 @@ def editar_item(rid, iid):
 @bp.post('/rotas/<int:rid>/escalas')
 @login_required
 def criar_escala(rid):
+    return redirect(acao_criar_escala(rid, request.form))
+
+
+def acao_criar_escala(rid, dados):
     r = _rota(rid, montar=True)
-    return _gravar(servico.salvar_escala, r, _com_dias(request.form),
+    return _gravar(servico.salvar_escala, r, _com_dias(dados),
                    sucesso=lambda e: f'{e.pessoa.name} escalado(a) nesta rota.',
                    destino=url_for('rotas.rota', rid=r.id), replanejar=r)
 
@@ -682,6 +800,10 @@ def criar_escala(rid):
 @bp.post('/rotas/<int:rid>/escalas/<int:eid>/encerrar')
 @login_required
 def encerrar_escala(rid, eid):
+    return redirect(acao_encerrar_escala(rid, eid))
+
+
+def acao_encerrar_escala(rid, eid):
     r = _rota(rid, montar=True)
     e = db.get_or_404(RotaEscala, eid)
     if e.rota_id != r.id:
@@ -691,7 +813,7 @@ def encerrar_escala(rid, eid):
     flash(f'Escala de {e.pessoa.name} encerrada. O que ela já fez continua com o nome dela; '
           'as tarefas que ainda não começaram passam para a escala atual.', 'success')
     _replanejar(r)
-    return redirect(url_for('rotas.rota', rid=r.id))
+    return url_for('rotas.rota', rid=r.id)
 
 
 # ── Acompanhamento ────────────────────────────────────────────────────────
@@ -699,9 +821,13 @@ def encerrar_escala(rid, eid):
 @bp.get('/rotas/locais/<int:cid>/dia')
 @login_required
 def dia(cid):
+    return render_template('rotas/dia.html', **contexto_dia(cid, request.args.get('data')))
+
+
+def contexto_dia(cid, bruto):
     loc = _local(cid)
     try:
-        d = datetime.strptime(request.args.get('data') or '', '%Y-%m-%d').date()
+        d = datetime.strptime(bruto or '', '%Y-%m-%d').date()
     except ValueError:
         d = tempo.hoje()
     if d == tempo.hoje():
@@ -724,18 +850,18 @@ def dia(cid):
                                           ElogioPublico.criado_em < inicio_do_dia
                                           + timedelta(days=1))
                .order_by(ElogioPublico.criado_em.desc()).all())
-    return render_template('rotas/dia.html', local=loc, data=d, tarefas=tarefas, agora=agora,
-                           situacao=servico.situacao, situacoes=SITUACOES,
-                           motivos=MOTIVOS_NAO_REALIZADA, extras=extras,
-                           aderencia={'no_prazo': no_prazo, 'base': base, 'pct': pct},
-                           ocorrencias=ocors, tipos_ocorrencia=TIPOS_OCORRENCIA_PUBLICA,
-                           elogios=elogios, motivos_troca=MOTIVOS_TROCA,
-                           situacoes_ocorrencia=SITUACOES_OCORRENCIA,
-                           atrasada=ocorrencias.atrasada,
-                           presencas=presenca.da_rota_no_dia(loc.id, d),
-                           chegadas=chegadas.do_dia(loc.id, d),
-                           entrada=chegadas.ponto_de_entrada(loc.id),
-                           pode_atender=_perfil() in servico.PERFIS_QUE_EXECUTAM)
+    return dict(local=loc, data=d, tarefas=tarefas, agora=agora,
+                situacao=servico.situacao, situacoes=SITUACOES,
+                motivos=MOTIVOS_NAO_REALIZADA, extras=extras,
+                aderencia={'no_prazo': no_prazo, 'base': base, 'pct': pct},
+                ocorrencias=ocors, tipos_ocorrencia=TIPOS_OCORRENCIA_PUBLICA,
+                elogios=elogios, motivos_troca=MOTIVOS_TROCA,
+                situacoes_ocorrencia=SITUACOES_OCORRENCIA,
+                atrasada=ocorrencias.atrasada,
+                presencas=presenca.da_rota_no_dia(loc.id, d),
+                chegadas=chegadas.do_dia(loc.id, d),
+                entrada=chegadas.ponto_de_entrada(loc.id),
+                pode_atender=_perfil() in servico.PERFIS_QUE_EXECUTAM)
 
 
 @bp.post('/rotas/locais/<int:cid>/chegadas')
@@ -778,21 +904,27 @@ def _execucao(eid):
 @bp.get('/rotas/execucoes/<int:eid>')
 @login_required
 def execucao(eid):
+    return render_template('rotas/execucao.html', **contexto_execucao(eid))
+
+
+def contexto_execucao(eid):
     ex = _execucao(eid)
-    return render_template('rotas/execucao.html', ex=ex,
-                           itens=servico.itens_da_versao(ex.versao),
-                           respostas=servico.respostas_vigentes(ex),
-                           originais=json.loads(ex.respostas_json or '{}'),
-                           pode_corrigir=current_user.e_gestao(),
-                           motivos_troca=MOTIVOS_TROCA)
+    return dict(ex=ex, itens=servico.itens_da_versao(ex.versao),
+                respostas=servico.respostas_vigentes(ex),
+                originais=json.loads(ex.respostas_json or '{}'),
+                pode_corrigir=current_user.e_gestao(), motivos_troca=MOTIVOS_TROCA)
 
 
 @bp.post('/rotas/execucoes/<int:eid>/corrigir')
 @login_required
 def corrigir(eid):
+    return redirect(acao_corrigir(eid, request.form))
+
+
+def acao_corrigir(eid, dados):
     ex = _execucao(eid)
-    novas = {k[len('r_'):]: v for k, v in request.form.items() if k.startswith('r_')}
-    return _gravar(servico.corrigir, ex, current_user, request.form.get('motivo'), novas,
+    novas = {k[len('r_'):]: v for k, v in dados.items() if k.startswith('r_')}
+    return _gravar(servico.corrigir, ex, current_user, dados.get('motivo'), novas,
                    sucesso='Correção registrada. A resposta original continua na trilha.',
                    destino=url_for('rotas.execucao', eid=ex.id))
 
@@ -800,6 +932,10 @@ def corrigir(eid):
 @bp.post('/rotas/nao-conformidades/<int:nid>/chamado')
 @login_required
 def chamado_da_nc(nid):
+    return redirect(acao_chamado_da_nc(nid))
+
+
+def acao_chamado_da_nc(nid):
     nc = db.get_or_404(NaoConformidade, nid)
     ex = _execucao(nc.execucao_id)
     from facilities.chamados.servico import RecusaChamado
@@ -809,8 +945,8 @@ def chamado_da_nc(nid):
     except RecusaChamado as erro:
         db.session.rollback()
         flash(erro.mensagem, 'danger')
-        return redirect(url_for('rotas.execucao', eid=ex.id))
-    return redirect(url_for('chamados.ver', chamado_id=nc.chamado_id))
+        return url_for('rotas.execucao', eid=ex.id)
+    return url_for('chamados.ver', chamado_id=nc.chamado_id)
 
 
 @bp.get('/rotas/fotos/<int:fid>')

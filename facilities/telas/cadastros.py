@@ -39,15 +39,21 @@ from facilities.core.acesso import admin_required
 from facilities.extensions import limiter
 from facilities.telas import _casca, api, bp
 
-# Os endereços já migrados: dentro das telas novas, levam às novas.
-MIGRADOS = ('/cadastros/', '/clientes', '/centros/', '/novo-contrato', '/convites')
+# Os endereços já migrados: dentro das telas novas, levam às novas (a
+# rotina dos locais entrou na Fase 3b).
+MIGRADOS = ('/cadastros/', '/clientes', '/centros/', '/novo-contrato', '/convites', '/rotas/')
 FORA = ('/etiquetas.pdf', '/logo.png')
+# Da rotina dos locais, os arquivos (POP/FIT, fotos, referências) e o
+# agendador continuam no servidor.
+FORA_DAS_ROTAS = ('/rotas/documentos/', '/rotas/fotos/', '/rotas/referencias/',
+                  '/rotas/ocorrencias/', '/rotas/agendador')
 
 
 def nova(url):
     """O endereço da tela nova para um endereço antigo já migrado; os outros
-    (as etiquetas, a rotina dos locais, as pessoas) ficam como estão."""
-    if url and url.startswith(MIGRADOS) and not url.split('?')[0].endswith(FORA):
+    (as etiquetas, os arquivos, as pessoas) ficam como estão."""
+    if url and url.startswith(MIGRADOS) and not url.split('?')[0].endswith(FORA) \
+            and not url.startswith(FORA_DAS_ROTAS):
         return '/novo' + url
     return url
 
@@ -464,7 +470,7 @@ def dados_da_rota(c):
                       for e in r.escalas if e.is_active],
         'hoje': c['hoje'],
         'vazias': len(c['vazias']),
-        'links': {'avancado': url_for('rotas.rota', rid=r.id)},
+        'links': {'avancado': nova(url_for('rotas.rota', rid=r.id))},
     }
 
 
@@ -581,9 +587,9 @@ def api_montagem_estrutura(cid):
         } for a in s.ambientes if a.is_active]} for s in c['setores']],
         'andamento': c['andamento'],
         'passos': _passos(c['passos']),
-        'links': {'importar': url_for('rotas.importar_plano', cid=loc.id),
+        'links': {'importar': nova(url_for('rotas.importar_plano', cid=loc.id)),
                   'etiquetas': url_for('cadastros.etiquetas', cid=loc.id),
-                  'rotas': url_for('rotas.local', cid=loc.id)},
+                  'rotas': nova(url_for('rotas.local', cid=loc.id))},
     })
 
 
@@ -605,7 +611,7 @@ def dados_da_equipe(c):
                      for x in c['convites']],
         'equipe': [{'nome': u.name, 'perfil': u.perfil_rotulo} for u in c['equipe']],
         'passos': _passos(c['passos']),
-        'links': {'concluir': url_for('rotas.local', cid=loc.id)},
+        'links': {'concluir': nova(url_for('rotas.local', cid=loc.id))},
     }
 
 

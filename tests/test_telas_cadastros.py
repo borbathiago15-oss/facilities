@@ -363,7 +363,7 @@ def test_cadastro_simplificado_traz_os_dados_da_tela_antiga(app_module, cena):
     assert [x['hora'] for x in d['linhas']] == re.findall(r'data-linha="([^"]+)"', antigo) == ['06:00', '07:30']
     assert d['rota']['dias'] == ['seg', 'ter', 'qua'] and '06:00 às 14:00 · seg, ter, qua' in antigo
     assert d['vazias'] == 8 and len(re.findall(r'name="hora" type="time"', antigo)) == 8
-    assert d['links']['avancado'] in antigo
+    assert d['links']['avancado'] == '/novo' + f"/rotas/{cena['rota']}" and d['links']['avancado'][5:] in antigo
     assert d['escalados'] == [] and 'Ninguém escalado' in antigo
 
 
@@ -392,7 +392,9 @@ def test_novo_contrato_traz_os_dados_da_tela_antiga(app_module, cena):
     assert f"{d['andamento']['pontos']} QR neste local, ainda sem o QR da entrada" in antigo
     assert d['links']['etiquetas'] == f'/cadastros/locais/{a}/etiquetas.pdf'
     for link in d['links'].values():
-        assert link in antigo, link
+        # A rotina dos locais já tem tela nova (Fase 3b): a nova leva a ela.
+        assert link.removeprefix('/novo') in antigo, link
+    assert d['links']['rotas'] == f'/novo/rotas/locais/{a}'
     assert d['passos']['local'] == {'id': a, 'nome': LOCAL_A}
 
     d = c.get(f'/api/v1/cadastros/novo-contrato/{a}/equipe').get_json()
@@ -406,7 +408,7 @@ def test_novo_contrato_traz_os_dados_da_tela_antiga(app_module, cena):
     assert [x['nome'] for x in d['equipe']] == re.findall(
         r'<div class="border-top px-3 py-2 d-flex flex-wrap gap-2"><strong>([^<]+)</strong>', antigo)
     assert [x['id'] for x in d['locais']] == [int(x) for x in re.findall(r'name="locais" value="(\d+)"', antigo)]
-    assert d['links']['concluir'] in antigo
+    assert d['links']['concluir'] == f'/novo/rotas/locais/{a}' and d['links']['concluir'][5:] in antigo
 
     d = c.get('/api/v1/cadastros/convites').get_json()
     antigo = _texto(c.get('/convites').get_data(as_text=True))
@@ -789,5 +791,5 @@ def test_dentro_das_telas_novas_os_links_sao_os_novos(app_module, cena, auth_cli
                    for u in menu)
     from facilities.telas.cadastros import nova
     assert nova('/cadastros/locais/1/etiquetas.pdf') == '/cadastros/locais/1/etiquetas.pdf'
-    assert nova('/rotas/locais/1') == '/rotas/locais/1'
+    assert nova('/rotas/locais/1') == '/novo/rotas/locais/1'      # Fase 3b
     assert nova('/convites') == '/novo/convites'

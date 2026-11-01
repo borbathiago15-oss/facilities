@@ -315,6 +315,16 @@ def _valor_do_parametro(nome, ids, entidade=None, endpoint=''):
             return por_visita[nome]
     if endpoint == 'rotas.remover_feriado' and nome == 'fid':
         return ids['feriado']
+    if endpoint.startswith(('telas.rotas_', 'api_v1.api_rotas_')):
+        # A rotina dos locais nas telas novas (Fase 3b: /novo/rotas/... e
+        # /api/v1/rotas/...): os mesmos ids das antigas.
+        if nome == 'fid':
+            return ids['feriado']
+        if nome == 'oid':
+            return ids['ocorrencia_publica']
+        if nome == 'acao':
+            return 'resolver' if 'ocorrencia' in endpoint else 'retirar'
+        endpoint = 'rotas.' + endpoint          # e segue para o mapa das rotas, abaixo
     if endpoint.startswith('rotas.'):
         por_rota = {'eid': ids['escala'] if 'escala' in endpoint else ids['execucao'],
                     'rid': ids['rota'], 'iid': ids['item'], 'mid': ids['modelo'],
