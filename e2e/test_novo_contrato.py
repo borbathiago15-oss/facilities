@@ -2,12 +2,13 @@
 o gerente cadastra o cliente com a logo, o local, um ambiente com o QR da
 entrada e convida uma pessoa; a pessoa abre o link, cria a senha e entra.
 
-Com ``E2E_CAPTURAS=<pasta>`` as telas viram PNG (para o dono ver).
+Nas telas antigas e nas novas (React, Fase 3a: os mesmos endereços abaixo de
+``/novo``). Com ``E2E_CAPTURAS=<pasta>`` as telas viram PNG (para o dono ver).
 """
 import os
 import re
 
-from conftest import abrir_contexto, entrar
+from conftest import abrir, abrir_contexto, entrar, tela_pronta
 
 CAPTURAS = os.environ.get('E2E_CAPTURAS')
 
@@ -32,12 +33,12 @@ def _logo(tmp_path):
 
 
 def test_gerente_monta_o_contrato_e_a_pessoa_aceita_o_convite(servidor, navegador, perfil,
-                                                              tmp_path):
+                                                              tmp_path, cadastros):
     base = servidor['base']
     b, ctx = abrir_contexto(navegador, perfil)
     pg = ctx.new_page()
     entrar(pg, base, 'gerente@e2e.test')
-    pg.goto(base + '/novo-contrato')
+    abrir(pg, base + cadastros + '/novo-contrato', 'novo-contrato')
     assert pg.get_by_text('De qual cliente é o local?').is_visible()
     _sem_rolagem_lateral(pg)
     pg.click('summary:has-text("Cadastrar cliente novo")')
@@ -47,6 +48,7 @@ def test_gerente_monta_o_contrato_e_a_pessoa_aceita_o_convite(servidor, navegado
     _capturar(pg, perfil, '1-cliente')
     pg.click('button:has-text("Cadastrar e seguir para o local")')
     pg.wait_for_load_state('networkidle')
+    tela_pronta(pg, 'novo-local')
 
     # Passo 2: o local.
     assert pg.get_by_role('heading', name='Novo local').is_visible()
@@ -56,6 +58,7 @@ def test_gerente_monta_o_contrato_e_a_pessoa_aceita_o_convite(servidor, navegado
     _capturar(pg, perfil, '2-local')
     pg.click('button:has-text("Cadastrar e seguir para a estrutura")')
     pg.wait_for_load_state('networkidle')
+    tela_pronta(pg, 'estrutura')
 
     # Passo 3: um ambiente com a entrada.
     assert pg.get_by_role('heading', name='Estrutura e QR').is_visible()
@@ -65,6 +68,8 @@ def test_gerente_monta_o_contrato_e_a_pessoa_aceita_o_convite(servidor, navegado
     pg.check('#entrada')
     pg.click('form button:has-text("Cadastrar")')
     pg.wait_for_load_state('networkidle')
+    # Na tela nova, a página se refaz sem recarregar: espera o QR aparecer.
+    pg.get_by_text('QR 001 · Porta de entrada · entrada').wait_for()
     assert pg.get_by_text('QR 001 · Porta de entrada · entrada').is_visible()
     _sem_rolagem_lateral(pg)
     _capturar(pg, perfil, '3-estrutura')
@@ -80,6 +85,7 @@ def test_gerente_monta_o_contrato_e_a_pessoa_aceita_o_convite(servidor, navegado
     # Passo 4: o convite.
     pg.click('a:has-text("Seguir para a equipe")')
     pg.wait_for_load_state('networkidle')
+    tela_pronta(pg, 'equipe')
     pg.fill('#nome', 'Joana Encarregada')
     pg.fill('#email', f'joana.{perfil}@e2e.test')
     pg.fill('#telefone', '71 98888-7777')
@@ -92,6 +98,7 @@ def test_gerente_monta_o_contrato_e_a_pessoa_aceita_o_convite(servidor, navegado
     _capturar(pg, perfil, '4-equipe')
     pg.click('button:has-text("Criar convite")')
     pg.wait_for_load_state('networkidle')
+    tela_pronta(pg, 'convite-criado')
     assert pg.get_by_role('heading', name='Convite pronto').is_visible()
     whatsapp = pg.get_attribute('a:has-text("Enviar pelo WhatsApp")', 'href')
     assert whatsapp.startswith('https://wa.me/5571988887777?text=')
