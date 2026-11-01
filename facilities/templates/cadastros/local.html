@@ -41,7 +41,9 @@
     <div class="col-md-2"><label class="form-label small fw-semibold" for="emod{{ sfx }}">Modelo</label>
       <input class="form-control" id="emod{{ sfx }}" name="modelo" value="{{ (e.modelo or '') if e else '' }}" maxlength="80"></div>
   </div>
-  <input type="hidden" name="ambiente_id" value="{{ amb.id }}">
+  {# Só no cadastro: ao alterar, o seletor "Ambiente" do formulário manda o
+     destino; uma cópia escondida aqui iria antes e o ponto não mudaria. #}
+  {% if not e %}<input type="hidden" name="ambiente_id" value="{{ amb.id }}">{% endif %}
 {% endmacro %}
 
 {% macro form_ponto(p, amb) %}
@@ -57,7 +59,7 @@
         {% for e in amb.equipamentos %}{% if e.is_active or (p and p.equipamento_id == e.id) %}<option value="{{ e.id }}" {% if p and p.equipamento_id == e.id %}selected{% endif %}>{{ e.nome }}</option>{% endif %}{% endfor %}
       </select></div>
   </div>
-  <input type="hidden" name="ambiente_id" value="{{ amb.id }}">
+  {% if not p %}<input type="hidden" name="ambiente_id" value="{{ amb.id }}">{% endif %}
 {% endmacro %}
 
 {% block content %}

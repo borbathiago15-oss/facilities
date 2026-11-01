@@ -177,3 +177,52 @@ def test_qr_sem_login_e_publico_e_com_login_exige_carteira(app_module, auth_clie
 def test_menu_mostra_cadastros_para_a_gestao(app_module, auth_client):
     html = auth_client.get('/cadastros/').get_data(as_text=True)
     assert 'Empresas do grupo' in html and 'Estrutura dos locais' in html
+
+
+def _campos_do_formulario(html, acao):
+    """Os nomes dos campos do formulário que posta em ``acao``, na ordem."""
+    import re
+    m = re.search(r'<form[^>]*action="' + re.escape(acao) + r'"[^>]*>(.*?)</form>', html, re.S)
+    assert m, acao
+    return re.findall(r'<(?:input|select|textarea)[^>]*\bname="([^"]+)"', m.group(1))
+
+
+def test_mudar_de_ambiente_pela_tela(app_module, auth_client):
+    """O formulário "Alterar ou mudar de ambiente" manda o ambiente uma vez só
+    (antes ia também uma cópia escondida com o atual, que vencia, e o ponto
+    não saía do lugar). O ponto e o equipamento mudam, e o QR continua."""
+    with app_module.app.app_context():
+        cid = fabrica.local('Condomínio Sul').id
+    base = f'/cadastros/locais/{cid}'
+    auth_client.post(f'{base}/setor', data={'nome': 'Bloco A'})
+    with app_module.app.app_context():
+        from facilities.cadastros.models import Ambiente, Equipamento, PontoInspecao, Setor
+        from facilities.extensions import db
+        sid = Setor.query.filter_by(client_id=cid, nome='Bloco A').one().id
+    for nome in ('Hall', 'Garagem'):
+        auth_client.post(f'{base}/ambiente', data={'nome': nome, 'setor_id': sid})
+    with app_module.app.app_context():
+        hall, garagem = (Ambiente.query.filter_by(setor_id=sid, nome=n).one().id for n in ('Hall', 'Garagem'))
+    auth_client.post(f'{base}/equipamento', data={'nome': 'Bomba', 'ambiente_id': hall})
+    auth_client.post(f'{base}/ponto', data={'nome': 'Portão', 'ambiente_id': hall})
+    with app_module.app.app_context():
+        ponto = PontoInspecao.query.filter_by(nome='Portão').one()
+        pid, qr = ponto.id, ponto.codigo_qr
+        eid = Equipamento.query.filter_by(nome='Bomba').one().id
+    html = auth_client.get(base).get_data(as_text=True)
+    for entidade, oid in (('ponto', pid), ('equipamento', eid)):
+        campos = _campos_do_formulario(html, f'{base}/{entidade}/{oid}')
+        assert campos.count('ambiente_id') == 1, (entidade, campos)
+    # O cadastro de um novo continua com o ambiente escondido.
+    assert _campos_do_formulario(html, f'{base}/ponto').count('ambiente_id') == 1
+    # Os campos como o navegador os manda, com o destino escolhido.
+    for entidade, oid, nome in (('ponto', pid, 'Portão'), ('equipamento', eid, 'Bomba')):
+        campos = _campos_do_formulario(html, f'{base}/{entidade}/{oid}')
+        dados = {c: '' for c in campos if c != 'csrf_token'}
+        dados.update(nome=nome, ambiente_id=garagem)
+        r = auth_client.post(f'{base}/{entidade}/{oid}', data=dados, follow_redirects=True)
+        assert 'atualizado.' in r.get_data(as_text=True)
+    with app_module.app.app_context():
+        ponto = db.session.get(PontoInspecao, pid)
+        assert (ponto.ambiente_id, ponto.codigo_qr) == (garagem, qr)
+        assert db.session.get(Equipamento, eid).ambiente_id == garagem

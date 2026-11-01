@@ -65,7 +65,8 @@ function FormEquipamento({ e, amb }: { e: Equipamento | null; amb: Ambiente }) {
         <div className="col-md-2"><label className="form-label small fw-semibold" htmlFor={`emod${sfx}`}>Modelo</label>
           <input className="form-control" id={`emod${sfx}`} name="modelo" defaultValue={e ? e.modelo : ''} maxLength={80} /></div>
       </div>
-      <input type="hidden" name="ambiente_id" value={amb.id} />
+      {/* Só no cadastro: ao alterar, o seletor "Ambiente" manda o destino. */}
+      {!e && <input type="hidden" name="ambiente_id" value={amb.id} />}
     </>
   );
 }
@@ -86,7 +87,7 @@ function FormPonto({ p, amb }: { p: Ponto | null; amb: Ambiente }) {
               <option value={e.id} key={e.id}>{e.nome}</option>))}
           </select></div>
       </div>
-      <input type="hidden" name="ambiente_id" value={amb.id} />
+      {!p && <input type="hidden" name="ambiente_id" value={amb.id} />}
     </>
   );
 }
