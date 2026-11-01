@@ -12,7 +12,17 @@ export default defineConfig({
     outDir: '../facilities/static/app',
     emptyOutDir: true,
     manifest: true,
-    rollupOptions: { input: 'src/main.tsx' },
+    rollupOptions: {
+      input: 'src/main.tsx',
+      // Um pedaço por grupo de telas (App.tsx: campo, passagem, cadastros,
+      // rotas, admin), com o nome do grupo no arquivo.
+      output: {
+        chunkFileNames: (pedaco) => {
+          const m = /src\/(?:paginas\/)?([a-z]+)\/[^/]+$/.exec(pedaco.facadeModuleId || '');
+          return `assets/${m ? m[1] : '[name]'}-[hash].js`;
+        },
+      },
+    },
   },
   test: {
     environment: 'jsdom',

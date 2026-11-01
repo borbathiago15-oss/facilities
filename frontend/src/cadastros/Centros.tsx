@@ -314,7 +314,7 @@ export function Rota({ dados }: { dados: DadosDaRota }) {
         </form>
         {!dados.pessoas.length && <p className="small text-muted mt-2 mb-0">Ninguém da equipe neste centro de custo ainda. <Ir href={`/novo/novo-contrato/${loc.id}/equipe`}>Convide a equipe</Ir>.</p>}
       </section>
-      <a className="btn btn-link" href={dados.links.avancado}>Modo avançado (frequência, horários por dia, tolerância)</a>
+      <Ir className="btn btn-link" href={dados.links.avancado}>Modo avançado (frequência, horários por dia, tolerância)</Ir>
     </div>
   );
 }

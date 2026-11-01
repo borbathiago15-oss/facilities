@@ -199,7 +199,7 @@ export function Estrutura({ dados }: { dados: DadosDaEstrutura }) {
         <div className="fc-cartao">
           <h2 className="h6 fw-bold"><i className="bi bi-file-earmark-spreadsheet" aria-hidden="true"></i> Tem a planilha do plano de limpeza?</h2>
           <p className="small text-muted">O sistema lê a planilha e monta setores, QR, checklists e rotas de uma vez. Você confere antes de gravar.</p>
-          <a className="btn btn-primary fw-bold" href={dados.links.importar}>Importar a planilha</a>
+          <Ir className="btn btn-primary fw-bold" href={dados.links.importar}>Importar a planilha</Ir>
         </div>
         <div className="fc-cartao">
           <h2 className="h6 fw-bold"><i className="bi bi-printer" aria-hidden="true"></i> Etiquetas</h2>
@@ -260,7 +260,7 @@ export function Estrutura({ dados }: { dados: DadosDaEstrutura }) {
 
       <div className="d-flex flex-wrap gap-2">
         <Ir className="btn btn-primary btn-lg fw-bold" href={`/novo/novo-contrato/${loc.id}/equipe`}>Seguir para a equipe <i className="bi bi-arrow-right" aria-hidden="true"></i></Ir>
-        {a.rotas > 0 && <a className="btn btn-outline-secondary btn-lg" href={dados.links.rotas}>Ver as {a.rotas} rota(s) do local</a>}
+        {a.rotas > 0 && <Ir className="btn btn-outline-secondary btn-lg" href={dados.links.rotas}>Ver as {a.rotas} rota(s) do local</Ir>}
       </div>
     </div>
   );
@@ -407,7 +407,7 @@ export function Equipe({ dados }: { dados: DadosDaEquipe }) {
 
       <div className="d-flex flex-wrap gap-2 mt-3">
         <Ir className="btn btn-outline-secondary btn-lg" href={`/novo/novo-contrato/${loc.id}/estrutura`}><i className="bi bi-arrow-left" aria-hidden="true"></i> Estrutura e QR</Ir>
-        <a className="btn btn-primary btn-lg fw-bold" href={dados.links.concluir}>Concluir: ver a rotina do local</a>
+        <Ir className="btn btn-primary btn-lg fw-bold" href={dados.links.concluir}>Concluir: ver a rotina do local</Ir>
       </div>
     </div>
   );
