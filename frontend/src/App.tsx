@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Route, Routes } from 'react-router';
 import { buscarEu } from './api';
 import { Casca } from './Casca';
+import { PaginaInicioCampo } from './campo/PaginaInicioCampo';
 import { Inicio } from './paginas/Inicio';
 import { NaoEncontrada } from './paginas/NaoEncontrada';
 
@@ -21,11 +22,17 @@ export function App() {
     );
   }
   return (
-    <Casca eu={eu.data}>
-      <Routes>
-        <Route path="/" element={<Inicio eu={eu.data} />} />
-        <Route path="*" element={<NaoEncontrada inicio={eu.data.links.inicio} />} />
-      </Routes>
-    </Casca>
+    <Routes>
+      {/* O aplicativo de campo tem a moldura própria (topo curto, navegação embaixo). */}
+      <Route path="/app" element={<PaginaInicioCampo eu={eu.data} />} />
+      <Route path="*" element={
+        <Casca eu={eu.data}>
+          <Routes>
+            <Route path="/" element={<Inicio eu={eu.data} />} />
+            <Route path="*" element={<NaoEncontrada inicio={eu.data.links.inicio} />} />
+          </Routes>
+        </Casca>
+      } />
+    </Routes>
   );
 }
