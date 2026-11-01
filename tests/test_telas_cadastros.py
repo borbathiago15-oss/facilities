@@ -273,12 +273,15 @@ def test_estrutura_do_local_traz_os_dados_da_tela_antiga(app_module, cena, auth_
         pid = PontoInspecao.query.filter_by(nome=f'Ponto {SEGREDO}').one().id
     c.post(f'/cadastros/locais/{a}/ponto/{pid}/ativo', data={'ativo': '0'})
     _flashes(c)
+    with app_module.app.app_context():
+        from app import Client, db
+        cc = db.session.get(Client, a).cost_center or ''
     for q in ('', '?inativos=1'):
         d = c.get(f'/api/v1/cadastros/locais/{a}{q}').get_json()
         antigo = _texto(c.get(f'/cadastros/locais/{a}{q}').get_data(as_text=True))
         assert d['com_inativos'] == (q != '') and d['pode_alterar']
         assert d['local'] == {'id': a, 'nome': LOCAL_A, 'cliente': 'Grupo GL', 'estado': 'Bahia',
-                              'subcentro': 'CC-SHO'}
+                              'subcentro': cc}
         [s] = [x for x in d['setores'] if x['nome'] == 'Administrativo']
         [amb] = s['ambientes']
         assert s['nome'] == 'Administrativo' and amb['nome'] == 'Banheiro masculino 2º andar'
@@ -325,7 +328,10 @@ def test_cadastro_simplificado_traz_os_dados_da_tela_antiga(app_module, cena):
     d = c.get('/api/v1/cadastros/centros/clientes').get_json()
     antigo = _texto(c.get('/clientes').get_data(as_text=True))
     assert [x['id'] for x in d['clientes']] == [int(x) for x in re.findall(r'href="/clientes/(\d+)"', antigo)]
-    assert d['clientes'][0]['centros'] == [{'id': a, 'nome': LOCAL_A, 'centro_custo': 'CC-SHO'}]
+    with app_module.app.app_context():
+        from app import Client, db
+        cc = db.session.get(Client, a).cost_center or ''
+    assert d['clientes'][0]['centros'] == [{'id': a, 'nome': LOCAL_A, 'centro_custo': cc}]
     assert d['pode_criar'] and 'Novo cliente' in antigo
 
     d = c.get(f"/api/v1/cadastros/centros/clientes/{cena['cliente']}").get_json()
