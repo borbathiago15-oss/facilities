@@ -9,7 +9,7 @@
 """
 import re
 
-from conftest import abrir_contexto, entrar, esperar
+from conftest import abrir, abrir_contexto, entrar, esperar, tela_pronta
 
 
 def test_cada_um_cai_na_sua_porta(servidor, navegador, perfil):
@@ -31,28 +31,29 @@ def test_cada_um_cai_na_sua_porta(servidor, navegador, perfil):
         b.close()
 
 
-def test_a_camera_le_o_qr_e_abre_o_ponto(servidor, navegador, perfil):
+def test_a_camera_le_o_qr_e_abre_o_ponto(servidor, navegador, perfil, campo):
     url_do_qr = servidor['base'] + '/q/' + servidor['qr']
     b, ctx = abrir_contexto(navegador, perfil, camera_com=url_do_qr)
     try:
         pg = ctx.new_page()
         entrar(pg, servidor['base'], 'ana@e2e.test')
-        pg.goto(servidor['base'] + '/app/ler-qr')
-        pg.wait_for_url('**/app/turno?ponto=' + servidor['qr'], timeout=20000)
+        abrir(pg, servidor['base'] + campo + '/ler-qr', 'ler-qr')
+        pg.wait_for_url(f'**{campo}/turno?ponto=' + servidor['qr'], timeout=20000)
+        tela_pronta(pg)
         assert pg.get_by_role('heading', name='Porta do banheiro').is_visible()
     finally:
         b.close()
 
 
-def test_qr_de_fora_nao_tira_o_celular_do_sistema(servidor, navegador, perfil):
+def test_qr_de_fora_nao_tira_o_celular_do_sistema(servidor, navegador, perfil, campo):
     b, ctx = abrir_contexto(navegador, perfil, camera_com='https://golpe.example/q/abcdefgh1234')
     try:
         pg = ctx.new_page()
         entrar(pg, servidor['base'], 'ana@e2e.test')
-        pg.goto(servidor['base'] + '/app/ler-qr')
+        abrir(pg, servidor['base'] + campo + '/ler-qr', 'ler-qr')
         esperar(pg, "document.getElementById('fc-leitor-msg').textContent"
                              ".includes('não é do Trino Facilities')", timeout=20000)
-        assert pg.url.endswith('/app/ler-qr')
+        assert pg.url.endswith(campo + '/ler-qr')
     finally:
         b.close()
 

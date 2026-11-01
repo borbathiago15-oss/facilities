@@ -8,7 +8,7 @@
 """
 import os
 
-from conftest import abrir_contexto, entrar, esperar
+from conftest import abrir, abrir_contexto, entrar, esperar, tela_pronta
 
 AQUI = os.path.dirname(os.path.abspath(__file__))
 
@@ -34,14 +34,15 @@ def _fazer_checklist(pg, foto):
     pg.get_by_role('button', name='Pronto').click()
 
 
-def test_ana_le_o_qr_e_faz_o_checklist(servidor, navegador, perfil, tmp_path):
+def test_ana_le_o_qr_e_faz_o_checklist(servidor, navegador, perfil, campo, tmp_path):
     url_do_qr = servidor['base'] + '/q/' + servidor['qr']
     b, ctx = abrir_contexto(navegador, perfil, camera_com=url_do_qr)
     try:
         pg = ctx.new_page()
         entrar(pg, servidor['base'], 'ana@e2e.test')
-        pg.goto(servidor['base'] + '/app/ler-qr')
-        pg.wait_for_url('**/app/turno?ponto=*', timeout=20000)
+        abrir(pg, servidor['base'] + campo + '/ler-qr', 'ler-qr')
+        pg.wait_for_url(f'**{campo}/turno?ponto=*', timeout=20000)
+        tela_pronta(pg)
         assert pg.get_by_role('heading', name='Porta do banheiro').is_visible()
         pg.wait_for_timeout(500)          # o selo de leitura volta do servidor
         # Lido pela câmera: não aparece o aviso de "aberto sem ler o QR".
@@ -55,12 +56,12 @@ def test_ana_le_o_qr_e_faz_o_checklist(servidor, navegador, perfil, tmp_path):
         b.close()
 
 
-def test_sem_sinal_a_execucao_sobe_depois_uma_vez(servidor, navegador, perfil, tmp_path):
+def test_sem_sinal_a_execucao_sobe_depois_uma_vez(servidor, navegador, perfil, campo, tmp_path):
     b, ctx = abrir_contexto(navegador, perfil)
     try:
         pg = ctx.new_page()
         entrar(pg, servidor['base'], 'ana@e2e.test')
-        pg.goto(servidor['base'] + '/app/turno?ponto=' + servidor['qr'])
+        abrir(pg, servidor['base'] + campo + '/turno?ponto=' + servidor['qr'])
         pg.wait_for_load_state('networkidle')
         ctx.set_offline(True)
         _fazer_checklist(pg, _foto(tmp_path))
@@ -77,14 +78,14 @@ def test_sem_sinal_a_execucao_sobe_depois_uma_vez(servidor, navegador, perfil, t
         b.close()
 
 
-def test_roteiro_numerado_e_como_fazer(servidor, navegador, perfil):
+def test_roteiro_numerado_e_como_fazer(servidor, navegador, perfil, campo):
     """O turno do local aparece como roteiro (1, 2, 3…) com a próxima
     destacada; no checklist, o "como fazer" fica atrás do (i) e o POP à parte."""
     b, ctx = abrir_contexto(navegador, perfil)
     try:
         pg = ctx.new_page()
         entrar(pg, servidor['base'], 'ana@e2e.test')
-        pg.goto(servidor['base'] + '/app/turno')
+        abrir(pg, servidor['base'] + campo + '/turno')
         # Sem local escolhido: um cartão por local, não a lista de tudo.
         assert pg.locator('.fc-local-turno').count() == 2
         assert pg.locator('.fc-roteiro-n').count() == 0
@@ -93,7 +94,7 @@ def test_roteiro_numerado_e_como_fazer(servidor, navegador, perfil):
         assert pg.locator('.fc-roteiro-n').first.inner_text() == '1'
         assert pg.locator('.fc-proxima').count() == 1
         # Aberto pelo endereço (como o link de um aviso): vale a hora do celular.
-        pg.goto(servidor['base'] + '/app/turno?ponto=' + servidor['qr'])
+        abrir(pg, servidor['base'] + campo + '/turno?ponto=' + servidor['qr'])
         assert pg.locator('text=Aberto sem ler o QR').count() == 1
         assert pg.locator('text=Deixe 2 rolos em cada cabine.').is_visible() is False
         pg.get_by_role('button', name='Como fazer: Papel higiênico reposto?').click()

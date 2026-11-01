@@ -1,8 +1,16 @@
 """API das telas novas do aplicativo de campo (Fase 1 da migração para React).
 
-``/api/v1/campo/inicio`` entrega o que o início do aplicativo mostra, com os
-mesmos dados e as mesmas regras da tela antiga (``campo.rotas.contexto_inicio``).
-Os endereços apontam para as telas de sempre até cada uma ser migrada.
+* ``/api/v1/campo/inicio``: o que o início do aplicativo mostra, com os mesmos
+  dados e as mesmas regras da tela antiga (``campo.rotas.contexto_inicio``);
+* ``/api/v1/campo/turno``: o "Meu turno", o MESMO JSON que a tela antiga leva
+  embutido (``rotas.telas._dados_do_turno``);
+* ``/api/v1/campo/links``: os endereços da moldura (o leitor de QR não tem
+  outro dado).
+
+Os endereços do turno e do leitor de QR apontam para as telas novas
+(``/novo/app/...``): quem está nelas continua nelas. Os demais, para as telas
+de sempre, até cada uma ser migrada. As ações continuam nas APIs do
+aplicativo que já existem (``/app/api/...``).
 """
 from flask import jsonify, url_for
 from flask_login import current_user, login_required
@@ -15,15 +23,31 @@ def _hora(dt, fmt):
     return tempo.fmt(dt, fmt) if dt else None
 
 
+def _nova(caminho, **params):
+    """O endereço da tela nova (``/novo/app/...``) que substitui a antiga."""
+    return url_for('telas.casca', caminho=caminho, **params)
+
+
+def _links():
+    u = current_user
+    return {
+        'ler_qr': _nova('app/ler-qr'),
+        'site': url_for('core.inicio'),
+        'instalar': url_for('campo.instalar'),
+        'passagem': url_for('diario_operacional.turno') if u.can_access('diario_operacional') else None,
+        'chamados': url_for('chamados.index') if u.can_view('chamados') else None,
+    }
+
+
 def _turno(itens):
     saida = []
     for item in itens:
         local, entrada, chegada, n = item['local'], item['entrada'], item['chegada'], item['tarefas']
         if entrada and not chegada:
-            situacao, url = 'sem_chegada', url_for('campo.ler_qr')
+            situacao, url = 'sem_chegada', _nova('app/ler-qr')
         else:
             situacao = 'chegou' if chegada else 'sem_entrada'
-            url = url_for('rotas.turno', local=local.id)
+            url = _nova('app/turno', local=local.id)
         saida.append({
             'local_id': local.id,
             'local': local.name,
@@ -62,7 +86,7 @@ def campo_inicio():
             'hora': _hora(o.criada_em, '%H:%M'),
             'texto': o.texto or '',
             'sua': o.responsavel_id == u.id,
-            'url': url_for('rotas.turno', ponto=o.ponto.codigo_qr),
+            'url': _nova('app/turno', ponto=o.ponto.codigo_qr),
         } for o in c['ocorrencias']],
         'tarefas': [{
             'id': t.id, 'titulo': t.titulo, 'turno': t.turno,
@@ -81,13 +105,28 @@ def campo_inicio():
         'passagem': ([{'nome': loc.name,
                        'url': url_for('diario_operacional.turno', client_id=loc.id)}
                       for loc in c['locais']] if passagem else None),
-        'links': {
-            'ler_qr': url_for('campo.ler_qr'),
-            'site': url_for('core.inicio'),
-            'instalar': url_for('campo.instalar'),
-            'passagem': url_for('diario_operacional.turno') if passagem else None,
-            'chamados': url_for('chamados.index') if ve_chamados else None,
-        },
+        'links': _links(),
     })
+    resp.headers['Cache-Control'] = 'no-store'
+    return resp
+
+
+@api.get('/campo/turno')
+@login_required
+def campo_turno():
+    """O "Meu turno": os locais (entrada e chegada de hoje), as tarefas, os
+    checklists, os pontos pelo QR, as preventivas e os avisos do público —
+    a mesma função (e as mesmas checagens de acesso) da tela antiga."""
+    from facilities.core.acesso import clientes_visiveis
+    from facilities.rotas.telas import _dados_do_turno
+    resp = jsonify({'dados': _dados_do_turno(clientes_visiveis()), 'links': _links()})
+    resp.headers['Cache-Control'] = 'no-store'
+    return resp
+
+
+@api.get('/campo/links')
+@login_required
+def campo_links():
+    resp = jsonify(_links())
     resp.headers['Cache-Control'] = 'no-store'
     return resp

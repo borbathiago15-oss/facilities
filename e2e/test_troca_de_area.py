@@ -7,7 +7,7 @@ O Tito abre o turno do "GL Armazém 3":
 * a sala de reunião (fora da rota hoje) abre o escopo da área como atividade
   fora da rota, com o motivo.
 """
-from conftest import abrir_contexto, entrar
+from conftest import abrir, abrir_contexto, entrar
 from servidor import QR_RECEPCAO, QR_SALA
 
 
@@ -16,13 +16,13 @@ def _feito_e_pronto(pg, item):
     pg.get_by_role('button', name='Pronto').click()
 
 
-def test_ir_para_outra_area_adianta_a_da_rota(servidor, navegador, perfil):
+def test_ir_para_outra_area_adianta_a_da_rota(servidor, navegador, perfil, campo):
     base = servidor['base']
     b, ctx = abrir_contexto(navegador, perfil)
     try:
         pg = ctx.new_page()
         entrar(pg, base, 'tito@e2e.test')
-        pg.goto(base + '/app/turno?local=' + str(servidor['sql'](
+        abrir(pg, base + campo + '/turno?local=' + str(servidor['sql'](
             "SELECT id FROM clients WHERE name = 'GL Armazém 3'")[0][0]))
         pg.get_by_role('button', name='Ir para outra área').click()
         assert pg.get_by_role('dialog').is_visible()
@@ -31,8 +31,8 @@ def test_ir_para_outra_area_adianta_a_da_rota(servidor, navegador, perfil):
         # recepção, então o QR é aberto pelo endereço (como o código digitado).
         with pg.expect_navigation():
             pg.get_by_role('button', name='Pedido do cliente').click()
-        assert '/app/ler-qr' in pg.url
-        pg.goto(base + '/app/turno?ponto=' + QR_RECEPCAO)
+        assert campo + '/ler-qr' in pg.url
+        abrir(pg, base + campo + '/turno?ponto=' + QR_RECEPCAO)
         pg.wait_for_selector('.fc-exec-sub')
         assert 'adiantada: Pedido do cliente' in pg.locator('.fc-exec-sub').inner_text()
         _feito_e_pronto(pg, 'Balcão limpo?')
@@ -47,13 +47,13 @@ def test_ir_para_outra_area_adianta_a_da_rota(servidor, navegador, perfil):
         b.close()
 
 
-def test_area_fora_da_rota_abre_o_escopo(servidor, navegador, perfil):
+def test_area_fora_da_rota_abre_o_escopo(servidor, navegador, perfil, campo):
     base = servidor['base']
     b, ctx = abrir_contexto(navegador, perfil)
     try:
         pg = ctx.new_page()
         entrar(pg, base, 'tito@e2e.test')
-        pg.goto(base + '/app/turno?ponto=' + QR_SALA)
+        abrir(pg, base + campo + '/turno?ponto=' + QR_SALA)
         pg.wait_for_selector('text=Nenhuma tarefa de rota aqui hoje.')
         pg.get_by_role('button', name='Limpar esta área fora da rota').click()
         pg.get_by_role('button', name='Área mais suja, precisa adiantar').click()

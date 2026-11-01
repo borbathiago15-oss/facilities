@@ -10,8 +10,8 @@ lado da antiga e a substitui depois do aceite do dono.
 | Fase | O que entra | Estado |
 |---|---|---|
 | 0. Base | Projeto React, API `/api/v1`, casca (menu, barra, gaveta do celular), build no CI e no Docker | no `main` (PR #32) |
-| 1a. App de campo: Início | `/novo/app`: turno por local, avisos do público, tarefas, pendências, chamados, presença, avisos no celular (`/api/v1/campo/inicio`) | este PR |
-| 1b. App de campo: turno e QR | Lista do turno, checklist, fotos antes/depois, GPS, motivo de atraso, troca de área, leitor de QR (reusa `/app/api/...`) | a seguir |
+| 1a. App de campo: Início | `/novo/app`: turno por local, avisos do público, tarefas, pendências, chamados, presença, avisos no celular (`/api/v1/campo/inicio`) | no `main` (PR #33) |
+| 1b. App de campo: turno e QR | `/novo/app/turno` e `/novo/app/ler-qr`: lista do turno, chegada, checklist, fotos antes/depois e por item, "Não deu", GPS, motivo de atraso, troca de área, não realizada, avisos do público e preventivas no ponto, leitor de QR. Dados em `/api/v1/campo/turno` (o mesmo `_dados_do_turno` da tela antiga); as ações seguem nas `/app/api/...`; a fila sem internet ainda é a de sempre (`fila-offline.js`, carregada pela casca), com as mesmas chaves no aparelho. Os e2e do turno rodam nas duas telas | este PR |
 | 1c. App de campo: sem internet | Fila do aparelho (IndexedDB) e cópia das telas para abrir sem sinal | |
 | 2. Passagem de turno | | |
 | 3. Cadastros e rotas da gestão | | |
@@ -81,3 +81,9 @@ Testes: `pytest tests/test_telas_novas.py` (servidor) e
    perfis (celular e PC) — eles são o critério de aceite da fase.
 4. O item do menu passa a apontar para `/novo/...` (em `core/menu.py`) só
    quando o dono aceitar; a tela antiga sai no mesmo PR.
+5. Enquanto as duas telas convivem, os e2e do módulo rodam nas duas (a
+   fixture `campo` do `e2e/conftest.py`: `/app` e `/novo/app`). A tela nova
+   marca `data-tela-pronta` quando termina de desenhar; os testes esperam por
+   ela (`abrir`/`tela_pronta`). Dentro das telas novas, os endereços já
+   migrados apontam para `/novo/...` (a moldura e o início do campo levam ao
+   turno e ao leitor novos); as telas antigas não mudam.

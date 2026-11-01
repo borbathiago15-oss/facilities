@@ -96,6 +96,32 @@ def perfil(request):
     return request.param
 
 
+MANIFESTO = os.path.join(os.path.dirname(AQUI), 'facilities', 'static', 'app', '.vite', 'manifest.json')
+
+
+@pytest.fixture(params=['/app', '/novo/app'], ids=['tela-antiga', 'tela-nova'])
+def campo(request):
+    """Onde fica o aplicativo de campo: a tela antiga (``/app``) ou a nova, em
+    React (``/novo/app``, Fase 1b). Os testes do turno e do leitor de QR rodam
+    nas duas. A nova precisa da compilação (``npm run build`` em frontend/)."""
+    if request.param != '/app' and not os.path.exists(MANIFESTO):
+        pytest.skip('telas novas não compiladas: rode "npm run build" em frontend/')
+    return request.param
+
+
+def tela_pronta(pagina, nome='turno', timeout=15000):
+    """A tela antiga chega desenhada; a nova (React) busca os dados e desenha
+    depois: espera ela marcar ``data-tela-pronta``. Na antiga, não faz nada."""
+    if '/novo/' in pagina.url:
+        pagina.wait_for_selector(f'[data-tela-pronta="{nome}"]', state='attached', timeout=timeout)
+
+
+def abrir(pagina, url, nome='turno'):
+    """``goto`` e, na tela nova, espera ela desenhar (``tela_pronta``)."""
+    pagina.goto(url)
+    tela_pronta(pagina, nome)
+
+
 def abrir_contexto(navegador, perfil, camera_com=None):
     """Um contexto (um "aparelho") no perfil pedido; ``camera_com`` = texto
     do QR que a câmera de mentira mostra."""

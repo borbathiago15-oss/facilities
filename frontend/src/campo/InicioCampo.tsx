@@ -3,6 +3,7 @@
 // chamados. Mesmos dados e regras da tela antiga (campo.rotas.contexto_inicio).
 import type { Eu } from '../api';
 import { AvisosCelular } from './AvisosCelular';
+import { Destino } from './CascaCampo';
 import type { InicioDoCampo, LocalDoTurno } from './tipos';
 
 function plural(n: number, palavra: string) {
@@ -12,18 +13,18 @@ function plural(n: number, palavra: string) {
 function CartaoDoLocal({ l }: { l: LocalDoTurno }) {
   if (l.situacao === 'sem_chegada') {
     return (
-      <a className="fc-cartao fc-local-turno mb-2" href={l.url} data-local={l.local_id} data-situacao={l.situacao}>
+      <Destino className="fc-cartao fc-local-turno mb-2" href={l.url} data-local={l.local_id} data-situacao={l.situacao}>
         <span className="fc-local-turno-nome">{l.local}</span>
         <span className="fc-local-turno-sub">
           {l.tarefas > 0 && `${plural(l.tarefas, 'tarefa')} hoje · `}Ao chegar, leia o QR da entrada ({l.entrada})
         </span>
         <span className="fc-local-turno-acao"><i className="bi bi-qr-code-scan" aria-hidden="true"></i> Ler o QR da entrada</span>
-      </a>
+      </Destino>
     );
   }
   const chegou = l.situacao === 'chegou';
   return (
-    <a className={`fc-cartao fc-local-turno mb-2${chegou ? ' fc-local-turno-aqui' : ''}`} href={l.url}
+    <Destino className={`fc-cartao fc-local-turno mb-2${chegou ? ' fc-local-turno-aqui' : ''}`} href={l.url}
       data-local={l.local_id} data-situacao={l.situacao}>
       <span className="fc-local-turno-nome">{chegou ? `Você está no ${l.local}` : l.local}</span>
       <span className="fc-local-turno-sub">
@@ -31,7 +32,7 @@ function CartaoDoLocal({ l }: { l: LocalDoTurno }) {
         {l.tarefas > 0 ? `${l.abertas} de ${plural(l.tarefas, 'tarefa')} por fazer` : 'Nenhuma tarefa da rota hoje'}
       </span>
       <span className="fc-local-turno-acao"><i className="bi bi-list-check" aria-hidden="true"></i> Ver o turno</span>
-    </a>
+    </Destino>
   );
 }
 
@@ -62,9 +63,9 @@ export function InicioCampo({ eu, dados }: { eu: Eu; dados: InicioDoCampo }) {
       <h1 className="fc-titulo">Olá, {eu.primeiro_nome}</h1>
       <p className="fc-sub">{d.hoje} · {eu.perfil}</p>
 
-      <a className="btn btn-primary btn-lg w-100 fc-app-acao mb-3" href={d.links.ler_qr}>
+      <Destino className="btn btn-primary btn-lg w-100 fc-app-acao mb-3" href={d.links.ler_qr}>
         <i className="bi bi-qr-code-scan" aria-hidden="true"></i> Ler o QR do local
-      </a>
+      </Destino>
 
       {d.turno.length > 0 && (
         <section className="mb-3" aria-labelledby="tit-turno">
@@ -93,12 +94,12 @@ export function InicioCampo({ eu, dados }: { eu: Eu; dados: InicioDoCampo }) {
         <section className="fc-cartao mb-3 border-warning" aria-labelledby="tit-ocor">
           <h2 className="h6 fw-bold" id="tit-ocor"><i className="bi bi-megaphone" aria-hidden="true"></i> Avisos do público ({d.ocorrencias.length})</h2>
           {d.ocorrencias.map((o) => (
-            <a className="fc-app-item" href={o.url} key={o.id}>
+            <Destino className="fc-app-item" href={o.url} key={o.id}>
               <span><span className="badge text-bg-warning">Checar aviso</span>{o.sua && <> <span className="badge text-bg-light">Sua</span></>}</span>
               {/* Local primeiro: dois locais podem ter ambientes de mesmo nome. */}
               <span className="fw-semibold">{o.local} · {o.ambiente} · {o.titulo}</span>
               <span className="small text-muted">{o.ponto} · {o.hora}{o.texto && ` · "${o.texto}"`}</span>
-            </a>
+            </Destino>
           ))}
         </section>
       )}

@@ -14,7 +14,7 @@ Com ``E2E_CAPTURAS=<pasta>`` as telas principais viram PNG (para o dono ver).
 import os
 from datetime import datetime, timedelta
 
-from conftest import abrir_contexto, entrar
+from conftest import abrir, abrir_contexto, entrar
 from servidor import QR_COPA, QR_ENTRADA
 
 CAPTURAS = os.environ.get('E2E_CAPTURAS')
@@ -33,11 +33,11 @@ def _foto(tmp_path, nome='foto.jpg'):
     return str(caminho)
 
 
-def _abrir_ponto(pg, base, codigo):
+def _abrir_ponto(pg, base, codigo, campo='/app'):
     """Abre o ponto como o código digitado no leitor abre (a câmera de
     mentira só mostra um QR por navegador): sem o selo, com a hora do
     celular."""
-    pg.goto(base + '/app/turno?ponto=' + codigo)
+    abrir(pg, base + campo + '/turno?ponto=' + codigo)
     pg.wait_for_timeout(300)
 
 
@@ -45,32 +45,36 @@ def _sem_rolagem_lateral(pg):
     assert pg.evaluate('document.documentElement.scrollWidth') <= pg.viewport_size['width']
 
 
-def test_chegada_turno_checklist_e_proxima_tarefa(servidor, navegador, tmp_path):
+def test_chegada_turno_checklist_e_proxima_tarefa(servidor, navegador, campo, tmp_path):
     base = servidor['base']
     b, ctx = abrir_contexto(navegador, 'celular', camera_com=base + '/q/' + QR_ENTRADA)
     try:
         pg = ctx.new_page()
         entrar(pg, base, 'ana@e2e.test')
+        if campo != '/app':
+            # O início da tela nova (o login leva ao de sempre).
+            pg.goto(base + campo + '/')
+            pg.wait_for_selector('[data-local]')
         # O início: um cartão por local — o Armazém 2 pede o QR da entrada.
         assert pg.locator('[data-local][data-situacao="sem_chegada"]', has_text='GL Armazém 2').is_visible()
         assert pg.locator('[data-local][data-situacao="sem_entrada"]', has_text='GL Armazém 1').is_visible()
         _capturar(pg, '01-inicio-locais')
         # QR comum antes da chegada: só "Confirme a chegada" e o botão.
-        pg.goto(base + '/app/turno?ponto=' + QR_COPA)
+        pg.goto(base + campo + '/turno?ponto=' + QR_COPA)
         pg.wait_for_selector('text=Confirme a chegada')
         assert pg.get_by_role('link', name='Ler o QR').is_visible()
         assert pg.locator('#turno-ponto button').count() == 0
         _capturar(pg, '02-confirme-a-chegada')
         # A câmera lê o QR da entrada: chegada registrada e o turno do local.
-        pg.goto(base + '/app/ler-qr')
-        pg.wait_for_url('**/app/turno?local=*', timeout=20000)
+        abrir(pg, base + campo + '/ler-qr', 'ler-qr')
+        pg.wait_for_url(f'**{campo}/turno?local=*', timeout=20000)
         pg.wait_for_selector('text=Você chegou ao GL Armazém 2 às')
         assert pg.locator('.fc-roteiro-n').count() == 2
         assert pg.locator('.fc-proxima', has_text='Copa').count() == 1
         assert servidor['sql']('SELECT com_camera FROM chegadas') == [(1,)]
         _capturar(pg, '03-chegou-turno-do-local')
         # O ponto abre DIRETO no checklist: antes → checks → depois → Pronto.
-        _abrir_ponto(pg, base, QR_COPA)
+        _abrir_ponto(pg, base, QR_COPA, campo)
         assert pg.get_by_role('heading', name='Copa').is_visible()
         assert pg.locator('.fc-exec-sub').inner_text().endswith('Previsto: 1 min')
         assert pg.get_by_role('button', name='Fazer agora').count() == 0
@@ -110,19 +114,19 @@ def test_chegada_turno_checklist_e_proxima_tarefa(servidor, navegador, tmp_path)
         b.close()
 
 
-def _chegar(pg, base):
-    pg.goto(base + '/app/turno?ponto=' + QR_ENTRADA + '&lido=camera')
+def _chegar(pg, base, campo='/app'):
+    pg.goto(base + campo + '/turno?ponto=' + QR_ENTRADA + '&lido=camera')
     pg.wait_for_selector('text=Você chegou ao GL Armazém 2 às', timeout=15000)
 
 
-def test_nao_deu_com_faltou_material(servidor, navegador, tmp_path):
+def test_nao_deu_com_faltou_material(servidor, navegador, campo, tmp_path):
     base = servidor['base']
     b, ctx = abrir_contexto(navegador, 'celular')
     try:
         pg = ctx.new_page()
         entrar(pg, base, 'ana@e2e.test')
-        _chegar(pg, base)
-        _abrir_ponto(pg, base, QR_COPA)
+        _chegar(pg, base, campo)
+        _abrir_ponto(pg, base, QR_COPA, campo)
         pg.set_input_files('[data-foto="antes"]', _foto(tmp_path, 'antes.jpg'))
         pg.locator('.fc-item', has_text='Pia limpa?').get_by_role('button', name='Não deu').click()
         pg.get_by_role('button', name='Faltou material').click()
@@ -150,18 +154,18 @@ def test_nao_deu_com_faltou_material(servidor, navegador, tmp_path):
         b.close()
 
 
-def test_atraso_pede_o_motivo_e_reenvia(servidor, navegador, tmp_path):
+def test_atraso_pede_o_motivo_e_reenvia(servidor, navegador, campo, tmp_path):
     base = servidor['base']
     b, ctx = abrir_contexto(navegador, 'celular')
     try:
         pg = ctx.new_page()
         entrar(pg, base, 'ana@e2e.test')
-        _chegar(pg, base)
+        _chegar(pg, base, campo)
         # O relógio do celular volta 25 min para a leitura do QR (sem câmera,
         # vale a hora do aparelho); antes do "Pronto" ele volta ao normal: a
         # limpeza "levou" 25 min contra 1 previsto (+10 de tolerância).
         pg.clock.install(time=datetime.now() - timedelta(minutes=25))
-        _abrir_ponto(pg, base, QR_COPA)
+        _abrir_ponto(pg, base, QR_COPA, campo)
         pg.set_input_files('[data-foto="antes"]', _foto(tmp_path, 'antes.jpg'))
         pg.get_by_role('button', name='Feito: Pia limpa?').click()
         pg.get_by_role('button', name='Feito: Lixo retirado?').click()
