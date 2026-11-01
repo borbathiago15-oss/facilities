@@ -118,3 +118,46 @@ def test_tela_da_gestao_nunca_abre_da_copia(servidor, navegador, perfil):
         assert 'Armazenamento' not in pg.content()
     finally:
         b.close()
+
+
+def test_a_nova_passagem_abre_da_copia_sem_sinal(servidor, navegador, perfil, passagem):
+    """A nova passagem de turno abre sem sinal nas duas telas (a antiga já
+    abria: sw.js, Fase 3); a nova diz que é a cópia das HH:MM. Encerrar sem
+    sinal guarda na fila do aparelho. Quem sai do sistema leva a cópia junto."""
+    b, ctx = abrir_contexto(navegador, perfil)
+    try:
+        pg = ctx.new_page()
+        pg.on('dialog', lambda d: d.accept())
+        entrar(pg, servidor['base'], 'ana@e2e.test')
+        _com_service_worker(pg)
+        abrir(pg, servidor['base'] + passagem + '/turno', 'passagem')
+        pg.wait_for_load_state('networkidle')
+        copias = pg.evaluate(COPIAS)
+        assert passagem + '/turno' in copias
+        if '/novo/' in passagem:
+            assert '/api/v1/passagem/turno' in copias and '/api/v1/eu' in copias
+        _sem_sinal(ctx, servidor)
+        pg.reload()
+        tela_pronta(pg, 'passagem')
+        assert pg.get_by_text('Banheiros limpos').is_visible()
+        assert pg.input_value('#diario-shift') == '1º Turno'
+        if '/novo/' in passagem:
+            aviso = pg.get_by_test_id('aviso-de-copia')
+            assert re.search(r'cópia guardada neste aparelho às \d\d:\d\d', aviso.inner_text())
+        pg.get_by_role('button', name='Encerrar turno').click()
+        pg.locator('.dt-guardado', has_text='Guardado neste aparelho.').wait_for(timeout=10000)
+        assert pg.locator('.fila-selo:not([hidden])').count() == 1
+        _com_sinal(ctx, servidor)
+        pg.evaluate('window.TrinoFila.enviarAgora()')
+        pg.locator('.dt-guardado.dt-enviado', has_text='Enviado.').wait_for(timeout=15000)
+        assert servidor['sql']("SELECT turno, status FROM diario_operacional_turnos") == [
+            ('1º Turno', 'encerrado')]
+        # Sair apaga as cópias: a Mariana, no mesmo aparelho, não abre a da Ana.
+        pg.goto(servidor['base'] + '/app/')
+        pg.locator('.fc-app-pessoa').click()
+        pg.get_by_role('button', name='Sair / trocar de pessoa').click()
+        pg.wait_for_url('**/login**')
+        entrar(pg, servidor['base'], 'mariana@e2e.test')
+        assert not [c for c in pg.evaluate(COPIAS) if 'passagem' in c or c.startswith('/api/')]
+    finally:
+        b.close()

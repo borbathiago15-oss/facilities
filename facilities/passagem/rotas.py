@@ -808,8 +808,16 @@ def turno():
     """
     if not current_user.can_access(MODULO):
         abort(403)
+    return render_template('diario_operacional/turno.html',
+                           **contexto_turno(request.args.get('client_id', type=int)))
+
+
+def contexto_turno(client_id_pedido):
+    """O que a tela da nova passagem mostra — a tela antiga
+    (``turno.html``) e a nova (React, ``/api/v1/passagem/turno``) saem
+    daqui. Quem chama já conferiu o ``can_access`` (ver ``turno``)."""
     clients = _clientes_visiveis()
-    client_id = request.args.get('client_id', type=int) or (clients[0].id if clients else None)
+    client_id = client_id_pedido or (clients[0].id if clients else None)
     if client_id and client_id not in [c.id for c in clients]:
         client_id = None
     configs = (DiarioConfiguracao.query
@@ -857,8 +865,8 @@ def turno():
         anterior_inicial = _chave_da_area(configs[0].id, efetiva[configs[0].id])
     else:
         anterior_inicial = ''
-    return render_template(
-        'diario_operacional/turno.html', clients=clients, client_id=client_id,
+    return dict(
+        clients=clients, client_id=client_id,
         contrato=contrato,
         # O centro de custo é o do contrato — é por ele que a operação se
         # reconhece no Razão e no financeiro, e é o que o encarregado espera
@@ -1130,6 +1138,14 @@ def ver_turno(turno_id):
     e ninguém nunca mais a vê. É por aqui que o supervisor confere a prova do
     que foi (ou não foi) feito no turno.
     """
+    return render_template('diario_operacional/ver_turno.html',
+                           **contexto_ver_turno(turno_id))
+
+
+def contexto_ver_turno(turno_id):
+    """O que a leitura da passagem mostra — a tela antiga
+    (``ver_turno.html``) e a nova (React, ``/api/v1/passagem/turno/<id>``)
+    saem daqui, com a mesma checagem de carteira (``_turno_autorizado``)."""
     t = _turno_autorizado(turno_id)
     cfg = DiarioConfiguracao.query.get(t.configuracao_id)
     dados = _json(t.dados_json, {})
@@ -1219,8 +1235,8 @@ def ver_turno(turno_id):
     pode_corrigir = (t.status == 'encerrado'
                      and t.created_by == current_user.id
                      and _janela_de_correcao_aberta(t))
-    return render_template(
-        'diario_operacional/ver_turno.html', turno=t,
+    return dict(
+        turno=t,
         cliente=Client.query.get(t.client_id), configuracao=cfg,
         linhas=linhas, campos=campos, congelada=congelada,
         anexos_gerais=anexos_gerais,

@@ -107,3 +107,4 @@ def nao_existe(_resto):
 # As APIs de cada módulo migrado registram as rotas no ``api`` acima.
 from facilities.telas import admin as _admin  # noqa: E402,F401
 from facilities.telas import campo as _campo  # noqa: E402,F401
+from facilities.telas import passagem as _passagem  # noqa: E402,F401

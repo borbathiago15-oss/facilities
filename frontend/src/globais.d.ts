@@ -4,11 +4,15 @@
 // e o leitor de QR de qualquer navegador (static/vendor/jsqr/jsQR.js).
 
 type ItemDaFila = {
+  id?: string;
   tipo: string;
   rotulo: string;
   corpo: unknown;
   tarefa_id?: number | null;
   fotos?: { campo: string; arquivo: File }[];
+  // A passagem de turno: o turno já gravado (só faltam as fotos) e os grupos.
+  turno_id?: number | null;
+  anexos?: { envio: string; atividade: string; arquivos: File[]; feito: boolean }[];
 };
 
 type DetectorDeQr = { detect(fonte: CanvasImageSource): Promise<{ rawValue: string }[]> };
@@ -20,7 +24,11 @@ interface Window {
     enviarAgora(): void;
     ehFalhaDeConexao(r: Response | null): boolean;
   };
-  TrinoFoto?: { reduzirTodos(arquivos: File[]): Promise<(File | Blob)[]> };
+  TrinoFoto?: {
+    reduzirTodos(arquivos: File[]): Promise<(File | Blob)[]>;
+    /** Reduz as fotos do campo no próprio campo; devolve o resumo ("1 foto · 2 MB → 300 KB"). */
+    prepararEntrada(entrada: HTMLInputElement): Promise<string>;
+  };
   jsQR?: (dados: Uint8ClampedArray, largura: number, altura: number,
           opcoes?: { inversionAttempts?: string }) => { data: string } | null;
   BarcodeDetector?: new (opcoes: { formats: string[] }) => DetectorDeQr;

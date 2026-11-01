@@ -125,6 +125,17 @@ def campo(request):
     return request.param
 
 
+@pytest.fixture(params=['/passagem-de-turno', '/novo/passagem-de-turno'], ids=['tela-antiga', 'tela-nova'])
+def passagem(request):
+    """Onde fica a passagem de turno: a tela antiga (``/passagem-de-turno``)
+    ou a nova, em React (``/novo/passagem-de-turno``, Fase 2a). Os testes da
+    nova passagem e da leitura rodam nas duas (``tela_pronta``: 'passagem' e
+    'ver-turno')."""
+    if request.param != '/passagem-de-turno' and not os.path.exists(MANIFESTO):
+        pytest.skip('telas novas não compiladas: rode "npm run build" em frontend/')
+    return request.param
+
+
 def tela_pronta(pagina, nome='turno', timeout=15000):
     """A tela antiga chega desenhada; a nova (React) busca os dados e desenha
     depois: espera ela marcar ``data-tela-pronta``. Na antiga, não faz nada."""
