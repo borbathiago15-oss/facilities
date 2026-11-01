@@ -5,6 +5,8 @@ import { Casca } from './Casca';
 import { PaginaInicioCampo } from './campo/PaginaInicioCampo';
 import { PaginaLerQr } from './campo/PaginaLerQr';
 import { PaginaTurno } from './campo/turno/PaginaTurno';
+import { PaginaPassagem } from './passagem/PaginaPassagem';
+import { PaginaVerTurno } from './passagem/PaginaVerTurno';
 import { PaginaArmazenamento } from './paginas/admin/PaginaArmazenamento';
 import { Inicio } from './paginas/Inicio';
 import { NaoEncontrada } from './paginas/NaoEncontrada';
@@ -35,6 +37,8 @@ export function App() {
           <Routes>
             <Route path="/" element={<Inicio eu={eu.data} />} />
             <Route path="/admin/armazenamento" element={<PaginaArmazenamento />} />
+            <Route path="/passagem-de-turno/turno" element={<PaginaPassagem />} />
+            <Route path="/passagem-de-turno/turno/:id" element={<PaginaVerTurno />} />
             <Route path="*" element={<NaoEncontrada inicio={eu.data.links.inicio} />} />
           </Routes>
         </Casca>

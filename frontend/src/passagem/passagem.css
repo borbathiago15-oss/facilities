@@ -1,0 +1,184 @@
+/* Os estilos da passagem de turno nas telas novas: os MESMOS das telas
+   antigas, copiados do <style> de templates/diario_operacional/turno.html e
+   ver_turno.html (lá eles continuam, porque as telas antigas não mudam).
+   Mudou lá, muda aqui. */
+
+/* ── Nova passagem (turno.html) ── */
+  .dt-pagina{max-width:900px;margin:0 auto}
+  .dt-cab{background:var(--blue-900);color:#fff;border-radius:14px;
+          padding:.9rem 1.1rem;margin-bottom:1rem}
+  .dt-cab-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+               gap:.85rem}
+  .dt-cab-rot{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;
+              opacity:.72;font-weight:700}
+  .dt-cab-val{font-weight:600;font-size:.98rem;line-height:1.25}
+  .dt-escolhas{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
+               gap:.75rem}
+  .dt-secao{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;
+            color:var(--gray-500);font-weight:700;margin:1.2rem 0 .5rem}
+  .dt-p{border:1px solid var(--gray-200);border-radius:12px;background:var(--surface);
+        padding:.85rem 1rem;margin-bottom:.7rem}
+  .dt-p-nome{font-weight:600;font-size:1rem;color:var(--gray-900);
+             display:block;margin-bottom:.5rem}
+  .dt-p-nome .obrig{color:var(--red-500)}
+  /* O switch é grande de propósito (dedo com luva). Isso estoura o recuo
+     padrão do Bootstrap (.form-check usa 1.5em), e o botão saía cortado na
+     borda esquerda do cartão — daí o par padding/margin refeito aqui. */
+  .dt-switch{padding:.2rem 0 .2rem 3.9rem;margin-bottom:.1rem}
+  .dt-switch .form-check-input{width:3.3rem;height:1.8rem;margin-left:-3.9rem;
+                               margin-top:.35rem}
+  /* O rótulo também alterna o interruptor (ligado por `for`), então ele é
+     metade do alvo: 44px de altura aqui dá ao dedo a área que o próprio
+     interruptor não tem. */
+  .dt-switch .form-check-label{font-size:1rem;cursor:pointer;min-height:44px;
+                               display:flex;align-items:center}
+  /* Semáforo (🟢 NORMAL / 🟡 ATENÇÃO / 🔴 CRÍTICO): botões, não lista
+     suspensa. No celular, escolher entre três estados tem de ser um toque, e
+     a resposta tem de ficar visível sem abrir nada. */
+  .dt-opcoes{display:flex;gap:.5rem;flex-wrap:wrap}
+  .dt-opcao{flex:1 1 auto;min-height:46px;min-width:96px;border-radius:10px;
+            border:1px solid var(--gray-300);background:var(--surface);font-size:.95rem;
+            font-weight:600;color:var(--gray-700);padding:.5rem .7rem}
+  .dt-opcao.sel{border-color:var(--blue-600);background:var(--blue-50);
+                color:var(--blue-700);box-shadow:inset 0 0 0 1px var(--blue-600)}
+  .dt-anexo{display:inline-flex;align-items:center;gap:.4rem;cursor:pointer;
+            border:1px dashed var(--gray-300);border-radius:10px;
+            padding:.45rem .75rem;font-size:.85rem;color:var(--blue-700);
+            background:var(--surface)}
+  .dt-anexo:hover{background:var(--blue-50)}
+  .dt-anexos .dt-anexo{margin:0 .35rem .35rem 0}
+  .dt-acoes{position:sticky;bottom:0;background:var(--surface);border-top:1px solid var(--gray-200);
+            padding:.75rem 0;margin-top:1rem;z-index:5}
+  .dt-acoes .btn{min-height:46px;font-size:1rem}
+  .dt-vazio{color:var(--gray-500);font-size:.9rem}
+  /* ── O que o turno anterior deixou ── */
+  .dt-anterior{border:1px solid var(--gray-200);border-radius:12px;background:var(--surface)}
+  .dt-anterior>summary{list-style:none;cursor:pointer;padding:.8rem 1rem;
+                       display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;
+                       min-height:48px}
+  .dt-anterior>summary::-webkit-details-marker{display:none}
+  .dt-anterior>summary::after{content:'▾';margin-left:auto;color:var(--gray-500)}
+  .dt-anterior[open]>summary::after{content:'▴'}
+  .dt-ant-tit{font-weight:700;color:var(--gray-900)}
+  .dt-ant-meta{font-size:.82rem;color:var(--gray-500)}
+  .dt-ant-corpo{padding:0 1rem 1rem}
+  .dt-ant-bloco{margin-bottom:.9rem}
+  .dt-ant-rot{font-size:.68rem;text-transform:uppercase;letter-spacing:.06em;
+              color:var(--gray-500);font-weight:700;margin-bottom:.3rem}
+  .dt-ant-txt{font-size:.92rem;color:var(--gray-800);white-space:pre-wrap}
+  .dt-ant-oco{border-left:3px solid var(--red-500);padding-left:.6rem;
+              margin-bottom:.5rem;font-size:.92rem}
+  .dt-ant-fotos{display:flex;gap:.5rem;flex-wrap:wrap}
+  .dt-ant-foto{width:72px;height:72px;border-radius:10px;overflow:hidden;
+               border:1px solid var(--gray-200);display:flex;
+               align-items:center;justify-content:center;background:var(--gray-50)}
+  .dt-ant-foto img{width:100%;height:100%;object-fit:cover}
+  .dt-ant-pdf{font-size:1.6rem;color:var(--red-500)}
+
+  /* ── As duas abas ────────────────────────────────────────────────────
+     A página era uma só e empilhava DOIS trabalhos diferentes: resolver o
+     que o turno passado deixou (que se faz ao CHEGAR, e ao longo do dia) e
+     preencher a passagem (que se faz ao SAIR). Com sete pendências abertas
+     o encarregado rolava a lista inteira toda vez que queria responder uma
+     pergunta do checklist — no celular a página passava de 4.000px.
+
+     A divisão segue o que ele de fato faz: RECEBI de um lado, ENTREGO do
+     outro. */
+  .dt-abas{display:flex;gap:.4rem;margin-bottom:1rem;
+           border-bottom:2px solid var(--gray-200)}
+  .dt-aba{flex:1 1 0;border:0;background:none;padding:.7rem .5rem;
+          font-weight:600;color:var(--gray-500);font-size:.95rem;
+          border-bottom:3px solid transparent;margin-bottom:-2px;
+          display:flex;align-items:center;justify-content:center;gap:.4rem;
+          min-height:48px}
+  .dt-aba:hover{color:var(--gray-800)}
+  .dt-aba.ativa{color:var(--blue-700);border-bottom-color:var(--blue-600)}
+  .dt-aba-n{background:var(--gray-200);color:var(--gray-700);border-radius:20px;
+            padding:.02rem .5rem;font-size:.76rem;font-weight:700}
+  .dt-aba.ativa .dt-aba-n{background:var(--blue-600);color:#fff}
+  /* Vermelho quando há pendência vencida: a aba precisa gritar mesmo quando
+     o encarregado está do outro lado preenchendo a passagem. */
+  .dt-aba-n.ruim{background:var(--red-500);color:#fff}
+  .dt-painel[hidden]{display:none}
+  .dt-sem-pend{padding:2rem;text-align:center;color:var(--gray-500);
+               font-size:.92rem;border:1px dashed var(--gray-300);
+               border-radius:12px}
+  /* No celular "Passagem de turno" quebrava em duas linhas e deixava a
+     barra torta. Fonte menor e sem quebra: o rótulo cabe inteiro, que é
+     melhor do que abreviar uma aba de duas. */
+  @media (max-width:420px){
+    .dt-aba{font-size:.82rem;gap:.3rem;padding:.7rem .25rem;
+            white-space:nowrap}
+  }
+  /* ── Pendência em aberto ── */
+  .dt-pend{border:1px solid var(--gray-200);border-radius:12px;background:var(--surface);
+           padding:.75rem .9rem;margin-bottom:.6rem}
+  .dt-pend.vencida{border-left:4px solid var(--red-500)}
+  .dt-pend-topo{display:flex;align-items:baseline;gap:.45rem;flex-wrap:wrap}
+  .dt-pend-ref{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+               font-size:.8rem;background:var(--gray-100);border-radius:6px;
+               padding:.1rem .4rem;color:var(--gray-700)}
+  .dt-pend-desc{font-size:.9rem;color:var(--gray-600);margin-top:.2rem}
+  .dt-pend-meta{display:flex;gap:.45rem;flex-wrap:wrap;margin-top:.45rem;
+                font-size:.76rem;color:var(--gray-500)}
+  .dt-pend-meta>span{background:var(--gray-100);border-radius:6px;padding:.12rem .45rem}
+  .dt-pend-idade.ruim{background:#fde8e8;color:var(--red-600);font-weight:700}
+  .dt-pend-alta{background:var(--tint-atencao);color:#b45309;font-weight:700}
+  .dt-pend-tent{margin-top:.5rem;padding:.4rem .6rem;background:var(--gray-50);
+                border-left:3px solid var(--gray-300);border-radius:0 8px 8px 0;
+                font-size:.85rem;color:var(--gray-700)}
+  .dt-pend-tent-rot{display:block;font-size:.66rem;text-transform:uppercase;
+                    letter-spacing:.06em;color:var(--gray-500);font-weight:700}
+  .dt-pend-tent-quem{color:var(--gray-500);font-size:.78rem}
+  .dt-pend-acoes{display:flex;gap:.5rem;margin-top:.6rem}
+  .dt-pend-acoes .btn{min-height:40px;flex:0 0 auto}
+  @media (max-width:768px){
+    /* O par Resolver/Continua divide a largura e ganha altura de dedo. */
+    .dt-pend-acoes .btn{flex:1 1 0;min-height:44px}
+    /* Rótulo de 10,5px não se lê a um braço de distância, com o telefone
+       na mão e o armazém mal iluminado. */
+    .dt-cab-rot{font-size:.72rem}
+    .dt-cab-val{font-size:1rem}
+    .dt-pagina .btn{min-height:44px}
+    /* A barra fixa não pode comer a última pergunta ao rolar até o fim. */
+    .dt-pagina{padding-bottom:1rem}
+  }
+
+/* ── Leitura da passagem (ver_turno.html) ── */
+  .vt-doc{max-width:980px;margin:0 auto}
+  .vt-cab{border-bottom:2px solid var(--blue-900);padding-bottom:.8rem;margin-bottom:1.1rem}
+  .vt-cab h2{margin:0;color:var(--blue-900)}
+  .vt-meta{font-size:.85rem;color:var(--gray-500)}
+  .vt-lin{border:1px solid var(--gray-200);border-radius:12px;padding:.8rem .95rem;
+          margin-bottom:.7rem;background:var(--surface)}
+  .vt-lin.nao{border-left:4px solid var(--red-500)}
+  .vt-lin.sim{border-left:4px solid var(--green-500)}
+  .vt-nome{font-weight:600;color:var(--gray-900)}
+  .vt-obs{font-size:.88rem;color:var(--gray-700);margin-top:.35rem;white-space:pre-wrap}
+  .vt-tag{display:inline-block;font-size:.72rem;font-weight:700;border-radius:999px;
+          padding:.12rem .5rem}
+  .vt-tag.ok{background:var(--green-100);color:var(--green-700)}
+  .vt-tag.bad{background:var(--red-100);color:var(--red-700)}
+  .vt-tag.neutro{background:var(--gray-100,#f3f4f6);color:var(--gray-500)}
+  .vt-provas{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.6rem}
+  .vt-prova{border:1px solid var(--gray-200);border-radius:10px;overflow:hidden;
+            width:132px;background:var(--gray-50,#f9fafb)}
+  .vt-prova img{width:100%;height:92px;object-fit:cover;display:block}
+  .vt-prova .vt-pdf{height:92px;display:flex;align-items:center;justify-content:center;
+                    font-size:1.8rem;color:var(--red-700)}
+  .vt-prova .vt-nome-arq{font-size:.68rem;padding:.3rem .4rem;color:var(--gray-600);
+                         word-break:break-word;line-height:1.25}
+  .vt-prova .vt-quem-anexou{font-size:.66rem;padding:0 .4rem .3rem;color:var(--gray-500);
+                            line-height:1.2}
+  .vt-vazio{color:var(--gray-500);font-size:.88rem}
+  .vt-ref{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.75rem;
+          background:var(--gray-100);border-radius:5px;padding:.05rem .35rem;
+          color:var(--gray-700);font-weight:400}
+  .vt-trilha{list-style:none;margin:.5rem 0 0;padding:0 0 0 .7rem;
+             border-left:2px solid var(--gray-200)}
+  .vt-ev{font-size:.8rem;margin-bottom:.4rem}
+  .vt-ev-quem{font-weight:600;color:var(--gray-800)}
+  .vt-ev-turno,.vt-ev-quando{color:var(--gray-500);margin-left:.35rem}
+  .vt-ev-txt{color:var(--gray-700)}
+  .vt-ev-recebida .vt-ev-txt{color:var(--gray-500);font-style:italic}
+  .vt-ev-resolvida .vt-ev-txt{color:var(--green-700,#15803d)}
