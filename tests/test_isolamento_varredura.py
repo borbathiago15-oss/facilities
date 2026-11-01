@@ -467,6 +467,11 @@ def test_a_marca_aparece_para_quem_e_de_a(app_module, local_a):
     # A Passagem de turno nas telas novas (Fase 2a): a nova passagem e a leitura.
     assert MARCA in c.get(f"/api/v1/passagem/turno?client_id={local_a['local']}").get_data(as_text=True)
     assert MARCA in c.get(f"/api/v1/passagem/turno/{local_a['turno']}").get_data(as_text=True)
+    # Fase 2b: o painel, o relatório mensal e a configuração.
+    q = f"?client_id={local_a['local']}"
+    assert MARCA in c.get('/api/v1/passagem/painel' + q + '&periodo=30d').get_data(as_text=True)
+    assert MARCA in c.get('/api/v1/passagem/relatorio-mensal' + q).get_data(as_text=True)
+    assert MARCA in c.get('/api/v1/passagem/configuracao' + q).get_data(as_text=True)
 
 
 def test_a_marca_aparece_para_o_cliente_de_a(app_module, local_a):

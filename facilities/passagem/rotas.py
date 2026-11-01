@@ -250,6 +250,14 @@ def index():
     chamada a ``analitico.painel``, para que nenhum número da tela discorde
     de outro por ter sido calculado com uma janela diferente.
     """
+    return render_template('diario_operacional/dashboard.html', **contexto_painel())
+
+
+def contexto_painel():
+    """O que o painel mostra — a tela antiga (``dashboard.html``) e a nova
+    (React, ``/api/v1/passagem/painel``) saem daqui, com o mesmo recorte da
+    query string (``client_id``, ``periodo``, ``de``, ``ate``, ``area_id``,
+    ``turno``)."""
     clients = _clientes_visiveis()
     client_id = request.args.get('client_id', type=int)
     if client_id and client_id not in [c.id for c in clients]:
@@ -321,8 +329,8 @@ def index():
                          .filter_by(client_id=client_id, ativo=True)
                          .order_by(DiarioConfiguracao.nome).all()
                          if client_id else [])]
-    return render_template(
-        'diario_operacional/dashboard.html', clients=clients,
+    return dict(
+        clients=clients,
         client_id=client_id, dados=dados, turnos=turnos, modelos=modelos,
         periodo=periodo, turno_sel=turno, periodos=analitico.PERIODOS,
         area_sel=area_id, todas_as_areas=analitico.TODAS_AS_AREAS,
@@ -366,8 +374,16 @@ def configuracao():
     novo com os dados do antigo na tela. Agora o contrato vem sempre
     resolvido, e a troca é uma navegação.
     """
+    return render_template('diario_operacional/configuracao.html',
+                           **contexto_configuracao(request.args.get('client_id', type=int)))
+
+
+def contexto_configuracao(client_id_pedido):
+    """O que a configuração mostra — a tela antiga (``configuracao.html``) e
+    a nova (React, ``/api/v1/passagem/configuracao``) saem daqui. Quem chama
+    já passou pelo ``permissao_requerida('diario_config')``."""
     clients = _clientes_visiveis()
-    client_id = request.args.get('client_id', type=int)
+    client_id = client_id_pedido
     if client_id and client_id not in [c.id for c in clients]:
         client_id = None
     if not client_id and clients:
@@ -403,14 +419,14 @@ def configuracao():
                 .group_by(DiarioConfiguracao.area_id).all())
 
     editar = request.args.get('editar', type=int)
-    return render_template('diario_operacional/configuracao.html', modelos_prontos=_modelos_prontos(),
-                           clients=clients, client_id=client_id,
-                           configs=[_config_payload(c) for c in configs],
-                           areas=[{'id': a.id, 'nome': a.nome,
-                                   'ativo': bool(a.ativo),
-                                   'modelos': usos_de_area.get(a.id, 0)}
-                                  for a in areas],
-                           usos=usos, editar=editar)
+    return dict(modelos_prontos=_modelos_prontos(),
+                clients=clients, client_id=client_id,
+                configs=[_config_payload(c) for c in configs],
+                areas=[{'id': a.id, 'nome': a.nome,
+                        'ativo': bool(a.ativo),
+                        'modelos': usos_de_area.get(a.id, 0)}
+                       for a in areas],
+                usos=usos, editar=editar)
 
 
 def _area_do_contrato(client_id, area_id):
@@ -1320,8 +1336,31 @@ def relatorio_mensal():
     perfil só abre contrato que é dele, e o contrato de fora vira 403 antes
     de qualquer consulta.
     """
-    from flask import abort, send_file
+    from flask import send_file
 
+    c = contexto_relatorio_mensal()
+    rel, cliente, mes, ano = c['rel'], c['cliente'], c['mes'], c['ano']
+    nome_da_area = rel['area']
+    if (request.args.get('format') or '').lower() == 'pdf':
+        from facilities.passagem import pdf as diario_pdf
+        rotulo = cliente.name + (f' {nome_da_area}' if nome_da_area else '')
+        limpo = ''.join(ch if ch.isalnum() else '-' for ch in rotulo)
+        # "CD Eletro - PB" virava "CD-Eletro---PB": cada espaço e o traço do
+        # meio davam um hífen. Hífens seguidos viram um só — o nome do arquivo
+        # é o que se lê na pasta de downloads e no anexo do e-mail.
+        limpo = re.sub(r'-{2,}', '-', limpo).strip('-')
+        return send_file(
+            diario_pdf.gerar(rel), mimetype='application/pdf',
+            as_attachment=True,
+            download_name=f'Passagem-de-Turno-{limpo}-{mes:02d}-{ano}.pdf')
+    return render_template('diario_operacional/relatorio_mensal.html', **c)
+
+
+def contexto_relatorio_mensal():
+    """O fechamento da competência pedida na query string (``client_id``,
+    ``mes``, ``ano``, ``area_id``) — a tela antiga, o PDF e a tela nova
+    (React, ``/api/v1/passagem/relatorio-mensal``) saem daqui, com a mesma
+    checagem de carteira (``require_client``) antes de qualquer consulta."""
     from facilities.core.models import Client
 
     from facilities.core.acesso import require_client
@@ -1370,19 +1409,6 @@ def relatorio_mensal():
     rel['emitido_em'] = tempo.agora()
     rel['emitido_por'] = current_user.name
 
-    if (request.args.get('format') or '').lower() == 'pdf':
-        from facilities.passagem import pdf as diario_pdf
-        rotulo = cliente.name + (f' {nome_da_area}' if nome_da_area else '')
-        limpo = ''.join(ch if ch.isalnum() else '-' for ch in rotulo)
-        # "CD Eletro - PB" virava "CD-Eletro---PB": cada espaço e o traço do
-        # meio davam um hífen. Hífens seguidos viram um só — o nome do arquivo
-        # é o que se lê na pasta de downloads e no anexo do e-mail.
-        limpo = re.sub(r'-{2,}', '-', limpo).strip('-')
-        return send_file(
-            diario_pdf.gerar(rel), mimetype='application/pdf',
-            as_attachment=True,
-            download_name=f'Passagem-de-Turno-{limpo}-{mes:02d}-{ano}.pdf')
-
     # Os 12 meses do seletor da tela, com o nome por extenso.
     meses = list(enumerate(MESES_LONGOS, start=1))
     # Os anos: até o seguinte (o servidor aceita, e em dezembro é o janeiro
@@ -1390,12 +1416,11 @@ def relatorio_mensal():
     # o primeiro da lista, e a próxima troca de mês ou de área — que envia o
     # formulário sozinha — levava o relatório para cinco anos atrás.
     anos = sorted(set(range(hoje.year - 4, hoje.year + 2)) | {ano})
-    return render_template('diario_operacional/relatorio_mensal.html',
-                           rel=rel, cliente=cliente, meses=meses, anos=anos,
-                           mes=mes, ano=ano,
-                           areas=[{'id': a.id, 'nome': a.nome} for a in areas],
-                           area_sel=area_id,
-                           todas_as_areas=analitico.TODAS_AS_AREAS)
+    return dict(rel=rel, cliente=cliente, meses=meses, anos=anos,
+                mes=mes, ano=ano,
+                areas=[{'id': a.id, 'nome': a.nome} for a in areas],
+                area_sel=area_id,
+                todas_as_areas=analitico.TODAS_AS_AREAS)
 
 
 # ─────────────────────────────────────────────────────────────────────────

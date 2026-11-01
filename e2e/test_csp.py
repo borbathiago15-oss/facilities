@@ -24,22 +24,26 @@ def test_passagem_funciona_sem_script_embutido(servidor, navegador, perfil, pass
         b.close()
 
 
-def test_gestao_painel_e_configuracao(servidor, navegador, perfil):
+def test_gestao_painel_e_configuracao(servidor, navegador, perfil, passagem):
+    """O painel, o relatório e a configuração da passagem (Fase 2b: antigas e
+    novas) e as outras telas da gestão."""
     b, ctx = abrir_contexto(navegador, perfil)
     try:
         pg = ctx.new_page()
         pg.on('dialog', lambda d: d.dismiss())
         entrar(pg, servidor['base'], 'admin@e2e.test')
-        for url in ('/passagem-de-turno/', '/passagem-de-turno/relatorio-mensal',
+        for url in (passagem + '/', passagem + '/relatorio-mensal',
                     '/chamados/', '/chamados/novo', '/painel', '/demandas/'):
             pg.goto(servidor['base'] + url)
             pg.wait_for_load_state('networkidle')
-        pg.goto(servidor['base'] + '/passagem-de-turno/configuracao')
+        pg.goto(servidor['base'] + passagem + '/configuracao')
+        tela_pronta(pg, 'configuracao')
         pg.wait_for_load_state('networkidle')
         pg.locator('[data-acao="novoModelo"]').first.click()
         pg.get_by_role('button', name='Adicionar turno').click()
         assert pg.locator('#cfg-shifts .config-row').count() >= 1
-        pg.goto(servidor['base'] + '/passagem-de-turno/')
+        pg.goto(servidor['base'] + passagem + '/')
+        tela_pronta(pg, 'painel')
         # O filtro fica recolhido; o que importa é o "change" chegar à ação.
         pg.evaluate("var s = document.getElementById('dopPeriodo'); s.value = 'custom';"
                     "s.dispatchEvent(new Event('change', {bubbles: true}))")

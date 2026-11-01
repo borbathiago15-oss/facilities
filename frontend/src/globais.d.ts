@@ -1,7 +1,8 @@
 // Os scripts de sempre que as telas novas reaproveitam (carregados pela
 // casca, templates/telas/casca.html): a fila do aparelho sem internet
 // (static/js/fila-offline.js), a redução das fotos (static/js/foto-leve.js)
-// e o leitor de QR de qualquer navegador (static/vendor/jsqr/jsQR.js).
+// o leitor de QR de qualquer navegador (static/vendor/jsqr/jsQR.js) e os
+// gráficos do painel da passagem (static/vendor/chart/chart.umd.min.js).
 
 type ItemDaFila = {
   id?: string;
@@ -32,4 +33,8 @@ interface Window {
   jsQR?: (dados: Uint8ClampedArray, largura: number, altura: number,
           opcoes?: { inversionAttempts?: string }) => { data: string } | null;
   BarcodeDetector?: new (opcoes: { formats: string[] }) => DetectorDeQr;
+  Chart?: {
+    new (alvo: HTMLCanvasElement, config: unknown): { destroy(): void };
+    defaults: { font: { family: string }; color: string };
+  };
 }

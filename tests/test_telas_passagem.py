@@ -126,7 +126,7 @@ def test_nova_passagem_traz_os_dados_da_tela_antiga(app_module, cena):
     assert [a['url'] for a in b['anexos']] == re.findall(
         r'href="(/passagem-de-turno/anexos/\d+)"', antigo)
     assert novo['anterior_inicial'] == f"area-{cena['area']}"
-    assert novo['links']['painel'] == f"/passagem-de-turno/?client_id={cena['local']}"
+    assert novo['links']['painel'] == f"/novo/passagem-de-turno/?client_id={cena['local']}"
     assert novo['links']['ver_turno'] == '/novo/passagem-de-turno/turno/'
 
 

@@ -1,6 +1,7 @@
 /* Os estilos da passagem de turno nas telas novas: os MESMOS das telas
-   antigas, copiados do <style> de templates/diario_operacional/turno.html e
-   ver_turno.html (lá eles continuam, porque as telas antigas não mudam).
+   antigas, copiados do <style> de templates/diario_operacional/turno.html,
+   ver_turno.html, dashboard.html, relatorio_mensal.html e configuracao.html
+   (lá eles continuam, porque as telas antigas não mudam).
    Mudou lá, muda aqui. */
 
 /* ── Nova passagem (turno.html) ── */
@@ -182,3 +183,139 @@
   .vt-ev-txt{color:var(--gray-700)}
   .vt-ev-recebida .vt-ev-txt{color:var(--gray-500);font-style:italic}
   .vt-ev-resolvida .vt-ev-txt{color:var(--green-700,#15803d)}
+
+/* ── Painel (dashboard.html) ── */
+  .dop-gov{border-radius:12px;padding:.6rem .95rem;font-size:.86rem;
+           display:flex;align-items:center;gap:.55rem;flex-wrap:wrap;
+           border:1px solid var(--gray-200);background:var(--gray-50,#f9fafb);
+           color:var(--gray-700)}
+  .dop-gov .bi{font-size:1rem}
+  .dop-hero{border:1px solid var(--gray-200);border-radius:14px;padding:1rem 1.1rem;
+            height:100%;background:var(--white);display:flex;flex-direction:column;gap:.35rem}
+  .dop-hero-label{font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;
+                  color:var(--gray-500);font-weight:700}
+  .dop-hero-value{font-size:2.1rem;font-weight:700;line-height:1.05;color:var(--gray-900)}
+  .dop-hero-value.critico{color:var(--red-700)}
+  .dop-hero-sub{font-size:.8rem;color:var(--gray-500)}
+  .dop-tag{display:inline-block;font-size:.72rem;font-weight:700;border-radius:999px;
+           padding:.12rem .5rem;white-space:nowrap}
+  .dop-tag.ok{background:var(--green-100);color:var(--green-700)}
+  .dop-tag.alerta{background:var(--yellow-100);color:var(--yellow-600)}
+  .dop-tag.critico{background:var(--red-100);color:var(--red-700)}
+  .dop-tag.neutro{background:var(--gray-100,#f3f4f6);color:var(--gray-500)}
+  .dop-track{height:7px;border-radius:999px;background:var(--gray-200);overflow:hidden}
+  .dop-fill{height:100%;border-radius:999px;background:var(--blue-600)}
+  .dop-fill.ok{background:var(--green-500)}
+  .dop-fill.alerta{background:var(--amber-500)}
+  .dop-fill.critico{background:var(--red-500)}
+  .dop-meta{position:relative;height:7px;margin-top:.15rem}
+  .dop-meta-mark{position:absolute;top:-9px;width:2px;height:11px;background:var(--gray-700)}
+  .dop-rot{display:grid;grid-template-columns:1fr 92px 58px;gap:.6rem;align-items:center;
+           padding:.42rem 0;border-bottom:1px solid var(--gray-100,#f3f4f6)}
+  .dop-rot:last-child{border-bottom:0}
+  .dop-rot-nome{font-size:.86rem;color:var(--gray-800)}
+  .dop-rot-pct{font-size:.84rem;font-weight:700;text-align:right}
+  .dop-vazio{padding:2rem 1rem;text-align:center;color:var(--gray-500)}
+  .dop-crit{border-left:3px solid var(--red-500)}
+  .dop-crit.so-alta{border-left-color:var(--amber-500)}
+
+/* ── Relatório mensal (relatorio_mensal.html) ── */
+  .rm-doc{max-width:1180px;margin:0 auto}
+  .rm-cabeca{border-bottom:3px solid var(--blue-900);padding-bottom:.9rem;margin-bottom:1.2rem;
+             display:flex;justify-content:space-between;align-items:flex-end;gap:1rem;flex-wrap:wrap}
+  .rm-cabeca h1{font-size:1.5rem;margin:0;color:var(--blue-900);font-weight:700}
+  .rm-cabeca .rm-sub{color:var(--gray-500);font-size:.85rem}
+  /* A marca é texto: o logo com nome escrito que veio do Trino era o de
+     outro sistema da casa — e o relatório vai para o cliente. */
+  .rm-marca{font-size:.74rem;font-weight:800;letter-spacing:.12em;text-transform:uppercase;
+            color:var(--gray-500);margin-bottom:.35rem}
+  .rm-bloco{margin-bottom:1.6rem}
+  .rm-bloco h2{font-size:1rem;text-transform:uppercase;letter-spacing:.05em;
+               color:var(--blue-900);font-weight:700;border-left:4px solid var(--blue-600);
+               padding-left:.55rem;margin-bottom:.75rem}
+  .rm-big{border:1px solid var(--gray-200);border-radius:12px;padding:.9rem 1rem;height:100%;
+          background:#fff}
+  .rm-big-label{font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;
+                color:var(--gray-500);font-weight:700}
+  .rm-big-value{font-size:1.9rem;font-weight:700;line-height:1.1;color:var(--gray-900)}
+  .rm-big-sub{font-size:.8rem;color:var(--gray-500)}
+  .rm-tag{display:inline-block;font-size:.72rem;font-weight:700;border-radius:999px;padding:.12rem .5rem}
+  .rm-tag.ok{background:var(--green-100);color:var(--green-700)}
+  .rm-tag.alerta{background:var(--yellow-100);color:var(--yellow-600)}
+  .rm-tag.critico{background:var(--red-100);color:var(--red-700)}
+  .rm-tag.neutro{background:var(--gray-100,#f3f4f6);color:var(--gray-500)}
+  .rm-vazio{padding:1.4rem;text-align:center;color:var(--gray-500);font-size:.88rem}
+  .rm-ref{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.76rem;
+          background:var(--gray-100);border-radius:5px;padding:.05rem .35rem;
+          color:var(--gray-700);margin-left:.3rem;white-space:nowrap}
+  .rm-resol{color:var(--green-700,#15803d);font-size:.82rem;margin-top:.15rem}
+  .rm-tentativa{color:var(--gray-600);font-size:.82rem;margin-top:.15rem;
+                border-left:2px solid var(--gray-300);padding-left:.4rem}
+  .rm-timeline{border-left:2px solid var(--gray-200);padding-left:1rem;margin-left:.4rem}
+  .rm-item{position:relative;padding-bottom:.9rem}
+  .rm-item::before{content:'';position:absolute;left:-1.32rem;top:.35rem;width:9px;height:9px;
+                   border-radius:50%;background:var(--blue-600)}
+  .rm-item-quando{font-size:.75rem;font-weight:700;color:var(--blue-800);text-transform:uppercase}
+  .rm-item-texto{font-size:.88rem;color:var(--gray-800)}
+  @media print{
+    .rm-noprint{display:none !important}
+    .rm-bloco{page-break-inside:avoid}
+    .rm-item,.rm-big,table tr{page-break-inside:avoid}
+  }
+  /* Os pontos de atenção: na antiga, em style="" no próprio cartão. */
+  .rm-atencao{border-left:4px solid #b45309 !important;background:#fffbf5}
+  .rm-atencao-tit{color:#92400e}
+  .rm-atencao-item{border-top:1px solid #fde8cc}
+
+/* ── Configuração dos modelos (configuracao.html) ── */
+  .cf-lista .cf-item{display:block;width:100%;text-align:left;border:1px solid var(--gray-200);
+                     border-radius:10px;padding:.6rem .8rem;margin-bottom:.5rem;background:var(--surface)}
+  .cf-lista .cf-item.ativo-sel{border-color:var(--blue-600);box-shadow:0 0 0 2px var(--blue-100)}
+  .cf-nome{font-weight:600;color:var(--gray-900)}
+  /* Áreas: uma linha por área, e no celular cada uma vira um bloco em vez de
+     espremer nome, contagem e dois botões na mesma largura. */
+  .ar-lista{display:flex;flex-direction:column;gap:.4rem}
+  .ar-item{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;
+           border:1px solid var(--gray-200);border-radius:10px;
+           padding:.55rem .8rem;background:var(--surface)}
+  .ar-item.off{opacity:.55;background:var(--gray-50)}
+  .ar-nome{font-weight:600;color:var(--gray-900);flex:1 1 auto}
+  .ar-meta{font-size:.78rem;color:var(--gray-500)}
+  /* "renomear" e "desativar" andam juntos, num grupo só, colados à direita.
+     Soltos na linha, cada um quebrava para um lado no celular e ficavam
+     desalinhados da contagem de modelos. */
+  .ar-acoes{display:flex;align-items:center;gap:1rem;margin-left:auto}
+  @media (max-width:768px){
+    .ar-item{align-items:center;row-gap:.15rem}
+    .ar-nome{flex:1 0 100%}
+    /* Embaixo do nome: a contagem à esquerda, as duas ações à direita,
+       todos na MESMA linha de base — e com alvo de dedo nas ações. */
+    .ar-item .btn{min-height:44px;display:inline-flex;align-items:center}
+    /* O `.diario-page .btn-sm` dá 14px de recuo lateral a todo botão do
+       módulo; nos dois links isso empurrava o grupo para a linha de baixo
+       da contagem. Recuo curto: o alvo continua com 44px de altura. */
+    .diario-page .ar-acoes .btn-sm{padding:8px 6px !important}
+    .ar-acoes{gap:.5rem}
+  }
+  .cf-meta{font-size:.75rem;color:var(--gray-500)}
+  .cf-tag{display:inline-block;font-size:.68rem;font-weight:700;border-radius:999px;
+          padding:.08rem .45rem}
+  .cf-tag.on{background:var(--green-100);color:var(--green-700)}
+  .cf-tag.off{background:var(--gray-100,#f3f4f6);color:var(--gray-500)}
+  .config-row{align-items:center}
+  /* As opções da pergunta de escolha: uma faixa inteira abaixo da linha,
+     só visível quando o tipo é "Escolha". */
+  .cfg-p-opcoes-caixa textarea{font-size:.9rem}
+  .cfg-p-opcoes-caixa .form-text{margin-top:.15rem}
+  /* No celular a linha de 4 colunas do Bootstrap não cabe: o botão de
+     excluir saía 31px para fora do cartão. Aqui cada campo ocupa a linha
+     inteira e os botões viram uma faixa própria, com alvo de 44px. */
+  @media (max-width:768px){
+    .config-row > [class*="col-"]{flex:0 0 100%;max-width:100%}
+    .config-row > .col-2.d-flex{gap:.5rem !important}
+    .config-row > .col-2.d-flex .btn{min-height:44px}
+    .config-row{border:1px solid var(--gray-200);border-radius:10px;
+                padding:.6rem;margin-bottom:.75rem}
+    #cfg-perguntas .config-row .btn{min-height:44px}
+  }
+  .cf-aviso{font-size:.8rem;color:var(--gray-500)}

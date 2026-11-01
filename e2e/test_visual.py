@@ -58,3 +58,23 @@ def test_nova_passagem_sem_rolagem_lateral(servidor, navegador, perfil, passagem
         assert pg.locator('.fc-lat-item.ativo').count() <= 1
     finally:
         b.close()
+
+
+def test_gestao_da_passagem_sem_rolagem_lateral(servidor, navegador, perfil, passagem):
+    """O painel, o relatório mensal e a configuração (Fase 2b: antigas e
+    novas): sem rolagem lateral e com no máximo um item do menu marcado."""
+    from conftest import abrir
+    b, ctx = abrir_contexto(navegador, perfil)
+    try:
+        pg = ctx.new_page()
+        entrar(pg, servidor['base'], 'admin@e2e.test')
+        [(cid,)] = servidor['sql']("SELECT id FROM clients WHERE name = 'GL Armazém 1'")
+        for caminho, nome in (('/', 'painel'), ('/relatorio-mensal', 'relatorio'),
+                              ('/configuracao', 'configuracao')):
+            abrir(pg, servidor['base'] + passagem + caminho + f'?client_id={cid}', nome)
+            pg.wait_for_load_state('networkidle')
+            largura = pg.evaluate('document.documentElement.scrollWidth')
+            assert largura <= pg.viewport_size['width'], f'{caminho} rola de lado ({largura}px)'
+            assert pg.locator('.fc-lat-item.ativo').count() <= 1
+    finally:
+        b.close()
