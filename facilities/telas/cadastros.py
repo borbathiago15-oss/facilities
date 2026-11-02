@@ -43,13 +43,16 @@ from facilities.telas import _casca, api, bp
 # rotina dos locais entrou na Fase 3b; os chamados, as demandas e a
 # preventiva, na 4a; a equipe, os materiais e as visitas do local, na 4b; os
 # relatórios do cliente, o painel e as chaves da integração, na 4c; o portal
-# do cliente e as cobranças vistas pela equipe, na 5).
+# do cliente e as cobranças vistas pela equipe, na 5; a conta, os avisos, as
+# pessoas e os locais do administrador, na 6a).
 MIGRADOS = ('/cadastros/', '/clientes', '/centros/', '/novo-contrato', '/convites', '/rotas/',
             '/chamados/', '/demandas/', '/preventiva/locais/', '/equipes/locais/',
             '/materiais/', '/visitas/locais/', '/relatorios/', '/admin/integracao/',
-            '/cliente/', '/cobrancas/')
-# O painel: só o endereço exato (com ou sem a busca), nada que comece igual.
-MIGRADOS_EXATOS = ('/painel',)
+            '/cliente/', '/cobrancas/', '/admin/usuarios', '/admin/contratos', '/avisos',
+            '/conta/seguranca', '/trocar-senha')
+# O painel e o Início (6a): só o endereço exato (com ou sem a busca), nada
+# que comece igual.
+MIGRADOS_EXATOS = ('/painel', '/')
 # Os arquivos continuam no servidor: as etiquetas, a logo, a foto do pedido
 # de insumo (``/materiais/pedidos/<id>/foto``) e o PDF e o Excel do
 # relatório do cliente (``/relatorios/cliente/<id>/<mês>/arquivo.pdf``).

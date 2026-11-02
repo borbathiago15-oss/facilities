@@ -213,10 +213,15 @@ def test_a_equipe_nao_abre_o_portal_novo(app_module, mais, papel):
         assert Cobranca.query.filter_by(titulo='x').count() == 0
 
 
-@pytest.mark.parametrize('url', ['/novo/', '/novo/chamados/', '/novo/painel', '/novo/cobrancas/',
+# (O Início novo, ``/novo/``, leva o cliente ao portal novo, como o antigo
+# leva ao antigo — Fase 6a, ``tests/test_telas_conta.py``; a API dele,
+# ``/api/v1/inicio``, continua fechada.)
+@pytest.mark.parametrize('url', ['/novo/chamados/', '/novo/painel', '/novo/cobrancas/',
                                  '/novo/relatorios/', '/novo/app', '/api/v1/chamados/',
                                  '/api/v1/cobrancas/', '/api/v1/painel', '/api/v1/campo/inicio',
-                                 '/api/v1/relatorios/', '/api/v1/qualquer'])
+                                 '/api/v1/relatorios/', '/api/v1/inicio',
+                                 '/novo/admin/usuarios', '/api/v1/admin/usuarios',
+                                 '/api/v1/qualquer'])
 def test_o_cliente_continua_fora_do_resto_das_telas_novas(app_module, mais, url):
     c = _cliente(app_module)
     r = c.get(url)

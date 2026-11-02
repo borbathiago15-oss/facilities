@@ -395,8 +395,16 @@ def _sessao(app):
         from facilities.telas.portal import ENDPOINTS_DO_CLIENTE
         if ep in ENDPOINTS_DO_CLIENTE:
             return None
+        # Fase 6a: a segurança, a troca de senha e os avisos nas telas novas
+        # (os mesmos que ela abre nas antigas); o Início novo leva ao portal
+        # novo, como o antigo leva ao antigo.
+        from facilities.telas.conta import ENDPOINTS_DO_CLIENTE as DA_CONTA
+        if ep in DA_CONTA:
+            return None
         if ep == 'core.inicio':
             return redirect(url_for('portal.inicio'))
+        if ep == 'telas.inicio':
+            return redirect('/novo' + url_for('portal.inicio'))
         if quer_json:
             return jsonify({'error': MSG_SO_DA_EQUIPE}), 403
         raise Forbidden(MSG_SO_DA_EQUIPE)
