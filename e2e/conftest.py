@@ -88,6 +88,7 @@ def servidor():
 
     from servidor import indice_email
     yield {'base': base, 'sql': consultar, 'qr': QR_DO_TESTE, 'indice': indice_email,
+           'banco': banco,
            'desligar': desligar, 'religar': religar}
     atual['proc'].terminate()
     atual['proc'].wait(timeout=10)
@@ -200,6 +201,19 @@ def portal(request):
     React, nos mesmos endereços abaixo de ``/novo`` (Fase 5). As fotos, os
     POP/FIT e o PDF continuam no servidor. O QR público continua no servidor
     nas duas (não tem tela nova)."""
+    if request.param and not os.path.exists(MANIFESTO):
+        pytest.skip('telas novas não compiladas: rode "npm run build" em frontend/')
+    return request.param
+
+
+@pytest.fixture(params=['', '/novo'], ids=['tela-antiga', 'tela-nova'])
+def conta(request):
+    """O prefixo do Início, dos avisos, da segurança da conta, da troca de
+    senha e das pessoas e locais do administrador (``/``, ``/avisos``,
+    ``/conta/seguranca``, ``/trocar-senha``, ``/admin/usuarios``,
+    ``/admin/contratos``): as telas antigas ou as novas, em React, nos mesmos
+    endereços abaixo de ``/novo`` (Fase 6a). O login, a segunda etapa do
+    login e o aceite do convite continuam no servidor nas duas."""
     if request.param and not os.path.exists(MANIFESTO):
         pytest.skip('telas novas não compiladas: rode "npm run build" em frontend/')
     return request.param
