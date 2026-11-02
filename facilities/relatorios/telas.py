@@ -114,51 +114,67 @@ def arquivo(local, primeiro, formato, so_liberado=False):
 
 # ── Gestão ────────────────────────────────────────────────────────────────
 
+# As telas antiga e nova (React, Fase 4c: ``/novo/relatorios/...`` e
+# ``/api/v1/relatorios/...``) saem das MESMAS funções: ``contexto_*`` monta os
+# dados da página; ``acao_agir`` faz o envio (a regra, o commit e o recado) e
+# devolve o endereço de volta. As checagens de acesso moram nelas.
+
 @bp.get('/')
 @login_required
 def inicio():
+    return render_template('relatorios/inicio.html', **contexto_inicio(request.args))
+
+
+def contexto_inicio(args):
     _so_quem_le()
-    primeiro = rel.mes_de(request.args.get('mes'))
+    primeiro = rel.mes_de(args.get('mes'))
     locais = clientes_visiveis()
     registros = {r.client_id: r for r in rel.RelatorioCliente.query.filter(
         rel.RelatorioCliente.client_id.in_([c.id for c in locais] or [-1]),
         rel.RelatorioCliente.mes == primeiro)}
-    return render_template('relatorios/inicio.html', locais=locais, primeiro=primeiro,
-                           registros=registros, nome_do_mes=rel.nome_do_mes(primeiro),
-                           anterior=rel.mes_anterior(primeiro).strftime('%Y-%m'),
-                           seguinte=(rel.fim_do_mes(primeiro) + timedelta(days=1))
-                           .strftime('%Y-%m'))
+    return dict(locais=locais, primeiro=primeiro, registros=registros,
+                nome_do_mes=rel.nome_do_mes(primeiro),
+                anterior=rel.mes_anterior(primeiro).strftime('%Y-%m'),
+                seguinte=(rel.fim_do_mes(primeiro) + timedelta(days=1)).strftime('%Y-%m'))
 
 
 @bp.get('/cliente/<int:cid>/<mes>')
 @login_required
 def cliente(cid, mes):
+    return render_template('relatorios/cliente.html', **contexto_cliente(cid, mes))
+
+
+def contexto_cliente(cid, mes):
     _so_quem_le()
     loc = _local(cid)
     primeiro = rel.mes_de(mes)
     d, registro, todas, fotos, automatica = montar(loc, primeiro)
     escolhidas = {f['ref'] for f in fotos}
     mudou = rel.mudancas(registro, d) if registro and registro.liberado_em else []
-    return render_template('relatorios/cliente.html', d=d, registro=registro, todas=todas,
-                           fotos=fotos, automatica=automatica, escolhidas=escolhidas,
-                           url_da_foto=url_da_foto, portal=False, mes=primeiro.strftime('%Y-%m'),
-                           pode_gerir=current_user.e_gestao(), fotos_max=rel.FOTOS_MAX,
-                           mes_fechado=rel.fim_do_mes(primeiro) < tempo.hoje(), mudou=mudou)
+    return dict(d=d, registro=registro, todas=todas, fotos=fotos, automatica=automatica,
+                escolhidas=escolhidas, url_da_foto=url_da_foto, portal=False,
+                mes=primeiro.strftime('%Y-%m'), pode_gerir=current_user.e_gestao(),
+                fotos_max=rel.FOTOS_MAX, mes_fechado=rel.fim_do_mes(primeiro) < tempo.hoje(),
+                mudou=mudou)
 
 
 @bp.post('/cliente/<int:cid>/<mes>/<acao>')
 @login_required
 def agir(cid, mes, acao):
+    return redirect(acao_agir(cid, mes, acao, request.form))
+
+
+def acao_agir(cid, mes, acao, dados):
     _so_quem_le()
     loc = _local(cid)
     primeiro = rel.mes_de(mes)
     destino = url_for('relatorios.cliente', cid=loc.id, mes=primeiro.strftime('%Y-%m'))
     passos = {
-        'fotos': (lambda: rel.escolher_fotos(loc.id, primeiro, request.form.getlist('foto'),
+        'fotos': (lambda: rel.escolher_fotos(loc.id, primeiro, dados.getlist('foto'),
                                              current_user), 'Fotos do relatório salvas.'),
         'amostra': (lambda: rel.escolher_fotos(loc.id, primeiro, [], current_user),
                     'Voltou para a amostra automática de fotos.'),
-        'recado': (lambda: rel.salvar_recado(loc.id, primeiro, request.form.get('recado'),
+        'recado': (lambda: rel.salvar_recado(loc.id, primeiro, dados.get('recado'),
                                              current_user), 'Recado salvo.'),
         'liberar': (lambda: rel.liberar(loc.id, primeiro, current_user),
                     'Relatório liberado: o cliente já vê no portal, nesta versão.'),
@@ -174,9 +190,9 @@ def agir(cid, mes, acao):
     except RegraDoRelatorio as erro:
         db.session.rollback()
         flash(erro.mensagem, 'danger')
-        return redirect(destino)
+        return destino
     flash(ok, 'success')
-    return redirect(destino)
+    return destino
 
 
 @bp.get('/cliente/<int:cid>/<mes>/arquivo.<formato>')

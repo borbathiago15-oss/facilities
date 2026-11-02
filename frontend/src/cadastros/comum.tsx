@@ -148,3 +148,10 @@ export function useFormulario() {
 export function tresDigitos(n: number): string {
   return String(n).padStart(3, '0');
 }
+
+/** A busca de um formulário GET (o ``?de=&ate=`` do custo e do painel). */
+export function buscaDoFormulario(form: HTMLFormElement): string {
+  const q = new URLSearchParams();
+  new FormData(form).forEach((v, k) => q.append(k, typeof v === 'string' ? v : ''));
+  return q.toString();
+}

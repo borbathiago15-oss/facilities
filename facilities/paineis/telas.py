@@ -17,13 +17,20 @@ def ve_painel(user):
     return user._effective_role() in PERFIS_DO_PAINEL
 
 
+# As telas antiga e nova (React, Fase 4c: ``/novo/painel`` e ``/api/v1/painel``)
+# saem da MESMA função: ``contexto_painel`` monta os dados (e confere a porta).
+
 @bp.get('/painel')
 @login_required
 def painel():
+    return render_template('paineis/painel.html', **contexto_painel(request.args))
+
+
+def contexto_painel(args):
     from facilities import demandas
     if not ve_painel(current_user):
         raise Forbidden('O painel é da supervisão, da gestão e da diretoria.')
-    de, ate = servico.ler_periodo(request.args, maximo_dias=366)
+    de, ate = servico.ler_periodo(args, maximo_dias=366)
     locais = clientes_visiveis()
     linhas = servico.notas(locais, de, ate)
     atrasadas = {}
@@ -37,9 +44,8 @@ def painel():
     elogios = media_dos_elogios([c.id for c in locais], servico._utc(de),
                                 servico._utc(ate + timedelta(days=1)))
     agrupar = current_user._effective_role() != 'supervisor'
-    return render_template('paineis/painel.html', de=de, ate=ate, linhas=linhas,
-                           grupos=servico.por_cliente(linhas) if agrupar else None,
-                           resumo=servico.resumo(linhas), atrasadas=atrasadas,
-                           elogios=elogios,
-                           faixas=servico.FAIXAS, indicadores=servico.INDICADORES,
-                           faixa_critica=servico.FAIXA_CRITICA, faixa_boa=servico.FAIXA_BOA)
+    return dict(de=de, ate=ate, linhas=linhas,
+                grupos=servico.por_cliente(linhas) if agrupar else None,
+                resumo=servico.resumo(linhas), atrasadas=atrasadas, elogios=elogios,
+                faixas=servico.FAIXAS, indicadores=servico.INDICADORES,
+                faixa_critica=servico.FAIXA_CRITICA, faixa_boa=servico.FAIXA_BOA)

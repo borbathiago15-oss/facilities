@@ -17,6 +17,9 @@ const rotas = () => import('./rotas/paginas');
 const chamados = () => import('./chamados/paginas');
 const equipes = () => import('./equipes/paginas');
 const materiais = () => import('./materiais/paginas');
+const relatorios = () => import('./relatorios/paginas');
+const paineis = () => import('./paineis/paginas');
+const integracao = () => import('./integracao/paginas');
 const admin = () => import('./paginas/admin/PaginaArmazenamento');
 
 function pedaco<M extends Record<string, ComponentType<any>>, K extends keyof M>(carregar: () => Promise<M>, nome: K) {
@@ -71,6 +74,10 @@ const MateriaisEstoque = pedaco(materiais, 'PaginaEstoque');
 const MateriaisMes = pedaco(materiais, 'PaginaConsumoDoMes');
 const MateriaisCusto = pedaco(materiais, 'PaginaCusto');
 const MateriaisPedidos = pedaco(materiais, 'PaginaPedidos');
+const RelatoriosInicio = pedaco(relatorios, 'PaginaInicio');
+const RelatoriosCliente = pedaco(relatorios, 'PaginaCliente');
+const PainelDosLocais = pedaco(paineis, 'PaginaPainel');
+const IntegracaoChaves = pedaco(integracao, 'PaginaIntegracao');
 const PaginaArmazenamento = pedaco(admin, 'PaginaArmazenamento');
 
 const CARREGANDO = <p className="p-4 text-muted" role="status">Carregando…</p>;
@@ -172,6 +179,10 @@ export function App() {
               <Route path="/materiais/pedidos" element={<MateriaisPedidos />} />
               <Route path="/materiais/locais/:id" element={<MateriaisEstoque />} />
               <Route path="/materiais/locais/:id/mes" element={<MateriaisMes />} />
+              <Route path="/relatorios" element={<RelatoriosInicio />} />
+              <Route path="/relatorios/cliente/:id/:mes" element={<RelatoriosCliente />} />
+              <Route path="/painel" element={<PainelDosLocais />} />
+              <Route path="/admin/integracao" element={<IntegracaoChaves />} />
               <Route path="*" element={<NaoEncontrada inicio={eu.data.links.inicio} />} />
             </Routes>
           </Carregar>

@@ -305,7 +305,8 @@ def _valor_do_parametro(nome, ids, entidade=None, endpoint=''):
                       'eid': ids['escala_trabalho'], 'prid': ids['falta']}
         if nome in por_equipe:
             return por_equipe[nome]
-    if endpoint.startswith('integracao.') and nome == 'kid':
+    if endpoint.startswith(('integracao.', 'api_v1.api_integracao_')) and nome == 'kid':
+        # Também na tela nova (Fase 4c: /api/v1/admin/integracao/<id>/revogar).
         return ids['chave']
     if endpoint.startswith(('materiais.', 'telas.materiais_', 'api_v1.api_materiais_')):
         # Também nas telas novas (Fase 4b: /novo/materiais/... e /api/v1/materiais/...).
@@ -345,7 +346,8 @@ def _valor_do_parametro(nome, ids, entidade=None, endpoint=''):
                       'iid': ids['item'], 'pid': ids['ponto']}
         if nome in por_centro:
             return por_centro[nome]
-    if endpoint.startswith('relatorios.'):
+    if endpoint.startswith(('relatorios.', 'telas.relatorios_', 'api_v1.api_relatorios_')):
+        # Também nas telas novas (Fase 4c: /novo/relatorios/... e /api/v1/relatorios/...).
         por_relatorio = {'cid': ids['local'], 'mes': ids['mes_relatorio'], 'acao': 'recolher',
                          'formato': 'pdf'}
         if nome in por_relatorio:
@@ -504,6 +506,9 @@ def test_a_marca_aparece_para_quem_e_de_a(app_module, local_a):
     assert MARCA in c.get(f'/api/v1/visitas/locais/{a}').get_data(as_text=True)
     assert MARCA in c.get(f'/api/v1/materiais/locais/{a}').get_data(as_text=True)
     assert MARCA in c.get('/api/v1/materiais/pedidos').get_data(as_text=True)
+    # Fase 4c: o relatório do cliente de A.
+    mes = local_a['mes_relatorio']
+    assert MARCA in c.get(f'/api/v1/relatorios/cliente/{a}/{mes}').get_data(as_text=True)
 
 
 def test_a_marca_aparece_para_o_cliente_de_a(app_module, local_a):
