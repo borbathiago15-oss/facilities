@@ -186,8 +186,20 @@ def relatorios(request):
     """O prefixo dos relatórios do cliente, do painel e das chaves da
     integração: as telas antigas (``/relatorios/...``, ``/painel``,
     ``/admin/integracao/``) ou as novas, em React, nos mesmos endereços
-    abaixo de ``/novo`` (Fase 4c). O PDF e o Excel continuam no servidor e o
-    portal do cliente continua o antigo."""
+    abaixo de ``/novo`` (Fase 4c). O PDF e o Excel continuam no servidor; o
+    portal do cliente tem a fixture ``portal`` (Fase 5)."""
+    if request.param and not os.path.exists(MANIFESTO):
+        pytest.skip('telas novas não compiladas: rode "npm run build" em frontend/')
+    return request.param
+
+
+@pytest.fixture(params=['', '/novo'], ids=['tela-antiga', 'tela-nova'])
+def portal(request):
+    """O prefixo do portal do cliente (``/cliente/...``) e das cobranças
+    vistas pela equipe (``/cobrancas/...``): as telas antigas ou as novas, em
+    React, nos mesmos endereços abaixo de ``/novo`` (Fase 5). As fotos, os
+    POP/FIT e o PDF continuam no servidor. O QR público continua no servidor
+    nas duas (não tem tela nova)."""
     if request.param and not os.path.exists(MANIFESTO):
         pytest.skip('telas novas não compiladas: rode "npm run build" em frontend/')
     return request.param
