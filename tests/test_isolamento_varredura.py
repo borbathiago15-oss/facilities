@@ -352,7 +352,10 @@ def _valor_do_parametro(nome, ids, entidade=None, endpoint=''):
                          'formato': 'pdf'}
         if nome in por_relatorio:
             return por_relatorio[nome]
-    if endpoint.startswith(('portal.', 'cobrancas.')):
+    if endpoint.startswith(('portal.', 'cobrancas.', 'telas.portal_', 'telas.cobrancas_',
+                            'api_v1.api_portal_', 'api_v1.api_cobrancas_')):
+        # Também nas telas novas (Fase 5: /novo/cliente/..., /novo/cobrancas/...
+        # e /api/v1/cliente/..., /api/v1/cobrancas/...).
         por_portal = {'cid': ids['local'], 'chamado_id': ids['chamado'], 'fid': ids['foto'],
                       'cobid': ids['cobranca'], 'acao': 'confirmar',
                       'vfid': ids['foto_visita'], 'mes': ids['mes_relatorio'],
@@ -509,6 +512,8 @@ def test_a_marca_aparece_para_quem_e_de_a(app_module, local_a):
     # Fase 4c: o relatório do cliente de A.
     mes = local_a['mes_relatorio']
     assert MARCA in c.get(f'/api/v1/relatorios/cliente/{a}/{mes}').get_data(as_text=True)
+    # Fase 5: a cobrança do cliente de A na tela nova da equipe.
+    assert MARCA in c.get(f"/api/v1/cobrancas/{local_a['cobranca']}").get_data(as_text=True)
 
 
 def test_a_marca_aparece_para_o_cliente_de_a(app_module, local_a):
@@ -517,6 +522,10 @@ def test_a_marca_aparece_para_o_cliente_de_a(app_module, local_a):
     c = fabrica.entrar_com_codigo(app_module, 'cliente.a@gl.com')
     assert MARCA in c.get(f"/cliente/cobrancas/{local_a['cobranca']}").get_data(as_text=True)
     assert MARCA in c.get(f"/cliente/chamados/{local_a['chamado']}").get_data(as_text=True)
+    # Fase 5: o mesmo nas telas novas do portal.
+    assert MARCA in c.get(f"/api/v1/cliente/cobrancas/{local_a['cobranca']}").get_data(as_text=True)
+    assert MARCA in c.get(f"/api/v1/cliente/chamados/{local_a['chamado']}").get_data(as_text=True)
+    assert MARCA in c.get(f"/api/v1/cliente/locais/{local_a['local']}").get_data(as_text=True)
 
 
 def test_relatorio_liberado_de_a_aparece_para_o_cliente_de_a(app_module, local_a):
@@ -524,5 +533,6 @@ def test_relatorio_liberado_de_a_aparece_para_o_cliente_de_a(app_module, local_a
     c = fabrica.entrar_com_codigo(app_module, 'cliente.a@gl.com')
     url = f"/cliente/relatorios/{local_a['local']}/{local_a['mes_relatorio']}"
     assert MARCA in c.get(url).get_data(as_text=True)
+    assert MARCA in c.get('/api/v1' + url).get_data(as_text=True)
     assert c.get(url + '/arquivo.pdf').mimetype == 'application/pdf'
 
