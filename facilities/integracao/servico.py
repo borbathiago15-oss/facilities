@@ -55,8 +55,14 @@ def criar_chave(nome, client_ids, todos, autor):
 
 
 def revogar(chave, agora=None):
+    """Corta a chave. Já revogada, não muda nada: a data da revogação é
+    registro de auditoria e não pode ser sobrescrita (segunda aba aberta,
+    envio repetido). Devolve True se revogou agora."""
+    if not chave.is_active and chave.revogada_em is not None:
+        return False
     chave.is_active = False
     chave.revogada_em = agora or datetime.utcnow()
+    return True
 
 
 def chave_do_cabecalho(cabecalho):

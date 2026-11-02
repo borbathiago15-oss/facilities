@@ -2,6 +2,7 @@
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
+from facilities import tempo
 from facilities.extensions import db
 from facilities.core.acesso import admin_required
 from facilities.core.models import Client
@@ -74,7 +75,10 @@ def revogar(kid):
 
 def acao_revogar(kid):
     ch = db.get_or_404(IntegracaoChave, kid)
-    servico.revogar(ch)
+    if not servico.revogar(ch):
+        flash(f'A chave "{ch.nome}" já estava revogada desde '
+              f'{tempo.fmt(ch.revogada_em)}. Nada mudou.', 'info')
+        return url_for('integracao.chaves')
     db.session.commit()
     flash(f'Chave "{ch.nome}" revogada: deixa de funcionar agora.', 'success')
     return url_for('integracao.chaves')

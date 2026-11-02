@@ -520,6 +520,20 @@ def test_criar_e_revogar_como_na_tela_antiga(app_module, cena, auth_client):  # 
     assert r.status_code == 200 and j2['destino'] == '/novo' + d1 == '/novo/admin/integracao/'
     assert j2['recados'] == [{'tipo': 'success', 'texto': 'Chave "Nova" revogada: deixa de funcionar agora.'}]
     assert _get(app_module, 'locais', j['chave']['texto']).status_code == 401
+    # Revogar de novo (segunda aba, envio repetido): a data da revogação é
+    # auditoria e não muda; as duas telas dizem que já estava revogada.
+    from facilities import tempo
+    with app_module.app.app_context():
+        datas = {k: IntegracaoChave.query.get(k).revogada_em for k in (antiga_id, kid)}
+    d2, rec = _antiga(c, f'/admin/integracao/{antiga_id}/revogar')
+    r, j3 = _nova(c, f'/api/v1/admin/integracao/{kid}/revogar')
+    assert d2 == d1 and r.status_code == 200 and j3['destino'] == '/novo' + d1
+    assert rec == [{'tipo': 'info', 'texto': f'A chave "Antiga" já estava revogada desde '
+                                            f'{tempo.fmt(datas[antiga_id])}. Nada mudou.'}]
+    assert j3['recados'] == [{'tipo': 'info', 'texto': f'A chave "Nova" já estava revogada desde '
+                                                     f'{tempo.fmt(datas[kid])}. Nada mudou.'}]
+    with app_module.app.app_context():
+        assert {k: IntegracaoChave.query.get(k).revogada_em for k in (antiga_id, kid)} == datas
     r = c.post('/api/v1/admin/integracao/999999/revogar')
     assert r.status_code == 404 and r.is_json
 
