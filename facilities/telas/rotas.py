@@ -117,8 +117,9 @@ def rotas_execucao(eid):
 # ── Início, local e biblioteca: os dados ──────────────────────────────────
 
 def _links_do_local(cid):
-    """As telas de outros módulos (ainda antigas) e a estrutura (já nova)."""
-    return {'preventiva': url_for('preventiva.local', cid=cid),
+    """As telas de outros módulos (a equipe e as visitas, ainda antigas) e as
+    já novas (a estrutura; a preventiva desde a Fase 4a)."""
+    return {'preventiva': nova(url_for('preventiva.local', cid=cid)),
             'equipe': url_for('equipes.local', cid=cid),
             'visitas': url_for('visitas.local', cid=cid),
             'estrutura': nova(url_for('cadastros.local', cid=cid))}
@@ -403,7 +404,7 @@ def api_rotas_dia(cid):
             'execucao': execucao(t.execucoes[0]) if t.execucoes else None,
             'nao_realizada': ({'motivo': c['motivos'].get(t.motivo, t.motivo),
                                'texto': t.motivo_texto or '',
-                               'chamado': (url_for('chamados.ver', chamado_id=t.chamado_id)
+                               'chamado': (nova(url_for('chamados.ver', chamado_id=t.chamado_id))
                                            if t.chamado_id else None)}
                               if t.status == 'nao_realizada' else None),
             'pessoa': t.pessoa.name if t.pessoa else None,
@@ -479,7 +480,7 @@ def api_rotas_execucao(eid):
                    'rotulo': {'antes': 'Antes', 'depois': 'Depois'}.get(f.momento, f.item_codigo)}
                   for f in ex.fotos],
         'nao_conformidades': [{'id': nc.id, 'item_texto': nc.item_texto, 'resposta': nc.resposta,
-                               'chamado': (url_for('chamados.ver', chamado_id=nc.chamado_id)
+                               'chamado': (nova(url_for('chamados.ver', chamado_id=nc.chamado_id))
                                            if nc.chamado_id else None)}
                               for nc in ex.nao_conformidades],
         'correcoes': [{'quando': _hora(x.created_at), 'autor': x.autor.name, 'motivo': x.motivo}

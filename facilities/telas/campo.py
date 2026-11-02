@@ -35,6 +35,12 @@ def _passagem(caminho, **params):
     return nova(caminho, **params)
 
 
+def _chamados(url):
+    """Os chamados nas telas novas (Fase 4a)."""
+    from facilities.telas.cadastros import nova
+    return nova(url)
+
+
 def _links():
     u = current_user
     return {
@@ -42,7 +48,7 @@ def _links():
         'site': url_for('core.inicio'),
         'instalar': url_for('campo.instalar'),
         'passagem': _passagem('turno') if u.can_access('diario_operacional') else None,
-        'chamados': url_for('chamados.index') if u.can_view('chamados') else None,
+        'chamados': _chamados(url_for('chamados.index')) if u.can_view('chamados') else None,
     }
 
 
@@ -106,7 +112,7 @@ def campo_inicio():
         } for p in c['pendencias']],
         'chamados': ([{
             'id': ch.id, 'titulo': ch.titulo, 'prazo': _hora(ch.prazo, '%d/%m %H:%M'),
-            'url': url_for('chamados.ver', chamado_id=ch.id),
+            'url': _chamados(url_for('chamados.ver', chamado_id=ch.id)),
         } for ch in c['chamados']] if ve_chamados else None),
         'passagem': ([{'nome': loc.name,
                        'url': _passagem('turno', client_id=loc.id)}

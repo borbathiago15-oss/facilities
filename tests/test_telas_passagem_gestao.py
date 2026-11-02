@@ -85,7 +85,9 @@ def test_painel_traz_os_dados_da_tela_antiga(app_module, gestor):
     assert o['descricao'] == f'Pallet {SEGREDO}' and o['gravidade'] == 'critica'
     assert o['quando'] == {'dia': tempo.hoje().strftime('%d/%m'), 'turno': '1º Turno'}
     assert o['chamado'] and f"Ver {o['chamado']['numero']}" in antigo
-    assert o['chamado']['url'] in antigo
+    # O chamado abre na tela nova (Fase 4a): o mesmo endereço abaixo de /novo.
+    assert o['chamado']['url'].startswith('/novo/chamados/')
+    assert o['chamado']['url'].removeprefix('/novo') in antigo
     # As críticas: as mesmas pendências, na mesma ordem.
     titulos = [x['titulo'] for x in d['dados']['criticas']]
     assert sorted(titulos) == sorted([f'Devolução {SEGREDO}', f'Gestão {SEGREDO}'])

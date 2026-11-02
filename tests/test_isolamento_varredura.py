@@ -295,7 +295,9 @@ def _valor_do_parametro(nome, ids, entidade=None, endpoint=''):
         return 'qualquer/coisa'
     if endpoint.startswith('publico.') and nome == 'oid':
         return ids['ocorrencia_publica']
-    if endpoint.startswith('preventiva.') and nome == 'pid':
+    if endpoint.startswith(('preventiva.', 'telas.preventiva_', 'api_v1.api_preventiva_')) \
+            and nome == 'pid':
+        # Também nas telas novas (Fase 4a: /novo/preventiva/... e /api/v1/preventiva/...).
         return ids['plano']
     if endpoint.startswith('equipes.'):
         por_equipe = {'cid': ids['local'], 'fid': ids['funcionario'], 'pid': ids['posto'],
@@ -488,6 +490,11 @@ def test_a_marca_aparece_para_quem_e_de_a(app_module, local_a):
     assert MARCA in c.get(f'/api/v1/cadastros/locais/{a}').get_data(as_text=True)
     assert MARCA in c.get(f'/api/v1/cadastros/novo-contrato/{a}/estrutura').get_data(as_text=True)
     assert MARCA in c.get(f"/api/v1/cadastros/centros/{a}/rotas/{local_a['rota']}").get_data(as_text=True)
+    # Fase 4a: o chamado, a lista, as demandas e a preventiva nas telas novas.
+    assert MARCA in c.get(f"/api/v1/chamados/{local_a['chamado']}").get_data(as_text=True)
+    assert MARCA in c.get(f'/api/v1/chamados/?client_id={a}').get_data(as_text=True)
+    assert MARCA in c.get(f'/api/v1/demandas/?local={a}').get_data(as_text=True)
+    assert MARCA in c.get(f'/api/v1/preventiva/locais/{a}').get_data(as_text=True)
 
 
 def test_a_marca_aparece_para_o_cliente_de_a(app_module, local_a):
