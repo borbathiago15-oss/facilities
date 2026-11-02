@@ -38,6 +38,9 @@ def _outra_pessoa(b, perfil):
 
 
 def _sem_rolagem(pg, onde):
+    # Mede só com a página inteira carregada: com a máquina ocupada, o CSS
+    # ainda chegando deixa a tabela sem estilo, mais larga que a tela.
+    pg.wait_for_load_state('load')
     largura = pg.evaluate('document.documentElement.scrollWidth')
     if largura > pg.viewport_size['width']:
         # Diz QUEM passa da tela (a falha foi intermitente: o culpado depende
