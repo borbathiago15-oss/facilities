@@ -15,7 +15,7 @@ export default defineConfig({
     rollupOptions: {
       input: 'src/main.tsx',
       // Um pedaço por grupo de telas (App.tsx: campo, passagem, cadastros,
-      // rotas, admin), com o nome do grupo no arquivo.
+      // rotas, chamados, admin), com o nome do grupo no arquivo.
       output: {
         chunkFileNames: (pedaco) => {
           const m = /src\/(?:paginas\/)?([a-z]+)\/[^/]+$/.exec(pedaco.facadeModuleId || '');

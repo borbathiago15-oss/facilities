@@ -14,6 +14,7 @@ const campo = () => import('./campo/paginas');
 const passagem = () => import('./passagem/paginas');
 const cadastros = () => import('./cadastros/paginas');
 const rotas = () => import('./rotas/paginas');
+const chamados = () => import('./chamados/paginas');
 const admin = () => import('./paginas/admin/PaginaArmazenamento');
 
 function pedaco<M extends Record<string, ComponentType<any>>, K extends keyof M>(carregar: () => Promise<M>, nome: K) {
@@ -55,6 +56,11 @@ const RotasRota = pedaco(rotas, 'PaginaRota');
 const RotasFeriados = pedaco(rotas, 'PaginaFeriados');
 const RotasDia = pedaco(rotas, 'PaginaDia');
 const RotasExecucao = pedaco(rotas, 'PaginaExecucao');
+const ChamadosLista = pedaco(chamados, 'PaginaLista');
+const ChamadosNovo = pedaco(chamados, 'PaginaNovo');
+const ChamadosVer = pedaco(chamados, 'PaginaChamado');
+const DemandasPainel = pedaco(chamados, 'PaginaDemandas');
+const PreventivaLocal = pedaco(chamados, 'PaginaPreventiva');
 const PaginaArmazenamento = pedaco(admin, 'PaginaArmazenamento');
 
 const CARREGANDO = <p className="p-4 text-muted" role="status">Carregando…</p>;
@@ -143,6 +149,11 @@ export function App() {
               <Route path="/rotas/modelos/:id" element={<RotasModelo />} />
               <Route path="/rotas/execucoes/:id" element={<RotasExecucao />} />
               <Route path="/rotas/:id" element={<RotasRota />} />
+              <Route path="/chamados" element={<ChamadosLista />} />
+              <Route path="/chamados/novo" element={<ChamadosNovo />} />
+              <Route path="/chamados/:id" element={<ChamadosVer />} />
+              <Route path="/demandas" element={<DemandasPainel />} />
+              <Route path="/preventiva/locais/:id" element={<PreventivaLocal />} />
               <Route path="*" element={<NaoEncontrada inicio={eu.data.links.inicio} />} />
             </Routes>
           </Carregar>
