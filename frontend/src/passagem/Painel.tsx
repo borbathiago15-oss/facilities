@@ -342,7 +342,9 @@ export function Painel({ dados }: { dados: DadosDoPainel }) {
           falhou(res.x.error || 'Não foi possível abrir o chamado. Recarregue a página e tente de novo.');
           return;
         }
-        window.location.assign(res.x.url || '/chamados/');
+        // O chamado abre na tela nova (Fase 4a); a antiga continua indo à antiga.
+        const url: string = res.x.url || '/chamados/';
+        window.location.assign(url.startsWith('/chamados/') ? '/novo' + url : url);
       }, () => falhou('Sem conexão: o chamado não foi aberto. Tente de novo quando o sinal voltar.'));
   };
 

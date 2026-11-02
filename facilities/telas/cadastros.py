@@ -40,13 +40,15 @@ from facilities.extensions import limiter
 from facilities.telas import _casca, api, bp
 
 # Os endereços já migrados: dentro das telas novas, levam às novas (a
-# rotina dos locais entrou na Fase 3b).
-MIGRADOS = ('/cadastros/', '/clientes', '/centros/', '/novo-contrato', '/convites', '/rotas/')
+# rotina dos locais entrou na Fase 3b; os chamados, as demandas e a
+# preventiva, na 4a).
+MIGRADOS = ('/cadastros/', '/clientes', '/centros/', '/novo-contrato', '/convites', '/rotas/',
+            '/chamados/', '/demandas/', '/preventiva/locais/')
 FORA = ('/etiquetas.pdf', '/logo.png')
 # Da rotina dos locais, os arquivos (POP/FIT, fotos, referências) e o
-# agendador continuam no servidor.
+# agendador continuam no servidor; dos chamados, as fotos e os PDFs.
 FORA_DAS_ROTAS = ('/rotas/documentos/', '/rotas/fotos/', '/rotas/referencias/',
-                  '/rotas/ocorrencias/', '/rotas/agendador')
+                  '/rotas/ocorrencias/', '/rotas/agendador', '/chamados/anexos/')
 
 
 def nova(url):

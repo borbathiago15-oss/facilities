@@ -69,19 +69,29 @@ def _ordem_de_urgencia(agora):
     return (atrasado, prioridade, Chamado.prazo.is_(None), Chamado.prazo, Chamado.id)
 
 
+# As telas antiga e nova (React, Fase 4a: ``/novo/chamados/...`` e
+# ``/api/v1/chamados/...``) saem das MESMAS funções: ``contexto_*`` monta os
+# dados da página; ``acao_*`` faz o envio (a regra, o commit e o recado) e
+# devolve o endereço de volta. As checagens de acesso moram nelas (os
+# decoradores ``module_required`` ficam nas duas rotas).
+
 @bp.get('/')
 @login_required
 @module_required(MODULO)
 def index():
+    return render_template('chamados/index.html', **contexto_index(request.args))
+
+
+def contexto_index(args):
     contratos = clientes_visiveis()
-    cid = request.args.get('client_id', type=int)
+    cid = args.get('client_id', type=int)
     if cid and cid not in {c.id for c in contratos}:
         abort(403)
-    visao = request.args.get('visao') or 'abertos'
+    visao = args.get('visao') or 'abertos'
     if visao not in VISOES:
         visao = 'abertos'
-    prioridade = request.args.get('prioridade') or ''
-    categoria = request.args.get('categoria') or ''
+    prioridade = args.get('prioridade') or ''
+    categoria = args.get('categoria') or ''
 
     ids = [cid] if cid else allowed_client_ids_or_none()
     agora = datetime.utcnow()
@@ -119,13 +129,12 @@ def index():
         chamados = q.order_by(Chamado.aberto_em.desc(), Chamado.id.desc()).all()
     else:
         chamados = q.order_by(*_ordem_de_urgencia(agora)).all()
-    return render_template('chamados/index.html', chamados=chamados, cortada=cortada,
-                           por_pagina=POR_PAGINA,
-                           contratos=contratos, client_id=cid, visao=visao, visoes=VISOES,
-                           prioridade=prioridade, categoria=categoria,
-                           prioridades=PRIORIDADES, categorias=CATEGORIAS,
-                           numeros=servico.indicadores(ids), agora=agora,
-                           pode_abrir=current_user.can_access(MODULO))
+    return dict(chamados=chamados, cortada=cortada, por_pagina=POR_PAGINA,
+                contratos=contratos, client_id=cid, visao=visao, visoes=VISOES,
+                prioridade=prioridade, categoria=categoria,
+                prioridades=PRIORIDADES, categorias=CATEGORIAS,
+                numeros=servico.indicadores(ids), agora=agora,
+                pode_abrir=current_user.can_access(MODULO))
 
 
 def _areas_por_contrato(contratos):
@@ -143,20 +152,26 @@ def _areas_por_contrato(contratos):
 @login_required
 @module_required(MODULO)
 def novo():
+    return render_template('chamados/novo.html', **contexto_novo(request.args))
+
+
+def contexto_novo(args):
     if not current_user.can_access(MODULO):
         abort(403)
     contratos = clientes_visiveis()
-    return render_template('chamados/novo.html', contratos=contratos,
-                           areas=_areas_por_contrato(contratos),
-                           client_id=request.args.get('client_id', type=int),
-                           prioridades=PRIORIDADES, categorias=CATEGORIAS)
+    return dict(contratos=contratos, areas=_areas_por_contrato(contratos),
+                client_id=args.get('client_id', type=int),
+                prioridades=PRIORIDADES, categorias=CATEGORIAS)
 
 
 @bp.post('/')
 @login_required
 @module_required(MODULO)
 def criar():
-    f = request.form
+    return redirect(acao_criar(request.form, request.files))
+
+
+def acao_criar(f, arquivos):
     try:
         ch, criado = servico.abrir_sem_duplicar(
             current_user, f.get('client_id'), f.get('titulo'),
@@ -167,21 +182,25 @@ def criar():
     except servico.RecusaChamado as ex:
         db.session.rollback()
         flash(ex.mensagem, 'danger')
-        return redirect(url_for('chamados.novo', client_id=f.get('client_id') or None))
+        return url_for('chamados.novo', client_id=f.get('client_id') or None)
     # Formulário enviado duas vezes: as fotos já vieram com o primeiro envio.
-    erro = _guardar_anexos(ch, request.files.getlist('arquivo'), 'antes') if criado else None
+    erro = _guardar_anexos(ch, arquivos.getlist('arquivo'), 'antes') if criado else None
     db.session.commit()
     if erro:
         flash(f'Chamado {ch.numero} aberto, mas {erro}', 'warning')
     else:
         flash(f'Chamado {ch.numero} aberto. Os gestores do contrato foram avisados.', 'success')
-    return redirect(url_for('chamados.ver', chamado_id=ch.id))
+    return url_for('chamados.ver', chamado_id=ch.id)
 
 
 @bp.get('/<int:chamado_id>')
 @login_required
 @module_required(MODULO)
 def ver(chamado_id):
+    return render_template('chamados/ver.html', **contexto_ver(chamado_id))
+
+
+def contexto_ver(chamado_id):
     ch = _chamado_autorizado(chamado_id)
     acoes = servico.acoes_disponiveis(current_user, ch)
     tecnicos = servico.tecnicos_do_contrato(ch.client_id) if 'atribuir' in acoes else []
@@ -189,32 +208,41 @@ def ver(chamado_id):
     from facilities.materiais.models import Material
     pode_consumir = (servico.pode_agir(current_user, ch) and ch.status not in ('fechado', 'cancelado')
                      and current_user._effective_role() in materiais.PERFIS_QUE_CONSOMEM)
-    return render_template('chamados/ver.html', ch=ch, acoes=acoes, tecnicos=tecnicos,
-                           consumos=materiais.consumos_do_chamado(ch.id),
-                           ve_custo=materiais.ve_custo(current_user),
-                           materiais=Material.query.filter_by(is_active=True)
-                           .order_by(Material.nome).all() if pode_consumir else [],
-                           prioridades=PRIORIDADES, status=STATUS, agora=datetime.utcnow(),
-                           pode_anexar=servico.pode_agir(current_user, ch)
-                           and ch.status not in ('fechado', 'cancelado'))
+    return dict(ch=ch, acoes=acoes, tecnicos=tecnicos,
+                consumos=materiais.consumos_do_chamado(ch.id),
+                ve_custo=materiais.ve_custo(current_user),
+                materiais=Material.query.filter_by(is_active=True)
+                .order_by(Material.nome).all() if pode_consumir else [],
+                prioridades=PRIORIDADES, status=STATUS, agora=datetime.utcnow(),
+                pode_anexar=servico.pode_agir(current_user, ch)
+                and ch.status not in ('fechado', 'cancelado'))
 
 
 @bp.post('/<int:chamado_id>/acao')
 @login_required
 @module_required(MODULO)
 def acao(chamado_id):
+    destino = acao_executar(chamado_id, request.form, request.files,
+                            recusa_em_json=request.is_json)
+    return redirect(destino) if isinstance(destino, str) else destino
+
+
+def acao_executar(chamado_id, dados, arquivos, recusa_em_json=False):
+    """A ação do chamado (``dados['acao']``). Devolve o endereço de volta;
+    com ``recusa_em_json`` (o corpo JSON da rota antiga), a recusa volta
+    como a resposta JSON de sempre."""
     ch = _chamado_autorizado(chamado_id, travar=True)
-    nome = request.form.get('acao') or ''
+    nome = dados.get('acao') or ''
     try:
-        feito = servico.executar(current_user, ch, nome, request.form)
+        feito = servico.executar(current_user, ch, nome, dados)
     except servico.RecusaChamado as ex:
         db.session.rollback()
-        if request.is_json:
+        if recusa_em_json:
             return jsonify({'error': ex.mensagem}), ex.status
         flash(ex.mensagem, 'danger')
-        return redirect(url_for('chamados.ver', chamado_id=ch.id))
+        return url_for('chamados.ver', chamado_id=ch.id)
     erro = None
-    arquivos = [a for a in request.files.getlist('arquivo') if a and a.filename]
+    arquivos = [a for a in arquivos.getlist('arquivo') if a and a.filename]
     # Anexo só entra em chamado que continua vivo depois da ação (o
     # "resolver" leva a foto do serviço feito). Fechado ou cancelado não
     # recebe arquivo — a mesma regra da rota /anexos, que um POST montado
@@ -229,7 +257,7 @@ def acao(chamado_id):
     flash(feito.mensagem, feito.categoria)
     if erro:
         flash(erro[:1].upper() + erro[1:], 'warning')
-    return redirect(url_for('chamados.ver', chamado_id=ch.id))
+    return url_for('chamados.ver', chamado_id=ch.id)
 
 
 # ── Anexos ───────────────────────────────────────────────────────────────
@@ -274,20 +302,24 @@ def _guardar_anexos(ch, arquivos, momento):
 @login_required
 @module_required(MODULO)
 def anexar(chamado_id):
+    return redirect(acao_anexar(chamado_id, request.form, request.files))
+
+
+def acao_anexar(chamado_id, dados, arquivos):
     # Travado como as ações: a foto que chega junto com um cancelamento só
     # confere o status depois que o cancelamento gravou.
     ch = _chamado_autorizado(chamado_id, travar=True)
     if not servico.pode_agir(current_user, ch) or ch.status in STATUS_ENCERRADOS:
         abort(403)
-    momento = 'depois' if request.form.get('momento') == 'depois' else 'antes'
-    arquivos = [a for a in request.files.getlist('arquivo') if a and a.filename]
+    momento = 'depois' if dados.get('momento') == 'depois' else 'antes'
+    arquivos = [a for a in arquivos.getlist('arquivo') if a and a.filename]
     if not arquivos:
         flash('Escolha ao menos um arquivo.', 'warning')
-        return redirect(url_for('chamados.ver', chamado_id=ch.id))
+        return url_for('chamados.ver', chamado_id=ch.id)
     erro = _guardar_anexos(ch, arquivos, momento)
     db.session.commit()
     flash(erro or 'Arquivo anexado.', 'warning' if erro else 'success')
-    return redirect(url_for('chamados.ver', chamado_id=ch.id))
+    return url_for('chamados.ver', chamado_id=ch.id)
 
 
 @bp.get('/anexos/<int:anexo_id>')

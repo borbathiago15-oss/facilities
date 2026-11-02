@@ -155,19 +155,28 @@ def movimento(cid):
 @bp.post('/materiais/locais/<int:cid>/consumo')
 @login_required
 def consumo(cid):
+    return redirect(acao_consumo(cid, request.form))
+
+
+def acao_consumo(cid, dados):
+    """O consumo lançado no site (o "Material usado" do chamado). A tela
+    antiga redireciona para o endereço devolvido; a nova do chamado (React,
+    Fase 4a) chama esta mesma função por ``/api/v1/materiais/...``."""
     loc = _local(cid)
-    ch_id = servico._id(request.form, 'chamado_id')
-    destino = (url_for('chamados.ver', chamado_id=ch_id) if request.form.get('voltar') == 'chamado'
+    ch_id = servico._id(dados, 'chamado_id')
+    destino = (url_for('chamados.ver', chamado_id=ch_id) if dados.get('voltar') == 'chamado'
                and ch_id else url_for('materiais.local', cid=loc.id)
                if servico.ve_custo(current_user) else url_for('materiais.app'))
     try:
-        mov = servico.consumir(current_user, loc, request.form)
+        mov = servico.consumir(current_user, loc, dados)
         db.session.commit()
     except RegraDoMaterial as erro:
-        return _erro(erro, destino)
+        db.session.rollback()
+        flash(erro.mensagem, 'danger')
+        return destino
     flash(f'Consumo registrado: {fmt_qtd(abs(mov.quantidade))} {mov.material.unidade} de '
           f'{mov.material.nome}.', 'success')
-    return redirect(destino)
+    return destino
 
 
 @bp.get('/materiais/locais/<int:cid>/mes')

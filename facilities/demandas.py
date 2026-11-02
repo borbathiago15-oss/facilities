@@ -104,11 +104,21 @@ def demandas(client_ids, agora=None, com_visitas=True, com_pedidos=True, acompan
 @bp.get('/')
 @login_required
 def painel():
+    return render_template('demandas/painel.html', **contexto_painel(request.args))
+
+
+def exigir_acesso():
     if not current_user.can_view('chamados'):
         raise Forbidden('Sem acesso às demandas.')
+
+
+def contexto_painel(args):
+    """Os dados do painel — a tela antiga e a nova (React, Fase 4a:
+    ``/novo/demandas/`` e ``/api/v1/demandas/``) saem daqui."""
+    exigir_acesso()
     locais = clientes_visiveis()
     ids = allowed_client_ids_or_none()
-    cid = request.args.get('local', type=int)
+    cid = args.get('local', type=int)
     if cid and cid in {c.id for c in locais}:
         ids = [cid]
     from facilities.visitas.servico import PERFIS_QUE_VISITAM
@@ -118,12 +128,11 @@ def painel():
     itens = demandas(ids, com_visitas=papel in PERFIS_QUE_VISITAM + ('visualizador',),
                      com_pedidos=ve_custo(current_user), acompanha_rotas=_pode_acompanhar())
     contagem = {s: sum(1 for i in itens if i['situacao'] == s) for s in SITUACOES}
-    tipo = request.args.get('tipo') or ''
-    situacao = request.args.get('situacao') or ''
+    tipo = args.get('tipo') or ''
+    situacao = args.get('situacao') or ''
     if tipo in TIPOS:
         itens = [i for i in itens if i['tipo'] == tipo]
     if situacao in SITUACOES:
         itens = [i for i in itens if i['situacao'] == situacao]
-    return render_template('demandas/painel.html', itens=itens, locais=locais, cid=cid,
-                           tipo=tipo, situacao=situacao, tipos=TIPOS, situacoes=SITUACOES,
-                           contagem=contagem)
+    return dict(itens=itens, locais=locais, cid=cid, tipo=tipo, situacao=situacao,
+                tipos=TIPOS, situacoes=SITUACOES, contagem=contagem)

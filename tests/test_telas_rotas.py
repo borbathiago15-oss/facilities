@@ -243,8 +243,11 @@ def test_inicio_local_e_biblioteca_trazem_os_dados_da_tela_antiga(app_module, ce
         int(x) for x in re.findall(r'href="/rotas/locais/(\d+)/dia"', antigo)]
     [la] = [x for x in d['locais'] if x['id'] == a]
     assert la['cliente'] == 'Grupo GL' and 'Shopping Centro <small>Grupo GL</small>' in antigo
-    for k in ('preventiva', 'equipe', 'visitas'):
+    for k in ('equipe', 'visitas'):
         assert f'href="{la["links"][k]}"' in antigo
+    # A preventiva já está nas telas novas (Fase 4a): o mesmo endereço abaixo de /novo.
+    assert la['links']['preventiva'] == f'/novo/preventiva/locais/{a}'
+    assert f'href="{la["links"]["preventiva"].removeprefix("/novo")}"' in antigo
     assert la['links']['estrutura'] == f'/novo/cadastros/locais/{a}'
 
     d = c.get(f'/api/v1/rotas/locais/{a}').get_json()
@@ -353,7 +356,9 @@ def test_rota_feriados_dia_e_execucao_trazem_os_dados_da_tela_antiga(app_module,
     assert d['execucao']['observacao'] == 'Tudo certo' and d['execucao']['lido_em'] in antigo
     [nc] = d['nao_conformidades']
     assert f"NC-{nc['id']}" in antigo
-    assert (f'href="{nc["chamado"]}"' in antigo) if nc['chamado'] else ('Abrir chamado' in antigo)
+    # O chamado da não conformidade abre na tela nova (Fase 4a).
+    assert (f'href="{nc["chamado"].removeprefix("/novo")}"' in antigo and nc['chamado'].startswith('/novo/chamados/')) \
+        if nc['chamado'] else ('Abrir chamado' in antigo)
     [f] = d['fotos']
     assert f['rotulo'] == 'Depois' and f'href="{f["url"]}"' in antigo
     assert d['pode_corrigir'] and [i['codigo'] for i in d['itens']] == re.findall(r'name="r_([^"]+)"', antigo)
@@ -641,11 +646,15 @@ def test_acompanhamento_como_na_tela_antiga(app_module, cena, auth_client):
     assert d['correcoes'][0]['motivo'] == 'Errei a resposta'
     antigo = _texto(c.get(f'/rotas/execucoes/{ex}').get_data(as_text=True))
     assert '(corrigido; original: nao)' in antigo and d['correcoes'][0]['quando'] in antigo
-    # A não conformidade vira chamado: o destino é o chamado (tela antiga).
+    # A não conformidade vira chamado: o destino é o chamado (na tela nova
+    # desde a Fase 4a; a antiga continua indo à antiga).
     r, j = _nova(c, f"/api/v1/rotas/nao-conformidades/{cena['nc']}/chamado")
     with app_module.app.app_context():
         ch = db.session.get(NaoConformidade, cena['nc']).chamado_id
-    assert ch and j['destino'] == f'/chamados/{ch}' and j['recados'] == []
+    assert ch and j['destino'] == f'/novo/chamados/{ch}' and j['recados'] == []
+    d = c.get(f'/api/v1/rotas/execucoes/{ex}').get_json()
+    assert d['nao_conformidades'][0]['chamado'] == f'/novo/chamados/{ch}'
+    assert f'href="/chamados/{ch}"' in c.get(f'/rotas/execucoes/{ex}').get_data(as_text=True)
     # A ocorrência do público: resolvida pelo site (a volta é o dia de hoje,
     # como na antiga).
     r, j = _nova(c, f"/api/v1/rotas/ocorrencias/{cena['ocorrencia']}/resolver", data={'resolucao': 'Feito'})
@@ -697,7 +706,12 @@ def test_dentro_das_telas_novas_os_links_sao_os_novos(app_module, cena, auth_cli
     assert nova('/rotas/documentos/1') == '/rotas/documentos/1'
     assert nova('/rotas/fotos/1') == '/rotas/fotos/1'
     assert nova('/rotas/referencias/1/abc') == '/rotas/referencias/1/abc'
-    assert nova('/chamados/1') == '/chamados/1'
+    # Fase 4a: os chamados, as demandas e a preventiva também; as fotos e os
+    # PDFs dos chamados continuam no servidor.
+    assert nova('/chamados/1') == '/novo/chamados/1'
+    assert nova('/chamados/anexos/1') == '/chamados/anexos/1'
+    assert nova('/preventiva/locais/1') == '/novo/preventiva/locais/1'
+    assert nova('/equipes/locais/1') == '/equipes/locais/1'
     # As telas antigas e o menu não mudam.
     assert 'href="/rotas/locais/' in c.get('/rotas/').get_data(as_text=True)
     menu = [i['url'] for g in c.get('/api/v1/eu').get_json()['menu'] for i in g['itens']]

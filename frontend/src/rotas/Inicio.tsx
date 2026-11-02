@@ -24,7 +24,7 @@ export function Inicio({ dados }: { dados: DadosDoInicio }) {
             <div className="fc-local-acoes">
               <Ir className="fc-local-acao" href={`/novo/rotas/locais/${l.id}/dia`}><i className="bi bi-calendar-check" aria-hidden="true"></i>Hoje</Ir>
               <Ir className="fc-local-acao" href={`/novo/rotas/locais/${l.id}`}><i className="bi bi-signpost-split" aria-hidden="true"></i>Rotas e checklists</Ir>
-              <a className="fc-local-acao" href={l.links.preventiva}><i className="bi bi-calendar2-week" aria-hidden="true"></i>Preventivas</a>
+              <Ir className="fc-local-acao" href={l.links.preventiva}><i className="bi bi-calendar2-week" aria-hidden="true"></i>Preventivas</Ir>
               <a className="fc-local-acao" href={l.links.equipe}><i className="bi bi-people" aria-hidden="true"></i>Equipe</a>
               <a className="fc-local-acao" href={l.links.visitas}><i className="bi bi-clipboard-check" aria-hidden="true"></i>Visitas</a>
             </div>
@@ -47,7 +47,7 @@ export function Local({ dados }: { dados: DadosDoLocal }) {
       <div className="d-flex flex-wrap gap-2 mb-3">
         <Ir className="btn btn-primary btn-sm" href={`/novo/rotas/locais/${loc.id}/dia`}><i className="bi bi-calendar-check"></i> Acompanhar hoje</Ir>
         {dados.ve_estrutura && <Ir className="btn btn-outline-secondary btn-sm" href={dados.links.estrutura}><i className="bi bi-diagram-3"></i> Pontos e QR do local</Ir>}
-        <a className="btn btn-outline-secondary btn-sm" href={dados.links.preventiva}><i className="bi bi-calendar2-week"></i> Preventivas</a>
+        <Ir className="btn btn-outline-secondary btn-sm" href={dados.links.preventiva}><i className="bi bi-calendar2-week"></i> Preventivas</Ir>
         <a className="btn btn-outline-secondary btn-sm" href={dados.links.equipe}><i className="bi bi-people"></i> Equipe</a>
         <a className="btn btn-outline-secondary btn-sm" href={dados.links.visitas}><i className="bi bi-clipboard-check"></i> Visitas de supervisão</a>
         <Ir className="btn btn-outline-secondary btn-sm" href={`/novo/rotas/locais/${loc.id}/feriados`}><i className="bi bi-calendar-x"></i> Feriados</Ir>

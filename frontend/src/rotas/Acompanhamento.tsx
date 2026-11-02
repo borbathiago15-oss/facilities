@@ -114,7 +114,7 @@ export function Dia({ dados }: { dados: DadosDoDia }) {
                     {ex.adiantada && <> <span className="badge text-bg-info">Adiantada</span> <span className="text-muted">{ex.motivo_troca}{ex.motivo_troca_texto && `: ${ex.motivo_troca_texto}`}</span></>}
                   </>
                 ) : t.nao_realizada ? (
-                  <>{t.nao_realizada.motivo}{t.nao_realizada.texto && `: ${t.nao_realizada.texto}`}{t.nao_realizada.chamado && <> · <a href={t.nao_realizada.chamado}>chamado</a></>}</>
+                  <>{t.nao_realizada.motivo}{t.nao_realizada.texto && `: ${t.nao_realizada.texto}`}{t.nao_realizada.chamado && <> · <Ir href={t.nao_realizada.chamado}>chamado</Ir></>}</>
                 ) : (t.pessoa || 'sem escala')}
               </span>
             </div>
@@ -252,7 +252,7 @@ export function Execucao({ dados }: { dados: DadosDaExecucao }) {
           {dados.nao_conformidades.map((nc) => (
             <div className="d-flex flex-wrap gap-2 align-items-center border-top py-2" key={nc.id}>
               <span><span className="badge text-bg-light" title="Use este número no plano de ação do Intelligence">NC-{nc.id}</span> {nc.item_texto}: <strong>{nc.resposta}</strong></span>
-              {nc.chamado ? <a className="ms-auto" href={nc.chamado}>Ver o chamado</a> : (
+              {nc.chamado ? <Ir className="ms-auto" href={nc.chamado}>Ver o chamado</Ir> : (
                 <form method="post" className="ms-auto m-0" onSubmit={submeter(`${API}/nao-conformidades/${nc.id}/chamado`)}>
                   <button className="btn btn-sm btn-outline-danger" type="submit" disabled={ocupado}>Abrir chamado</button>
                 </form>

@@ -254,7 +254,7 @@ def dados_do_painel(c):
                            'turno': d['quando_ocorrencias'].get(o.id, {}).get('turno')},
                 'chamado': ({'id': chamados[o.id].id, 'numero': chamados[o.id].numero,
                              'status_rotulo': chamados[o.id].status_rotulo,
-                             'url': f'/chamados/{chamados[o.id].id}'}
+                             'url': f'/novo/chamados/{chamados[o.id].id}'}
                             if o.id in chamados else None),
             } for o in d['ocorrencias']],
             'criticas': [{
