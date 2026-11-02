@@ -16,7 +16,8 @@ export default defineConfig({
       input: 'src/main.tsx',
       // Um pedaço por grupo de telas (App.tsx: campo, passagem, cadastros,
       // rotas, chamados, equipes, materiais, relatorios, paineis, integracao,
-      // portal, cobrancas, admin), com o nome do grupo no arquivo.
+      // portal, cobrancas, admin, conta, administracao), com o nome do grupo no
+      // arquivo.
       output: {
         chunkFileNames: (pedaco) => {
           const m = /src\/(?:paginas\/)?([a-z]+)\/[^/]+$/.exec(pedaco.facadeModuleId || '');

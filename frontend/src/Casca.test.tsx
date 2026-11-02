@@ -4,7 +4,6 @@ import { MemoryRouter } from 'react-router';
 import { describe, expect, it } from 'vitest';
 import type { Eu } from './api';
 import { Casca } from './Casca';
-import { Inicio } from './paginas/Inicio';
 
 const EU: Eu = {
   id: 1, nome: 'Ana Souza', primeiro_nome: 'Ana', perfil: 'Supervisor', papel: 'supervisor',
@@ -20,7 +19,7 @@ const EU: Eu = {
 
 function montar() {
   return render(
-    <MemoryRouter><Casca eu={EU}><Inicio eu={EU} /></Casca></MemoryRouter>,
+    <MemoryRouter><Casca eu={EU}><h1>Olá, {EU.primeiro_nome}</h1></Casca></MemoryRouter>,
   );
 }
 

@@ -37,6 +37,13 @@ FORA = {
     'publico.abrir_ocorrencia': 'aberto ao público por desenho',
     # O elogio pelo QR (27/10/2026): idem. Testado em test_reclamacao_elogio.py.
     'publico.elogio': 'aberto ao público por desenho',
+    # Fase 6a: trocar a senha e desligar o código pelas telas novas só mexem
+    # na conta de quem chama, e a senha errada conta no bloqueio da conta
+    # (no mesmo contador das antigas, que ficam na varredura): com as quatro,
+    # a pessoa de B seria bloqueada e deslogada no meio da varredura, e o
+    # resto passaria sem sessão. Testadas em test_telas_conta.py.
+    'api_v1.api_trocar_senha': 'conta erro de senha (bloqueio) e derrubaria a sessão',
+    'api_v1.api_desativar_codigo': 'conta erro de senha (bloqueio) e derrubaria a sessão',
 }
 # Rotas fora da varredura só para UM perfil, com o motivo.
 FORA_PARA = {
@@ -474,6 +481,8 @@ def _varrer(app_module, local_a, c, papel):
             if MARCA in texto:
                 vazou.append(f'{metodo} {caminho} → {r.status_code}')
     assert not vazou, f'{papel} de B leu dado de A em: ' + '; '.join(vazou)
+    # A varredura inteira com a sessão de B (nenhuma rota a derrubou no meio).
+    assert c.get('/api/v1/eu').status_code == 200, f'{papel} de B perdeu a sessão na varredura'
     assert _digital(app_module, a) == antes, f'{papel} de B alterou dado de A'
 
 

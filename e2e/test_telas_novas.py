@@ -1,6 +1,6 @@
 """As telas novas (React): a casca abre no celular e no PC, com o mesmo menu
-do site, a gaveta do celular e sem rolagem lateral; os módulos ainda não
-migrados abrem na tela de sempre. Sem violação de CSP (conftest).
+do site, a gaveta do celular e sem rolagem lateral; os atalhos do Início
+levam às telas novas já migradas e às de sempre. Sem violação de CSP (conftest).
 
 Precisa das telas compiladas (``npm run build`` em frontend/).
 """
@@ -49,9 +49,15 @@ def test_casca_react_no_celular_e_no_pc(servidor, navegador, perfil):
             _esperar(pg, dentro, sim=False)
         else:
             assert pg.evaluate(dentro)
-        # Módulo ainda não migrado: abre a tela de sempre.
-        pg.locator('.card', has_text='Chamados').click()
-        pg.wait_for_url('**/chamados/')
+        # O Início novo (Fase 6a): o atalho de um módulo já migrado abre a
+        # tela nova; o de um endereço que as telas novas não trocam (a
+        # passagem, que tem endereço próprio abaixo de /novo), a de sempre.
+        pg.locator('.fc-modulo', has_text='Chamados').click()
+        pg.wait_for_url('**/novo/chamados/')
+        pg.go_back()
+        pg.locator('.fc-modulo', has_text='Passagem de turno').click()
+        pg.wait_for_url('**/passagem-de-turno/')
+        assert '/novo/' not in pg.url
         # Endereço que não existe nas telas novas: aviso, com caminho de volta.
         pg.goto(servidor['base'] + '/novo/nao-existe')
         pg.get_by_role('heading', name='Página não encontrada').wait_for()

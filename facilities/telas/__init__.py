@@ -46,7 +46,7 @@ def _casca():
                                 for c in entrada.get('css', [])])
 
 
-@bp.get('/novo/', defaults={'caminho': ''})
+# ``/novo/`` (o Início) tem rota própria (``telas.conta.inicio``, Fase 6a).
 @bp.get('/novo/<path:caminho>')
 @login_required
 def casca(caminho):
@@ -106,8 +106,10 @@ def nao_existe(_resto):
 
 # As APIs de cada módulo migrado registram as rotas no ``api`` acima.
 from facilities.telas import admin as _admin  # noqa: E402,F401
+from facilities.telas import administracao as _administracao  # noqa: E402,F401
 from facilities.telas import cadastros as _cadastros  # noqa: E402,F401
 from facilities.telas import chamados as _chamados  # noqa: E402,F401
+from facilities.telas import conta as _conta  # noqa: E402,F401
 from facilities.telas import campo as _campo  # noqa: E402,F401
 from facilities.telas import equipes as _equipes  # noqa: E402,F401
 from facilities.telas import integracao as _integracao  # noqa: E402,F401
