@@ -181,6 +181,18 @@ def equipes(request):
     return request.param
 
 
+@pytest.fixture(params=['', '/novo'], ids=['tela-antiga', 'tela-nova'])
+def relatorios(request):
+    """O prefixo dos relatórios do cliente, do painel e das chaves da
+    integração: as telas antigas (``/relatorios/...``, ``/painel``,
+    ``/admin/integracao/``) ou as novas, em React, nos mesmos endereços
+    abaixo de ``/novo`` (Fase 4c). O PDF e o Excel continuam no servidor e o
+    portal do cliente continua o antigo."""
+    if request.param and not os.path.exists(MANIFESTO):
+        pytest.skip('telas novas não compiladas: rode "npm run build" em frontend/')
+    return request.param
+
+
 def tela_pronta(pagina, nome='turno', timeout=15000):
     """A tela antiga chega desenhada; a nova (React) busca os dados e desenha
     depois: espera ela marcar ``data-tela-pronta``. Na antiga, não faz nada."""
