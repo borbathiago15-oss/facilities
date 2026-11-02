@@ -28,9 +28,18 @@ def _local(cid, montar=False):
     return loc
 
 
+# As telas antiga e nova (React, Fase 4a: ``/novo/preventiva/locais/<id>``
+# e ``/api/v1/preventiva/...``) saem das MESMAS funções: ``contexto_local``
+# monta os dados; ``acao_*`` faz o envio (a regra, o commit e o recado) e
+# devolve o endereço de volta.
+
 @bp.get('/locais/<int:cid>')
 @login_required
 def local(cid):
+    return render_template('preventiva/local.html', **contexto_local(cid))
+
+
+def contexto_local(cid):
     from facilities.cadastros.models import Equipamento, PontoInspecao
     from facilities.chamados.models import PRIORIDADES
     from facilities.chamados.servico import tecnicos_do_contrato
@@ -40,8 +49,8 @@ def local(cid):
               .order_by(PlanoPreventivo.is_active.desc(), PlanoPreventivo.proxima_em).all())
     modelos = [m for m in ChecklistModelo.query.filter_by(client_id=loc.id, is_active=True)
                .order_by(ChecklistModelo.nome) if m.versao_atual]
-    return render_template(
-        'preventiva/local.html', local=loc, planos=planos, modelos=modelos,
+    return dict(
+        local=loc, planos=planos, modelos=modelos,
         pontos=PontoInspecao.query.filter_by(client_id=loc.id, is_active=True)
         .order_by(PontoInspecao.nome).all(),
         equipamentos=Equipamento.query.filter_by(client_id=loc.id, is_active=True)
@@ -57,16 +66,20 @@ def _gravar(funcao, *args, destino, sucesso):
     except RegraDaPreventiva as erro:
         db.session.rollback()
         flash(erro.mensagem, 'danger')
-        return redirect(destino)
+        return destino
     flash(sucesso, 'success')
-    return redirect(destino)
+    return destino
 
 
 @bp.post('/locais/<int:cid>')
 @login_required
 def criar(cid):
+    return redirect(acao_criar(cid, request.form))
+
+
+def acao_criar(cid, dados):
     loc = _local(cid, montar=True)
-    return _gravar(servico.salvar_plano, loc, None, request.form, current_user,
+    return _gravar(servico.salvar_plano, loc, None, dados, current_user,
                    destino=url_for('preventiva.local', cid=loc.id),
                    sucesso='Plano preventivo cadastrado. A ordem de serviço abre sozinha '
                            'na data.')
@@ -75,14 +88,18 @@ def criar(cid):
 @bp.post('/<int:pid>')
 @login_required
 def editar(pid):
+    return redirect(acao_editar(pid, request.form))
+
+
+def acao_editar(pid, dados):
     plano = db.get_or_404(PlanoPreventivo, pid)
     loc = _local(plano.client_id, montar=True)
-    if request.form.get('ativo') in ('0', '1'):
-        plano.is_active = request.form.get('ativo') == '1'
+    if dados.get('ativo') in ('0', '1'):
+        plano.is_active = dados.get('ativo') == '1'
         db.session.commit()
         flash('Plano reativado.' if plano.is_active else
               'Plano desativado: não abre mais ordens (o histórico fica).', 'success')
-        return redirect(url_for('preventiva.local', cid=loc.id))
-    return _gravar(servico.salvar_plano, loc, plano, request.form, current_user,
+        return url_for('preventiva.local', cid=loc.id)
+    return _gravar(servico.salvar_plano, loc, plano, dados, current_user,
                    destino=url_for('preventiva.local', cid=loc.id),
                    sucesso='Plano atualizado. Vale para os próximos ciclos.')
