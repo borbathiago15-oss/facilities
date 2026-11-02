@@ -436,6 +436,16 @@ def test_as_demandas_trazem_os_dados_da_tela_antiga(app_module, cena, auth_clien
         for k, v in d['situacoes']:
             assert f'<div class="small text-muted">{v}</div><div class="fs-4 fw-bold">{d["contagem"][k]}</div>' in texto
         assert [x['id'] for x in d['locais']] == [int(x) for x in re.findall(r'<option value="(\d+)"', antigo.split('id="flocal"')[1].split('</select>')[0])]
+    # Os cartões contam com o mesmo filtro de tipo (e de local) da lista:
+    # sem situação escolhida, a soma deles é o tamanho da lista.
+    for busca in ('', '?tipo=preventiva', '?tipo=chamado', f"?local={cena['local']}&tipo=chamado"):
+        d = c.get('/api/v1/demandas/' + busca).get_json()
+        assert sum(d['contagem'].values()) == len(d['itens']), busca
+    so_chamados = c.get('/api/v1/demandas/?tipo=chamado').get_json()
+    assert len(so_chamados['itens']) < len(c.get('/api/v1/demandas/').get_json()['itens'])
+    for k in so_chamados['contagem']:
+        com_situacao = c.get(f'/api/v1/demandas/?tipo=chamado&situacao={k}').get_json()
+        assert so_chamados['contagem'][k] == len(com_situacao['itens']), k
     d = c.get(f"/api/v1/demandas/?local={cena['local']}").get_json()
     tipos = {i['tipo'] for i in d['itens']}
     assert {'chamado', 'preventiva'} <= tipos and d['local'] == cena['local']
