@@ -39,7 +39,15 @@ def _outra_pessoa(b, perfil):
 
 def _sem_rolagem(pg, onde):
     largura = pg.evaluate('document.documentElement.scrollWidth')
-    assert largura <= pg.viewport_size['width'], f'{onde} rola de lado ({largura}px)'
+    if largura > pg.viewport_size['width']:
+        # Diz QUEM passa da tela (a falha foi intermitente: o culpado depende
+        # do conteúdo do momento, e sem o nome não há como achar a causa).
+        culpados = pg.evaluate("""(w) => [...document.querySelectorAll('body *')]
+            .filter(e => e.getBoundingClientRect().right > w)
+            .slice(-5).map(e => e.tagName.toLowerCase() + (e.className ? '.' + String(e.className).trim().replace(/ +/g, '.') : '')
+                + ' «' + (e.textContent || '').trim().slice(0, 60) + '» ' + Math.round(e.getBoundingClientRect().right) + 'px')""",
+            pg.viewport_size['width'])
+        raise AssertionError(f'{onde} rola de lado ({largura}px): ' + ' | '.join(culpados))
 
 
 def _pronta(pg, nome):
