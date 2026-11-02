@@ -38,21 +38,30 @@ def _gravar(funcao, *args, destino, sucesso):
     except RegraDaVisita as erro:
         db.session.rollback()
         flash(erro.mensagem, 'danger')
-        return redirect(destino)
+        return destino
     flash(sucesso, 'success')
-    return redirect(destino)
+    return destino
 
+
+# As telas antiga e nova (React, Fase 4b: ``/novo/visitas/locais/<id>`` e
+# ``/api/v1/visitas/...``) saem das MESMAS funções: ``contexto_local`` monta
+# os dados; ``acao_*`` faz o envio (a regra, o commit e o recado) e devolve
+# o endereço de volta.
 
 @bp.get('/visitas/locais/<int:cid>')
 @login_required
 def local(cid):
+    return render_template('visitas/local.html', **contexto_local(cid))
+
+
+def contexto_local(cid):
     from facilities.rotas.models import ChecklistModelo
     loc = _local(cid)
     modelos = [m for m in ChecklistModelo.query.filter_by(client_id=loc.id, is_active=True)
                .order_by(ChecklistModelo.nome)
                if m.versao_atual]
-    return render_template(
-        'visitas/local.html', local=loc, modelos=modelos,
+    return dict(
+        local=loc, modelos=modelos,
         programadas=VisitaProgramada.query.filter_by(client_id=loc.id)
         .order_by(VisitaProgramada.is_active.desc(), VisitaProgramada.proxima_em).all(),
         recentes=Visita.query.filter_by(client_id=loc.id)
@@ -64,8 +73,12 @@ def local(cid):
 @bp.post('/visitas/locais/<int:cid>')
 @login_required
 def criar(cid):
+    return redirect(acao_criar(cid, request.form))
+
+
+def acao_criar(cid, dados):
     loc = _local(cid, montar=True)
-    return _gravar(servico.salvar_programada, loc, None, request.form, current_user,
+    return _gravar(servico.salvar_programada, loc, None, dados, current_user,
                    destino=url_for('visitas.local', cid=loc.id),
                    sucesso='Visita programada. Ela abre sozinha na data e avisa quem faz.')
 
@@ -73,16 +86,20 @@ def criar(cid):
 @bp.post('/visitas/programadas/<int:pid>')
 @login_required
 def editar(pid):
+    return redirect(acao_editar(pid, request.form))
+
+
+def acao_editar(pid, dados):
     prog = db.get_or_404(VisitaProgramada, pid)
     loc = _local(prog.client_id, montar=True)
     destino = url_for('visitas.local', cid=loc.id)
-    if request.form.get('ativo') in ('0', '1'):
-        prog.is_active = request.form.get('ativo') == '1'
+    if dados.get('ativo') in ('0', '1'):
+        prog.is_active = dados.get('ativo') == '1'
         db.session.commit()
         flash('Programação reativada.' if prog.is_active else
               'Programação desativada: não abre mais visitas (o histórico fica).', 'success')
-        return redirect(destino)
-    return _gravar(servico.salvar_programada, loc, prog, request.form, current_user,
+        return destino
+    return _gravar(servico.salvar_programada, loc, prog, dados, current_user,
                    destino=destino, sucesso='Programação atualizada.')
 
 

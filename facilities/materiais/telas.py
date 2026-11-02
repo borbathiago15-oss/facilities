@@ -54,62 +54,86 @@ def _erro(erro, destino):
     return redirect(destino)
 
 
-def _periodo():
+def _recusa(erro, destino):
+    """A recusa da regra numa ação do site: desfaz, deixa o recado e devolve
+    o endereço de volta (a tela antiga redireciona; a nova o recebe)."""
+    db.session.rollback()
+    flash(erro.mensagem, 'danger')
+    return destino
+
+
+def _periodo(args):
     hoje = tempo.hoje()
     try:
-        de = datetime.strptime(request.args.get('de') or '', '%Y-%m-%d').date()
+        de = datetime.strptime(args.get('de') or '', '%Y-%m-%d').date()
     except ValueError:
         de = hoje.replace(day=1)
     try:
-        ate = datetime.strptime(request.args.get('ate') or '', '%Y-%m-%d').date()
+        ate = datetime.strptime(args.get('ate') or '', '%Y-%m-%d').date()
     except ValueError:
         ate = hoje
     return (de, ate) if de <= ate else (ate, de)
 
+
+# As telas antiga e nova (React, Fase 4b: ``/novo/materiais/...`` e
+# ``/api/v1/materiais/...``) saem das MESMAS funções: ``contexto_*`` monta os
+# dados da página; ``acao_*`` faz o envio (a regra, o commit e o recado) e
+# devolve o endereço de volta. As checagens de acesso moram nelas.
 
 # ── Catálogo ──────────────────────────────────────────────────────────────
 
 @bp.get('/materiais/')
 @login_required
 def catalogo():
+    return render_template('materiais/catalogo.html', **contexto_catalogo())
+
+
+def contexto_catalogo():
     _so_quem_ve_custo()
-    return render_template('materiais/catalogo.html',
-                           materiais=Material.query.order_by(Material.is_active.desc(),
-                                                             Material.nome).all(),
-                           locais=clientes_visiveis(), pode_montar=current_user.e_gestao())
+    return dict(materiais=Material.query.order_by(Material.is_active.desc(),
+                                                  Material.nome).all(),
+                locais=clientes_visiveis(), pode_montar=current_user.e_gestao())
 
 
 @bp.post('/materiais/')
 @login_required
 def criar_material():
+    return redirect(acao_criar_material(request.form))
+
+
+def acao_criar_material(dados):
     _so_gestao()
     try:
-        m = servico.salvar_material(None, request.form)
+        m = servico.salvar_material(None, dados)
         db.session.commit()
     except RegraDoMaterial as erro:
-        return _erro(erro, url_for('materiais.catalogo'))
+        return _recusa(erro, url_for('materiais.catalogo'))
     flash(f'Material "{m.nome}" cadastrado.', 'success')
-    return redirect(url_for('materiais.catalogo'))
+    return url_for('materiais.catalogo')
 
 
 @bp.post('/materiais/<int:mid>')
 @login_required
 def editar_material(mid):
+    return redirect(acao_editar_material(mid, request.form))
+
+
+def acao_editar_material(mid, dados):
     _so_gestao()
     m = db.get_or_404(Material, mid)
-    if request.form.get('ativo') in ('0', '1'):
-        m.is_active = request.form.get('ativo') == '1'
+    if dados.get('ativo') in ('0', '1'):
+        m.is_active = dados.get('ativo') == '1'
         db.session.commit()
         flash('Material reativado.' if m.is_active else
               'Material desativado: some das listas (o histórico fica).', 'success')
-        return redirect(url_for('materiais.catalogo'))
+        return url_for('materiais.catalogo')
     try:
-        servico.salvar_material(m, request.form)
+        servico.salvar_material(m, dados)
         db.session.commit()
     except RegraDoMaterial as erro:
-        return _erro(erro, url_for('materiais.catalogo'))
+        return _recusa(erro, url_for('materiais.catalogo'))
     flash('Material atualizado. O preço novo vale para os próximos lançamentos.', 'success')
-    return redirect(url_for('materiais.catalogo'))
+    return url_for('materiais.catalogo')
 
 
 # ── Estoque do local ──────────────────────────────────────────────────────
@@ -117,13 +141,17 @@ def editar_material(mid):
 @bp.get('/materiais/locais/<int:cid>')
 @login_required
 def local(cid):
+    return render_template('materiais/local.html', **contexto_local(cid))
+
+
+def contexto_local(cid):
     from facilities.rotas.models import Rota
     _so_quem_ve_custo()
     loc = _local(cid)
     saldos = servico.saldos(loc.id)
     materiais = Material.query.filter_by(is_active=True).order_by(Material.nome).all()
-    return render_template(
-        'materiais/local.html', local=loc, materiais=materiais, saldos=saldos,
+    return dict(
+        local=loc, materiais=materiais, saldos=saldos,
         com_saldo=[m for m in Material.query.order_by(Material.nome) if m.id in saldos],
         movimentos=MovimentoEstoque.query.filter_by(client_id=loc.id)
         .order_by(MovimentoEstoque.criado_em.desc()).limit(50).all(),
@@ -135,21 +163,25 @@ def local(cid):
 @bp.post('/materiais/locais/<int:cid>/movimento')
 @login_required
 def movimento(cid):
+    return redirect(acao_movimento(cid, request.form))
+
+
+def acao_movimento(cid, dados):
     loc = _local(cid)
     destino = url_for('materiais.local', cid=loc.id)
-    tipo = request.form.get('tipo')
+    tipo = dados.get('tipo')
     if tipo not in TIPOS_MOVIMENTO or tipo == CONSUMO:
         flash('Escolha entrada, saída ou ajuste.', 'danger')
-        return redirect(destino)
+        return destino
     try:
-        mov = servico.movimentar(current_user, loc, request.form, tipo)
+        mov = servico.movimentar(current_user, loc, dados, tipo)
         db.session.commit()
     except RegraDoMaterial as erro:
-        return _erro(erro, destino)
+        return _recusa(erro, destino)
     flash(f'{mov.tipo_rotulo}: {fmt_qtd(abs(mov.quantidade))} {mov.material.unidade} de '
           f'{mov.material.nome}. Saldo agora: '
           f'{fmt_qtd(servico.saldo(loc.id, mov.material_id))}.', 'success')
-    return redirect(destino)
+    return destino
 
 
 @bp.post('/materiais/locais/<int:cid>/consumo')
@@ -171,9 +203,7 @@ def acao_consumo(cid, dados):
         mov = servico.consumir(current_user, loc, dados)
         db.session.commit()
     except RegraDoMaterial as erro:
-        db.session.rollback()
-        flash(erro.mensagem, 'danger')
-        return destino
+        return _recusa(erro, destino)
     flash(f'Consumo registrado: {fmt_qtd(abs(mov.quantidade))} {mov.material.unidade} de '
           f'{mov.material.nome}.', 'success')
     return destino
@@ -182,31 +212,38 @@ def acao_consumo(cid, dados):
 @bp.get('/materiais/locais/<int:cid>/mes')
 @login_required
 def mes(cid):
+    return render_template('materiais/mes.html', **contexto_mes(cid, request.args))
+
+
+def contexto_mes(cid, args):
     _so_quem_ve_custo()
     loc = _local(cid)
     hoje = tempo.hoje()
     try:
-        ano, m = (int(x) for x in (request.args.get('m') or hoje.strftime('%Y-%m')).split('-'))
+        ano, m = (int(x) for x in (args.get('m') or hoje.strftime('%Y-%m')).split('-'))
         primeiro = date(ano, m, 1)
     except ValueError:
         primeiro = hoje.replace(day=1)
     ultimo = (primeiro + timedelta(days=32)).replace(day=1) - timedelta(days=1)
     linhas = servico.consumo_do_mes(loc.id, primeiro, ultimo)
-    return render_template('materiais/mes.html', local=loc, primeiro=primeiro, linhas=linhas,
-                           total=sum((x['valor'] for x in linhas if x['valor'] is not None),
-                                     servico.Decimal('0.00')),
-                           sem_preco=[x for x in linhas if x['valor'] is None],
-                           anterior=(primeiro - timedelta(days=1)).strftime('%Y-%m'),
-                           seguinte=(ultimo + timedelta(days=1)).strftime('%Y-%m'))
+    return dict(local=loc, primeiro=primeiro, linhas=linhas,
+                total=sum((x['valor'] for x in linhas if x['valor'] is not None),
+                          servico.Decimal('0.00')),
+                sem_preco=[x for x in linhas if x['valor'] is None],
+                anterior=(primeiro - timedelta(days=1)).strftime('%Y-%m'),
+                seguinte=(ultimo + timedelta(days=1)).strftime('%Y-%m'))
 
 
 @bp.get('/materiais/custo')
 @login_required
 def custo():
+    return render_template('materiais/custo.html', **contexto_custo(request.args))
+
+
+def contexto_custo(args):
     _so_quem_ve_custo()
-    de, ate = _periodo()
-    return render_template('materiais/custo.html', de=de, ate=ate,
-                           r=servico.custo(allowed_client_ids_or_none(), de, ate))
+    de, ate = _periodo(args)
+    return dict(de=de, ate=ate, r=servico.custo(allowed_client_ids_or_none(), de, ate))
 
 
 # ── Pedidos de insumo ─────────────────────────────────────────────────────
@@ -214,30 +251,37 @@ def custo():
 @bp.get('/materiais/pedidos')
 @login_required
 def pedidos():
+    return render_template('materiais/pedidos.html', **contexto_pedidos())
+
+
+def contexto_pedidos():
     _so_quem_ve_custo()
     ids = allowed_client_ids_or_none()
     q = PedidoInsumo.query
     if ids is not None:
         q = q.filter(PedidoInsumo.client_id.in_(ids or [-1]))
     lista = q.order_by(PedidoInsumo.status, PedidoInsumo.criado_em.desc()).limit(200).all()
-    return render_template('materiais/pedidos.html', pedidos=lista, agora=datetime.utcnow(),
-                           gestor_de={p.client_id: servico.e_gestor_do_contrato(current_user,
-                                                                                p.client_id)
-                                      for p in lista})
+    return dict(pedidos=lista, agora=datetime.utcnow(),
+                gestor_de={p.client_id: servico.e_gestor_do_contrato(current_user, p.client_id)
+                           for p in lista})
 
 
 @bp.post('/materiais/pedidos/<int:pid>/visto')
 @login_required
 def visto(pid):
+    return redirect(acao_visto(pid))
+
+
+def acao_visto(pid):
     p = db.get_or_404(PedidoInsumo, pid)
     require_client(p.client_id)
     try:
         servico.marcar_visto(current_user, p)
         db.session.commit()
     except RegraDoMaterial as erro:
-        return _erro(erro, url_for('materiais.pedidos'))
+        return _recusa(erro, url_for('materiais.pedidos'))
     flash('Pedido marcado como visto. A compra segue no sistema de compras.', 'success')
-    return redirect(url_for('materiais.pedidos'))
+    return url_for('materiais.pedidos')
 
 
 @bp.get('/materiais/pedidos/<int:pid>/foto')
