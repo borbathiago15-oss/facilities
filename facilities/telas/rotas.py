@@ -117,11 +117,11 @@ def rotas_execucao(eid):
 # ── Início, local e biblioteca: os dados ──────────────────────────────────
 
 def _links_do_local(cid):
-    """As telas de outros módulos (a equipe e as visitas, ainda antigas) e as
-    já novas (a estrutura; a preventiva desde a Fase 4a)."""
+    """As telas de outros módulos, já novas (a estrutura; a preventiva desde
+    a Fase 4a; a equipe e as visitas desde a 4b)."""
     return {'preventiva': nova(url_for('preventiva.local', cid=cid)),
-            'equipe': url_for('equipes.local', cid=cid),
-            'visitas': url_for('visitas.local', cid=cid),
+            'equipe': nova(url_for('equipes.local', cid=cid)),
+            'visitas': nova(url_for('visitas.local', cid=cid)),
             'estrutura': nova(url_for('cadastros.local', cid=cid))}
 
 

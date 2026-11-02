@@ -41,10 +41,13 @@ from facilities.telas import _casca, api, bp
 
 # Os endereços já migrados: dentro das telas novas, levam às novas (a
 # rotina dos locais entrou na Fase 3b; os chamados, as demandas e a
-# preventiva, na 4a).
+# preventiva, na 4a; a equipe, os materiais e as visitas do local, na 4b).
 MIGRADOS = ('/cadastros/', '/clientes', '/centros/', '/novo-contrato', '/convites', '/rotas/',
-            '/chamados/', '/demandas/', '/preventiva/locais/')
-FORA = ('/etiquetas.pdf', '/logo.png')
+            '/chamados/', '/demandas/', '/preventiva/locais/', '/equipes/locais/',
+            '/materiais/', '/visitas/locais/')
+# Os arquivos continuam no servidor: as etiquetas, a logo e a foto do pedido
+# de insumo (``/materiais/pedidos/<id>/foto``).
+FORA = ('/etiquetas.pdf', '/logo.png', '/foto')
 # Da rotina dos locais, os arquivos (POP/FIT, fotos, referências) e o
 # agendador continuam no servidor; dos chamados, as fotos e os PDFs.
 FORA_DAS_ROTAS = ('/rotas/documentos/', '/rotas/fotos/', '/rotas/referencias/',

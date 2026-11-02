@@ -243,11 +243,13 @@ def test_inicio_local_e_biblioteca_trazem_os_dados_da_tela_antiga(app_module, ce
         int(x) for x in re.findall(r'href="/rotas/locais/(\d+)/dia"', antigo)]
     [la] = [x for x in d['locais'] if x['id'] == a]
     assert la['cliente'] == 'Grupo GL' and 'Shopping Centro <small>Grupo GL</small>' in antigo
-    for k in ('equipe', 'visitas'):
-        assert f'href="{la["links"][k]}"' in antigo
-    # A preventiva já está nas telas novas (Fase 4a): o mesmo endereço abaixo de /novo.
+    # A preventiva já está nas telas novas (Fase 4a), a equipe e as visitas
+    # desde a 4b: o mesmo endereço abaixo de /novo.
     assert la['links']['preventiva'] == f'/novo/preventiva/locais/{a}'
-    assert f'href="{la["links"]["preventiva"].removeprefix("/novo")}"' in antigo
+    assert la['links']['equipe'] == f'/novo/equipes/locais/{a}'
+    assert la['links']['visitas'] == f'/novo/visitas/locais/{a}'
+    for k in ('preventiva', 'equipe', 'visitas'):
+        assert f'href="{la["links"][k].removeprefix("/novo")}"' in antigo
     assert la['links']['estrutura'] == f'/novo/cadastros/locais/{a}'
 
     d = c.get(f'/api/v1/rotas/locais/{a}').get_json()
@@ -711,7 +713,17 @@ def test_dentro_das_telas_novas_os_links_sao_os_novos(app_module, cena, auth_cli
     assert nova('/chamados/1') == '/novo/chamados/1'
     assert nova('/chamados/anexos/1') == '/chamados/anexos/1'
     assert nova('/preventiva/locais/1') == '/novo/preventiva/locais/1'
-    assert nova('/equipes/locais/1') == '/equipes/locais/1'
+    # Fase 4b: a equipe, os materiais e as visitas do local; a foto do pedido
+    # de insumo e o aplicativo do supervisor continuam onde estão.
+    assert nova('/equipes/locais/1') == '/novo/equipes/locais/1'
+    assert nova('/equipes/locais/1/mes?m=2026-10') == '/novo/equipes/locais/1/mes?m=2026-10'
+    assert nova('/visitas/locais/1') == '/novo/visitas/locais/1'
+    assert nova('/materiais/') == '/novo/materiais/'
+    assert nova('/materiais/pedidos') == '/novo/materiais/pedidos'
+    assert nova('/materiais/pedidos/1/foto') == '/materiais/pedidos/1/foto'
+    assert nova('/app/visitas/1') == '/app/visitas/1'
+    assert nova('/app/materiais') == '/app/materiais'
+    assert nova('/app/equipe') == '/app/equipe'
     # As telas antigas e o menu não mudam.
     assert 'href="/rotas/locais/' in c.get('/rotas/').get_data(as_text=True)
     menu = [i['url'] for g in c.get('/api/v1/eu').get_json()['menu'] for i in g['itens']]

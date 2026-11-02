@@ -299,18 +299,21 @@ def _valor_do_parametro(nome, ids, entidade=None, endpoint=''):
             and nome == 'pid':
         # Também nas telas novas (Fase 4a: /novo/preventiva/... e /api/v1/preventiva/...).
         return ids['plano']
-    if endpoint.startswith('equipes.'):
+    if endpoint.startswith(('equipes.', 'telas.equipes_', 'api_v1.api_equipes_')):
+        # Também nas telas novas (Fase 4b: /novo/equipes/... e /api/v1/equipes/...).
         por_equipe = {'cid': ids['local'], 'fid': ids['funcionario'], 'pid': ids['posto'],
                       'eid': ids['escala_trabalho'], 'prid': ids['falta']}
         if nome in por_equipe:
             return por_equipe[nome]
     if endpoint.startswith('integracao.') and nome == 'kid':
         return ids['chave']
-    if endpoint.startswith('materiais.'):
+    if endpoint.startswith(('materiais.', 'telas.materiais_', 'api_v1.api_materiais_')):
+        # Também nas telas novas (Fase 4b: /novo/materiais/... e /api/v1/materiais/...).
         por_material = {'cid': ids['local'], 'mid': ids['material'], 'pid': ids['pedido']}
         if nome in por_material:
             return por_material[nome]
-    if endpoint.startswith('visitas.'):
+    if endpoint.startswith(('visitas.', 'telas.visitas_', 'api_v1.api_visitas_')):
+        # Também nas telas novas (Fase 4b: /novo/visitas/... e /api/v1/visitas/...).
         por_visita = {'cid': ids['local'], 'pid': ids['programada'], 'vid': ids['visita'],
                       'vfid': ids['foto_visita']}
         if nome in por_visita:
@@ -495,6 +498,12 @@ def test_a_marca_aparece_para_quem_e_de_a(app_module, local_a):
     assert MARCA in c.get(f'/api/v1/chamados/?client_id={a}').get_data(as_text=True)
     assert MARCA in c.get(f'/api/v1/demandas/?local={a}').get_data(as_text=True)
     assert MARCA in c.get(f'/api/v1/preventiva/locais/{a}').get_data(as_text=True)
+    # Fase 4b: a equipe, a grade do mês, as visitas e os materiais do local.
+    assert MARCA in c.get(f'/api/v1/equipes/locais/{a}').get_data(as_text=True)
+    assert MARCA in c.get(f'/api/v1/equipes/locais/{a}/mes').get_data(as_text=True)
+    assert MARCA in c.get(f'/api/v1/visitas/locais/{a}').get_data(as_text=True)
+    assert MARCA in c.get(f'/api/v1/materiais/locais/{a}').get_data(as_text=True)
+    assert MARCA in c.get('/api/v1/materiais/pedidos').get_data(as_text=True)
 
 
 def test_a_marca_aparece_para_o_cliente_de_a(app_module, local_a):
