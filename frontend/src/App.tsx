@@ -3,7 +3,6 @@ import { Component, type ComponentType, type ReactNode, Suspense, lazy } from 'r
 import { Route, Routes } from 'react-router';
 import { buscarEu } from './api';
 import { Casca } from './Casca';
-import { Inicio } from './paginas/Inicio';
 import { NaoEncontrada } from './paginas/NaoEncontrada';
 
 // Cada grupo de telas é um pedaço próprio do build, carregado só quando uma
@@ -23,6 +22,8 @@ const integracao = () => import('./integracao/paginas');
 const portal = () => import('./portal/paginas');
 const cobrancas = () => import('./cobrancas/paginas');
 const admin = () => import('./paginas/admin/PaginaArmazenamento');
+const conta = () => import('./conta/paginas');
+const administracao = () => import('./administracao/paginas');
 
 function pedaco<M extends Record<string, ComponentType<any>>, K extends keyof M>(carregar: () => Promise<M>, nome: K) {
   return lazy(() => carregar().then((m) => ({ default: m[nome] })));
@@ -90,6 +91,12 @@ const PortalCobranca = pedaco(portal, 'PaginaCobranca');
 const CobrancasLista = pedaco(cobrancas, 'PaginaLista');
 const CobrancasVer = pedaco(cobrancas, 'PaginaCobranca');
 const PaginaArmazenamento = pedaco(admin, 'PaginaArmazenamento');
+const ContaInicio = pedaco(conta, 'PaginaInicio');
+const ContaAvisos = pedaco(conta, 'PaginaAvisos');
+const ContaSeguranca = pedaco(conta, 'PaginaSeguranca');
+const ContaTrocarSenha = pedaco(conta, 'PaginaTrocarSenha');
+const AdminPessoas = pedaco(administracao, 'PaginaPessoas');
+const AdminLocais = pedaco(administracao, 'PaginaLocais');
 
 const CARREGANDO = <p className="p-4 text-muted" role="status">Carregando…</p>;
 
@@ -142,8 +149,13 @@ export function App() {
         <Casca eu={eu.data}>
           <Carregar>
             <Routes>
-              <Route path="/" element={<Inicio eu={eu.data} />} />
+              <Route path="/" element={<ContaInicio />} />
+              <Route path="/avisos" element={<ContaAvisos />} />
+              <Route path="/conta/seguranca" element={<ContaSeguranca />} />
+              <Route path="/trocar-senha" element={<ContaTrocarSenha />} />
               <Route path="/admin/armazenamento" element={<PaginaArmazenamento />} />
+              <Route path="/admin/usuarios" element={<AdminPessoas />} />
+              <Route path="/admin/contratos" element={<AdminLocais />} />
               <Route path="/passagem-de-turno" element={<PaginaPainel />} />
               <Route path="/passagem-de-turno/relatorio-mensal" element={<PaginaRelatorio />} />
               <Route path="/passagem-de-turno/configuracao" element={<PaginaConfiguracao />} />
