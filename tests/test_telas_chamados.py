@@ -422,7 +422,7 @@ def test_as_demandas_trazem_os_dados_da_tela_antiga(app_module, cena, auth_clien
         antigo = c.get('/demandas/' + busca).get_data(as_text=True)
         texto = _texto(antigo)
         lista = antigo.split('<div class="fc-cartao p-0">')[1]
-        assert ['/novo' + x if x.startswith(('/chamados/', '/rotas/')) else x
+        assert ['/novo' + x if x.startswith(('/chamados/', '/rotas/', '/materiais/')) else x
                 for x in re.findall(r'<a class="d-flex[^"]*" href="([^"]+)"', lista)] == [i['link'] for i in d['itens']], busca
         for i in d['itens']:
             assert i['titulo'] in texto and f"{i['local']} · {i['estado']}" in texto
@@ -628,10 +628,11 @@ def test_anexar_e_o_material_como_na_tela_antiga(app_module, cena, auth_client):
         _, d1, rec = _antiga(c, f"/materiais/locais/{cena['local']}/consumo", data=ruim)
         r, j = _nova(c, f"/api/v1/materiais/locais/{cena['local']}/consumo", json=ruim)
         assert r.status_code == 400 and j['error'] == rec[0]['texto'] and j['destino'] == '/novo' + d1
-    # Sem voltar ao chamado: o destino é a tela dos materiais (ainda antiga).
+    # Sem voltar ao chamado: o destino é o estoque do local (na tela nova
+    # desde a Fase 4b: o mesmo endereço abaixo de /novo).
     _, d1, _ = _antiga(c, f"/materiais/locais/{cena['local']}/consumo", data={**form, 'voltar': ''})
     r, j = _nova(c, f"/api/v1/materiais/locais/{cena['local']}/consumo", data={**form, 'voltar': ''})
-    assert j['destino'] == d1 and not d1.startswith('/novo')
+    assert j['destino'] == '/novo' + d1 and d1 == f"/materiais/locais/{cena['local']}"
 
 
 def test_a_preventiva_como_na_tela_antiga(app_module, cena, auth_client):

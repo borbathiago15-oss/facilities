@@ -213,7 +213,7 @@ describe('a tela abre pelo seu pedaço do build', () => {
       avisos_nao_lidos: 0, menu: [], csrf: 'x', versao: '1',
       links: { inicio: '/', avisos: '/avisos', trocar_senha: '/t', seguranca: '/s', sair: '/sair' } } };
     respostas['/api/v1/rotas/inicio'] = { status: 200, corpo: { pode_montar: true, locais: [
-      { id: 3, nome: 'CD 1', cliente: 'Grupo GL', links: { preventiva: '/novo/preventiva/locais/3', equipe: '/e', visitas: '/v', estrutura: '/novo/cadastros/locais/3' } }] } };
+      { id: 3, nome: 'CD 1', cliente: 'Grupo GL', links: { preventiva: '/novo/preventiva/locais/3', equipe: '/novo/equipes/locais/3', visitas: '/novo/visitas/locais/3', estrutura: '/novo/cadastros/locais/3' } }] } };
     render(
       <QueryClientProvider client={new QueryClient()}>
         <MemoryRouter initialEntries={['/rotas/']}><App /></MemoryRouter>
@@ -221,5 +221,8 @@ describe('a tela abre pelo seu pedaço do build', () => {
     expect(await screen.findByRole('heading', { name: 'Rotina dos locais' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Hoje' })).toHaveAttribute('href', '/rotas/locais/3/dia');
     expect(screen.getByRole('link', { name: 'Preventivas' })).toHaveAttribute('href', '/preventiva/locais/3');
+    // Fase 4b: a equipe e as visitas do local também ficam nas telas novas.
+    expect(screen.getByRole('link', { name: 'Equipe' })).toHaveAttribute('href', '/equipes/locais/3');
+    expect(screen.getByRole('link', { name: 'Visitas' })).toHaveAttribute('href', '/visitas/locais/3');
   });
 });

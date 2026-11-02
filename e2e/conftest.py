@@ -168,6 +168,19 @@ def chamados(request):
     return request.param
 
 
+@pytest.fixture(params=['', '/novo'], ids=['tela-antiga', 'tela-nova'])
+def equipes(request):
+    """O prefixo da equipe, dos materiais e das visitas do local na gestão:
+    as telas antigas (``/equipes/...``, ``/materiais/...``, ``/visitas/...``)
+    ou as novas, em React, nos mesmos endereços abaixo de ``/novo`` (Fase
+    4b). Os testes rodam nas duas; dentro das novas, os links levam às
+    novas. O aplicativo do supervisor e de quem usa o material (``/app/...``)
+    continua o antigo."""
+    if request.param and not os.path.exists(MANIFESTO):
+        pytest.skip('telas novas não compiladas: rode "npm run build" em frontend/')
+    return request.param
+
+
 def tela_pronta(pagina, nome='turno', timeout=15000):
     """A tela antiga chega desenhada; a nova (React) busca os dados e desenha
     depois: espera ela marcar ``data-tela-pronta``. Na antiga, não faz nada."""

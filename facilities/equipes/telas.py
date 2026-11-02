@@ -43,23 +43,32 @@ def _gravar(funcao, *args, destino, sucesso):
     except RegraDaEquipe as erro:
         db.session.rollback()
         flash(erro.mensagem, 'danger')
-        return redirect(destino)
+        return destino
     flash(sucesso, 'success')
-    return redirect(destino)
+    return destino
 
+
+# As telas antiga e nova (React, Fase 4b: ``/novo/equipes/locais/<id>`` e
+# ``/api/v1/equipes/...``) saem das MESMAS funções: ``contexto_*`` monta os
+# dados da página; ``acao_*`` faz o envio (a regra, o commit e o recado) e
+# devolve o endereço de volta. As checagens de acesso moram nelas.
 
 # ── Site: cadastro ────────────────────────────────────────────────────────
 
 @bp.get('/equipes/locais/<int:cid>')
 @login_required
 def local(cid):
+    return render_template('equipes/local.html', **contexto_local(cid))
+
+
+def contexto_local(cid):
     from facilities.rotas.models import Rota
     loc = _local(cid)
     escalas = (EscalaTrabalho.query.filter_by(client_id=loc.id, is_active=True)
                .order_by(EscalaTrabalho.data_inicio).all())
     hoje = tempo.hoje()
-    return render_template(
-        'equipes/local.html', local=loc, hoje=hoje.isoformat(), dias=DIAS,
+    return dict(
+        local=loc, hoje=hoje.isoformat(), dias=DIAS,
         funcionarios=Funcionario.query.filter_by(client_id=loc.id)
         .order_by(Funcionario.is_active.desc(), Funcionario.nome).all(),
         postos=Posto.query.filter_by(client_id=loc.id)
@@ -72,8 +81,12 @@ def local(cid):
 @bp.post('/equipes/locais/<int:cid>/funcionarios')
 @login_required
 def criar_funcionario(cid):
+    return redirect(acao_criar_funcionario(cid, request.form))
+
+
+def acao_criar_funcionario(cid, dados):
     loc = _local(cid, montar=True)
-    return _gravar(servico.salvar_funcionario, loc, None, request.form, current_user,
+    return _gravar(servico.salvar_funcionario, loc, None, dados, current_user,
                    destino=url_for('equipes.local', cid=loc.id),
                    sucesso='Funcionário cadastrado.')
 
@@ -81,47 +94,63 @@ def criar_funcionario(cid):
 @bp.post('/equipes/funcionarios/<int:fid>')
 @login_required
 def editar_funcionario(fid):
+    return redirect(acao_editar_funcionario(fid, request.form))
+
+
+def acao_editar_funcionario(fid, dados):
     func = db.get_or_404(Funcionario, fid)
     loc = _local(func.client_id, montar=True)
     destino = url_for('equipes.local', cid=loc.id)
-    if request.form.get('ativo') in ('0', '1'):
-        func.is_active = request.form.get('ativo') == '1'
+    if dados.get('ativo') in ('0', '1'):
+        func.is_active = dados.get('ativo') == '1'
         db.session.commit()
         flash('Funcionário reativado.' if func.is_active else
               'Funcionário desligado: sai da escala (o histórico fica).', 'success')
-        return redirect(destino)
-    return _gravar(servico.salvar_funcionario, loc, func, request.form, current_user,
+        return destino
+    return _gravar(servico.salvar_funcionario, loc, func, dados, current_user,
                    destino=destino, sucesso='Funcionário atualizado.')
 
 
 @bp.post('/equipes/locais/<int:cid>/postos')
 @login_required
 def criar_posto(cid):
+    return redirect(acao_criar_posto(cid, request.form))
+
+
+def acao_criar_posto(cid, dados):
     loc = _local(cid, montar=True)
-    return _gravar(servico.salvar_posto, loc, None, request.form,
+    return _gravar(servico.salvar_posto, loc, None, dados,
                    destino=url_for('equipes.local', cid=loc.id), sucesso='Posto cadastrado.')
 
 
 @bp.post('/equipes/postos/<int:pid>')
 @login_required
 def editar_posto(pid):
+    return redirect(acao_editar_posto(pid, request.form))
+
+
+def acao_editar_posto(pid, dados):
     posto = db.get_or_404(Posto, pid)
     loc = _local(posto.client_id, montar=True)
     destino = url_for('equipes.local', cid=loc.id)
-    if request.form.get('ativo') in ('0', '1'):
-        posto.is_active = request.form.get('ativo') == '1'
+    if dados.get('ativo') in ('0', '1'):
+        posto.is_active = dados.get('ativo') == '1'
         db.session.commit()
         flash('Posto reativado.' if posto.is_active else 'Posto desativado.', 'success')
-        return redirect(destino)
-    return _gravar(servico.salvar_posto, loc, posto, request.form, destino=destino,
+        return destino
+    return _gravar(servico.salvar_posto, loc, posto, dados, destino=destino,
                    sucesso='Posto atualizado.')
 
 
 @bp.post('/equipes/locais/<int:cid>/escalas')
 @login_required
 def criar_escala(cid):
+    return redirect(acao_criar_escala(cid, request.form))
+
+
+def acao_criar_escala(cid, dados):
     loc = _local(cid, montar=True)
-    return _gravar(servico.salvar_escala, loc, request.form, current_user,
+    return _gravar(servico.salvar_escala, loc, dados, current_user,
                    destino=url_for('equipes.local', cid=loc.id),
                    sucesso='Escala lançada.')
 
@@ -129,35 +158,42 @@ def criar_escala(cid):
 @bp.post('/equipes/escalas/<int:eid>/encerrar')
 @login_required
 def encerrar_escala(eid):
+    return redirect(acao_encerrar_escala(eid, request.form))
+
+
+def acao_encerrar_escala(eid, dados):
     e = db.get_or_404(EscalaTrabalho, eid)
     loc = _local(e.client_id, montar=True)
     try:
-        fim = servico._data(request.form.get('data_fim'), 'o último dia da escala')
+        fim = servico._data(dados.get('data_fim'), 'o último dia da escala')
     except RegraDaEquipe as erro:
         flash(erro.mensagem, 'danger')
-        return redirect(url_for('equipes.local', cid=loc.id))
+        return url_for('equipes.local', cid=loc.id)
     servico.encerrar_escala(e, fim)
     db.session.commit()
     flash(f'Escala de {e.funcionario.nome} encerrada em {fim.strftime("%d/%m/%Y")}.', 'success')
-    return redirect(url_for('equipes.local', cid=loc.id))
+    return url_for('equipes.local', cid=loc.id)
 
 
 @bp.get('/equipes/locais/<int:cid>/mes')
 @login_required
 def mes(cid):
+    return render_template('equipes/mes.html', **contexto_mes(cid, request.args))
+
+
+def contexto_mes(cid, args):
     loc = _local(cid)
     hoje = tempo.hoje()
     try:
-        ano, m = (int(x) for x in (request.args.get('m') or hoje.strftime('%Y-%m')).split('-'))
+        ano, m = (int(x) for x in (args.get('m') or hoje.strftime('%Y-%m')).split('-'))
         primeiro = date(ano, m, 1)
     except ValueError:
         primeiro = hoje.replace(day=1)
     anterior = (primeiro - timedelta(days=1)).replace(day=1)
     seguinte = (primeiro + timedelta(days=32)).replace(day=1)
-    return render_template('equipes/mes.html', local=loc, primeiro=primeiro,
-                           anterior=anterior.strftime('%Y-%m'),
-                           seguinte=seguinte.strftime('%Y-%m'),
-                           grade=servico.mes(loc.id, primeiro.year, primeiro.month))
+    return dict(local=loc, primeiro=primeiro, anterior=anterior.strftime('%Y-%m'),
+                seguinte=seguinte.strftime('%Y-%m'),
+                grade=servico.mes(loc.id, primeiro.year, primeiro.month))
 
 
 # ── Aplicativo: presença e cobertura ──────────────────────────────────────

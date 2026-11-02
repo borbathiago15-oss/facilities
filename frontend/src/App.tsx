@@ -15,6 +15,8 @@ const passagem = () => import('./passagem/paginas');
 const cadastros = () => import('./cadastros/paginas');
 const rotas = () => import('./rotas/paginas');
 const chamados = () => import('./chamados/paginas');
+const equipes = () => import('./equipes/paginas');
+const materiais = () => import('./materiais/paginas');
 const admin = () => import('./paginas/admin/PaginaArmazenamento');
 
 function pedaco<M extends Record<string, ComponentType<any>>, K extends keyof M>(carregar: () => Promise<M>, nome: K) {
@@ -61,6 +63,14 @@ const ChamadosNovo = pedaco(chamados, 'PaginaNovo');
 const ChamadosVer = pedaco(chamados, 'PaginaChamado');
 const DemandasPainel = pedaco(chamados, 'PaginaDemandas');
 const PreventivaLocal = pedaco(chamados, 'PaginaPreventiva');
+const EquipeLocal = pedaco(equipes, 'PaginaEquipe');
+const EquipeMes = pedaco(equipes, 'PaginaMes');
+const VisitasLocal = pedaco(equipes, 'PaginaVisitas');
+const MateriaisCatalogo = pedaco(materiais, 'PaginaCatalogo');
+const MateriaisEstoque = pedaco(materiais, 'PaginaEstoque');
+const MateriaisMes = pedaco(materiais, 'PaginaConsumoDoMes');
+const MateriaisCusto = pedaco(materiais, 'PaginaCusto');
+const MateriaisPedidos = pedaco(materiais, 'PaginaPedidos');
 const PaginaArmazenamento = pedaco(admin, 'PaginaArmazenamento');
 
 const CARREGANDO = <p className="p-4 text-muted" role="status">Carregando…</p>;
@@ -154,6 +164,14 @@ export function App() {
               <Route path="/chamados/:id" element={<ChamadosVer />} />
               <Route path="/demandas" element={<DemandasPainel />} />
               <Route path="/preventiva/locais/:id" element={<PreventivaLocal />} />
+              <Route path="/equipes/locais/:id" element={<EquipeLocal />} />
+              <Route path="/equipes/locais/:id/mes" element={<EquipeMes />} />
+              <Route path="/visitas/locais/:id" element={<VisitasLocal />} />
+              <Route path="/materiais" element={<MateriaisCatalogo />} />
+              <Route path="/materiais/custo" element={<MateriaisCusto />} />
+              <Route path="/materiais/pedidos" element={<MateriaisPedidos />} />
+              <Route path="/materiais/locais/:id" element={<MateriaisEstoque />} />
+              <Route path="/materiais/locais/:id/mes" element={<MateriaisMes />} />
               <Route path="*" element={<NaoEncontrada inicio={eu.data.links.inicio} />} />
             </Routes>
           </Carregar>
