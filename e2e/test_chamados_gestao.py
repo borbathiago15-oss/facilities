@@ -78,8 +78,10 @@ def test_o_ciclo_do_chamado(servidor, navegador, perfil, chamados):
         ana.wait_for_selector('text=Diga o que está errado e onde.')
         _pronta(ana, 'chamados-novo')
         assert ana.url.startswith(base + chamados + '/chamados/novo')
-        # Dois contratos: escolhe o contrato, e as áreas dele aparecem.
-        assert ana.locator('#area_id').is_disabled()
+        # Dois contratos: escolhe o contrato, e as áreas dele aparecem. Na
+        # antiga é o chamados_novo.js que desliga a lista, depois de o texto
+        # já estar na tela: espera o estado em vez de olhar uma vez só.
+        ana.wait_for_selector('#area_id:disabled', state='attached', timeout=5000)
         ana.select_option('#client_id', label='GL Armazém 1')
         ana.select_option('#area_id', label='Limpeza')
         ana.fill('#titulo', 'Torneira do banheiro vazando')
