@@ -23,23 +23,47 @@ def _senha_temporaria():
     return ''.join(secrets.choice(alfabeto) for _ in range(12))
 
 
+# As telas antiga e nova (React, Fase 6a: ``/novo/admin/usuarios``,
+# ``/novo/admin/contratos`` e ``/api/v1/admin/...``) saem das MESMAS funções:
+# ``contexto_*`` monta a tela; ``acao_*`` faz o envio (a regra, o commit e o
+# recado). Só o administrador (``admin_required`` nas rotas das duas telas).
+#
+# A senha temporária (cadastrar e "Gerar senha temporária"): a ação a
+# devolve e NÃO deixa recado com ela. A tela antiga a põe no recado (como
+# sempre fez); a nova a recebe só na resposta do envio (``no-store``), como
+# a chave da integração.
+
+def _texto_da_senha_nova(u, senha):
+    return (f'Cadastro de {u.name} criado. Senha temporária: {senha} — entregue '
+            f'pessoalmente; no primeiro acesso o sistema pede uma senha nova.')
+
+
+def _texto_da_senha_gerada(u, senha):
+    return f'Senha temporária de {u.name}: {senha}'
+
+
 # ── Pessoas ──────────────────────────────────────────────────────────────
 
 @bp.get('/usuarios')
 @login_required
 @admin_required
 def usuarios():
+    from facilities.core.hierarquia import cadeia_acima
+    return render_template('core/usuarios.html', cadeia_acima=cadeia_acima,
+                           **contexto_usuarios())
+
+
+def contexto_usuarios():
     from facilities.cadastros.models import Contratante
-    from facilities.core.hierarquia import cadeia_acima, superiores_possiveis
+    from facilities.core.hierarquia import superiores_possiveis
     from sqlalchemy.orm import selectinload
     pessoas = (User.query.filter(User.is_deleted.is_(False))
                .options(selectinload(User.clients))
                .order_by(User.is_active.desc(), User.name).all())
     contratos = Client.query.filter(Client.is_deleted.is_(False)).order_by(Client.name).all()
-    return render_template('core/usuarios.html', pessoas=pessoas, contratos=contratos,
-                           perfis=PERFIS, permissoes=User.PERMISSOES_FINAS,
-                           superiores=superiores_possiveis(), cadeia_acima=cadeia_acima,
-                           clientes=Contratante.query.order_by(Contratante.nome).all())
+    return dict(pessoas=pessoas, contratos=contratos, perfis=PERFIS,
+                permissoes=User.PERMISSOES_FINAS, superiores=superiores_possiveis(),
+                clientes=Contratante.query.order_by(Contratante.nome).all())
 
 
 def _aplicar_formulario(u, form):
@@ -95,52 +119,70 @@ def _validar(u, original_id=None):
 @login_required
 @admin_required
 def criar_usuario():
+    feito = acao_criar_usuario(request.form)
+    if feito is not None:
+        flash(_texto_da_senha_nova(*feito), 'success')
+    return redirect(url_for('admin.usuarios'))
+
+
+def acao_criar_usuario(dados):
+    """``(pessoa, senha temporária)``; na recusa, o recado e None."""
     u = User()
-    _aplicar_formulario(u, request.form)
-    erro = _validar(u) or _aplicar_cadeia(u, request.form)
+    _aplicar_formulario(u, dados)
+    erro = _validar(u) or _aplicar_cadeia(u, dados)
     if erro:
         db.session.rollback()
         flash(erro, 'danger')
-        return redirect(url_for('admin.usuarios'))
+        return None
     senha = _senha_temporaria()
     u.set_password(senha)
     u.must_change_password = True
     db.session.add(u)
     db.session.commit()
-    flash(f'Cadastro de {u.name} criado. Senha temporária: {senha} — entregue '
-          f'pessoalmente; no primeiro acesso o sistema pede uma senha nova.', 'success')
-    return redirect(url_for('admin.usuarios'))
+    return u, senha
 
 
 @bp.post('/usuarios/<int:uid>')
 @login_required
 @admin_required
 def editar_usuario(uid):
+    return redirect(acao_editar_usuario(uid, request.form))
+
+
+def acao_editar_usuario(uid, dados):
     u = db.get_or_404(User, uid)
     era_ativo = u.is_active
     role_antes = u.role
-    _aplicar_formulario(u, request.form)
-    u.is_active = bool(request.form.get('is_active'))
+    _aplicar_formulario(u, dados)
+    u.is_active = bool(dados.get('is_active'))
     if u.id == current_user.id and (not u.is_active or u.role != 'master'):
         db.session.rollback()
         flash('Você não pode tirar o seu próprio acesso de administrador.', 'danger')
-        return redirect(url_for('admin.usuarios'))
-    erro = _validar(u, original_id=u.id) or _aplicar_cadeia(u, request.form, role_antes)
+        return url_for('admin.usuarios')
+    erro = _validar(u, original_id=u.id) or _aplicar_cadeia(u, dados, role_antes)
     if erro:
         db.session.rollback()
         flash(erro, 'danger')
-        return redirect(url_for('admin.usuarios'))
+        return url_for('admin.usuarios')
     if era_ativo and not u.is_active:
         u.session_epoch = (u.session_epoch or 0) + 1   # derruba as sessões abertas
     db.session.commit()
     flash(f'Cadastro de {u.name} atualizado.', 'success')
-    return redirect(url_for('admin.usuarios'))
+    return url_for('admin.usuarios')
 
 
 @bp.post('/usuarios/<int:uid>/nova-senha')
 @login_required
 @admin_required
 def nova_senha(uid):
+    u, senha = acao_nova_senha(uid)
+    flash(_texto_da_senha_gerada(u, senha), 'success')
+    return redirect(url_for('admin.usuarios'))
+
+
+def acao_nova_senha(uid):
+    """``(pessoa, senha temporária)``: a atual deixa de valer e as sessões
+    abertas caem."""
     u = db.get_or_404(User, uid)
     senha = _senha_temporaria()
     u.set_password(senha)
@@ -149,14 +191,17 @@ def nova_senha(uid):
     u.lockout_until = None
     u.session_epoch = (u.session_epoch or 0) + 1
     db.session.commit()
-    flash(f'Senha temporária de {u.name}: {senha}', 'success')
-    return redirect(url_for('admin.usuarios'))
+    return u, senha
 
 
 @bp.post('/usuarios/<int:uid>/desligar-codigo')
 @login_required
 @admin_required
 def desligar_codigo(uid):
+    return redirect(acao_desligar_codigo(uid))
+
+
+def acao_desligar_codigo(uid):
     """A pessoa perdeu o celular: o administrador desliga a segunda etapa.
     As sessões abertas caem (quem achou o celular não continua dentro)."""
     u = db.get_or_404(User, uid)
@@ -167,7 +212,7 @@ def desligar_codigo(uid):
     db.session.commit()
     flash(f'Segunda etapa de {u.name} desligada. No próximo login ela entra só com a '
           f'senha e pode ativar de novo em "Segurança da conta".', 'success')
-    return redirect(url_for('admin.usuarios'))
+    return url_for('admin.usuarios')
 
 
 # ── Locais (a tabela ``clients``; o endereço /admin/contratos é o de sempre) ─
@@ -176,15 +221,19 @@ def desligar_codigo(uid):
 @login_required
 @admin_required
 def contratos():
+    return render_template('core/contratos.html', **contexto_contratos())
+
+
+def contexto_contratos():
     from facilities.cadastros.models import Contratante, Estado
     lista = Client.query.filter(Client.is_deleted.is_(False)).order_by(
         Client.is_active.desc(), Client.name).all()
     gestores = (User.query.filter(User.is_deleted.is_(False), User.is_active.is_(True),
                                   User.role.in_(PERFIS_DE_GESTAO))
                 .order_by(User.name).all())
-    return render_template('core/contratos.html', contratos=lista, gestores=gestores,
-                           clientes=Contratante.query.order_by(Contratante.nome).all(),
-                           estados=Estado.query.order_by(Estado.nome).all())
+    return dict(contratos=lista, gestores=gestores,
+                clientes=Contratante.query.order_by(Contratante.nome).all(),
+                estados=Estado.query.order_by(Estado.nome).all())
 
 
 def _aplicar_contrato(c, form):
@@ -208,11 +257,11 @@ def _responsavel_invalido(c):
     return None
 
 
-def _vincular(c):
+def _vincular(c, dados):
     """Cliente e estado do local; o erro volta como mensagem para a tela."""
     from facilities.cadastros.servico import CadastroInvalido, vincular_local
     try:
-        vincular_local(c, request.form, current_user)
+        vincular_local(c, dados, current_user)
     except CadastroInvalido as erro:
         return str(erro)
     return None
@@ -222,39 +271,47 @@ def _vincular(c):
 @login_required
 @admin_required
 def criar_contrato():
+    return redirect(acao_criar_contrato(request.form))
+
+
+def acao_criar_contrato(dados):
     from facilities.cadastros.servico import registrar_local
     c = Client(is_active=True)
-    _aplicar_contrato(c, request.form)
+    _aplicar_contrato(c, dados)
     erro = ('Informe o nome do local.' if not c.name
-            else _responsavel_invalido(c) or _vincular(c))
+            else _responsavel_invalido(c) or _vincular(c, dados))
     if erro:
         db.session.rollback()
         flash(erro, 'danger')
-        return redirect(url_for('admin.contratos'))
+        return url_for('admin.contratos')
     db.session.add(c)
     registrar_local(c, None, current_user, nova=True)
     db.session.commit()
     flash(f'Local {c.name} cadastrado. Agora cadastre a estrutura dele (setores, '
           f'ambientes e pontos) e configure a passagem de turno.', 'success')
-    return redirect(url_for('admin.contratos'))
+    return url_for('admin.contratos')
 
 
 @bp.post('/contratos/<int:cid>')
 @login_required
 @admin_required
 def editar_contrato(cid):
+    return redirect(acao_editar_contrato(cid, request.form))
+
+
+def acao_editar_contrato(cid, dados):
     from facilities.cadastros.servico import foto, registrar_local
     c = db.get_or_404(Client, cid)
     antes = foto(c)
-    _aplicar_contrato(c, request.form)
-    c.is_active = bool(request.form.get('is_active'))
+    _aplicar_contrato(c, dados)
+    c.is_active = bool(dados.get('is_active'))
     erro = ('Informe o nome do local.' if not c.name
-            else _responsavel_invalido(c) or _vincular(c))
+            else _responsavel_invalido(c) or _vincular(c, dados))
     if erro:
         db.session.rollback()
         flash(erro, 'danger')
-        return redirect(url_for('admin.contratos'))
+        return url_for('admin.contratos')
     registrar_local(c, antes, current_user)
     db.session.commit()
     flash(f'Local {c.name} atualizado.', 'success')
-    return redirect(url_for('admin.contratos'))
+    return url_for('admin.contratos')

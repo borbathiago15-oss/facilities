@@ -53,9 +53,18 @@ def healthz():
     return jsonify({'status': 'ok'}), 200
 
 
+# As telas antiga e nova (React, Fase 6a: ``/novo/``, ``/novo/avisos`` e
+# ``/api/v1/inicio``, ``/api/v1/avisos``) saem das MESMAS funções:
+# ``contexto_*`` monta a tela; ``acao_*`` faz o envio (o commit e o endereço
+# de volta).
+
 @bp.get('/')
 @login_required
 def inicio():
+    return render_template('core/inicio.html', **contexto_inicio())
+
+
+def contexto_inicio():
     """O Início: o que espera a pessoa hoje (números que levam à fila de
     Demandas já filtrada), o que resolver primeiro e os atalhos do perfil."""
     from facilities.paineis.telas import ve_painel
@@ -110,9 +119,8 @@ def inicio():
             numeros.append({'rotulo': 'Pedidos de insumo', 'n': conta(tipo='insumo'), 'tom': 'info',
                             'icone': 'bi-box-seam', 'url': url_for('demandas.painel', tipo='insumo')})
         primeiro = itens[:6]
-    return render_template('core/inicio.html', atalhos=atalhos, numeros=numeros,
-                           primeiro=primeiro, tipos=_tipos_de_demanda(),
-                           situacoes=_situacoes_de_demanda())
+    return dict(atalhos=atalhos, numeros=numeros, primeiro=primeiro,
+                tipos=_tipos_de_demanda(), situacoes=_situacoes_de_demanda())
 
 
 def _tipos_de_demanda():
@@ -128,14 +136,23 @@ def _situacoes_de_demanda():
 @bp.get('/avisos')
 @login_required
 def avisos():
+    return render_template('core/avisos.html', **contexto_avisos())
+
+
+def contexto_avisos():
+    """Os últimos avisos da própria pessoa (só dela)."""
     lista = (Notification.query.filter_by(user_id=current_user.id)
              .order_by(Notification.created_at.desc()).limit(AVISOS_POR_PAGINA).all())
-    return render_template('core/avisos.html', avisos=lista)
+    return dict(avisos=lista)
 
 
 @bp.post('/avisos/<int:aviso_id>/abrir')
 @login_required
 def abrir_aviso(aviso_id):
+    return redirect(acao_abrir_aviso(aviso_id))
+
+
+def acao_abrir_aviso(aviso_id):
     """Marca como lido e leva ao link do aviso — só se for caminho interno.
 
     A conferência é a mesma do ``next=`` do login: ``//host`` e ``/\\host``
@@ -145,15 +162,21 @@ def abrir_aviso(aviso_id):
     a = Notification.query.filter_by(id=aviso_id, user_id=current_user.id).first_or_404()
     a.status = 'read'
     db.session.commit()
-    return redirect(_destino_seguro(a.link) or url_for('core.avisos'))
+    return _destino_seguro(a.link) or url_for('core.avisos')
 
 
 @bp.post('/avisos/ler-todos')
 @login_required
 def ler_todos():
-    (Notification.query.filter_by(user_id=current_user.id, status='unread')
-     .update({'status': 'read'}))
-    db.session.commit()
+    acao_ler_todos()
     if request.is_json:
         return jsonify({'ok': True})
     return redirect(url_for('core.avisos'))
+
+
+def acao_ler_todos():
+    """Marca como lidos todos os avisos da própria pessoa."""
+    (Notification.query.filter_by(user_id=current_user.id, status='unread')
+     .update({'status': 'read'}))
+    db.session.commit()
+    return url_for('core.avisos')

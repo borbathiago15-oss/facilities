@@ -122,14 +122,24 @@ def _senha_atual_errada(u):
     desligar o código): conta como erro de login. No limite, a conta bloqueia
     e a sessão cai — quem roubou a sessão não descobre a senha por tentativa
     (auditoria SEC-011). Devolve a resposta quando derrubou a sessão."""
-    if not _contar_erro_de_senha(u, datetime.utcnow()):
+    if not _derrubar_se_bloqueou(u):
         return None
+    return redirect(url_for('auth.login'))
+
+
+def _derrubar_se_bloqueou(u):
+    """O erro de senha de ``_senha_atual_errada``, sem a resposta: True
+    quando a conta bloqueou e a sessão caiu (o recado fica para a tela de
+    login). As telas antiga e nova (Fase 6a) contam no MESMO contador, o do
+    banco (``failed_login_count``)."""
+    if not _contar_erro_de_senha(u, datetime.utcnow()):
+        return False
     u.session_epoch = (u.session_epoch or 0) + 1
     db.session.commit()
     logout_user()
     session.clear()
     flash(MSG_LOGIN_RECUSADO, 'danger')
-    return redirect(url_for('auth.login'))
+    return True
 
 
 @functools.lru_cache(maxsize=1)
@@ -347,30 +357,47 @@ def logout():
 
 
 # ── Segunda etapa: ativar e desativar (pela própria pessoa) ──────────────
+#
+# As telas antiga e nova (React, Fase 6a: ``/novo/conta/seguranca``,
+# ``/novo/trocar-senha`` e ``/api/v1/conta/...``) saem das MESMAS funções:
+# ``preparar_codigo`` (o segredo novo, guardado na sessão até ativar),
+# ``acao_ativar_codigo``, ``acao_desativar_codigo`` e ``acao_trocar_senha``
+# (a regra, o commit, a rotação da sessão e o recado).
 
 @bp.route('/conta/seguranca', methods=['GET'])
 @login_required
 def seguranca():
-    novo = None
-    if not current_user.totp_ativo:
-        segredo = session.get('_totp_novo') or totp.novo_segredo()
-        session['_totp_novo'] = segredo
-        endereco = totp.uri(segredo, current_user.email)
-        novo = {'segredo': segredo, 'qr': totp.qr_svg(endereco)}
-    return render_template('core/seguranca.html', novo=novo)
+    return render_template('core/seguranca.html', novo=preparar_codigo())
+
+
+def preparar_codigo():
+    """O segredo e o QR para cadastrar no aplicativo autenticador, ou None
+    com a segunda etapa já ativada. O segredo fica na sessão até ativar (o
+    mesmo em cada abertura, nas duas telas): o código digitado é conferido
+    contra ele."""
+    if current_user.totp_ativo:
+        return None
+    segredo = session.get('_totp_novo') or totp.novo_segredo()
+    session['_totp_novo'] = segredo
+    endereco = totp.uri(segredo, current_user.email)
+    return {'segredo': segredo, 'qr': totp.qr_svg(endereco)}
 
 
 @bp.route('/conta/seguranca/ativar', methods=['POST'])
 @login_required
 def ativar_codigo():
+    return redirect(acao_ativar_codigo(request.form))
+
+
+def acao_ativar_codigo(dados):
     segredo = session.get('_totp_novo')
     if not segredo or current_user.totp_ativo:
-        return redirect(url_for('auth.seguranca'))
-    aceito = totp.verificar(segredo, request.form.get('codigo'))
+        return url_for('auth.seguranca')
+    aceito = totp.verificar(segredo, dados.get('codigo'))
     if aceito is None:
         flash('O código não confere. Confira se o aplicativo leu o QR desta tela e digite '
               'o código que aparece agora.', 'danger')
-        return redirect(url_for('auth.seguranca'))
+        return url_for('auth.seguranca')
     u = current_user._get_current_object()
     u.totp_segredo = segredo
     u.totp_ativo = True
@@ -384,63 +411,78 @@ def ativar_codigo():
     login_user(u)
     flash('Segunda etapa ativada. A partir de agora, o login pede a senha e o código do '
           'aplicativo.', 'success')
-    return redirect(url_for('auth.seguranca'))
+    return url_for('auth.seguranca')
 
 
 @bp.route('/conta/seguranca/desativar', methods=['POST'])
 @login_required
 def desativar_codigo():
+    destino, _derrubou = acao_desativar_codigo(request.form)
+    return redirect(destino)
+
+
+def acao_desativar_codigo(dados):
+    """``(destino, derrubou)``: ``derrubou`` quando a senha errada bloqueou a
+    conta e a sessão caiu (o destino é o login)."""
     u = current_user._get_current_object()
     if exige_segunda_etapa(u):
         # Fase 9B (cliente) e auditoria SEC-001 (gestão): obrigatória.
         flash('No seu perfil a segunda etapa é obrigatória e não pode ser desligada. '
               'Trocou de celular? Peça ao administrador para zerar o código e cadastre '
               'de novo.', 'warning')
-        return redirect(url_for('auth.seguranca'))
-    if not u.check_password(request.form.get('senha') or ''):
-        derrubou = _senha_atual_errada(u)
-        if derrubou:
-            return derrubou
+        return url_for('auth.seguranca'), False
+    if not u.check_password(dados.get('senha') or ''):
+        if _derrubar_se_bloqueou(u):
+            return url_for('auth.login'), True
         flash('A senha não confere.', 'danger')
-        return redirect(url_for('auth.seguranca'))
+        return url_for('auth.seguranca'), False
     u.totp_ativo = False
     u.totp_segredo = None
     u.totp_ultimo_passo = None
     db.session.commit()
     flash('Segunda etapa desativada.', 'success')
-    return redirect(url_for('auth.seguranca'))
+    return url_for('auth.seguranca'), False
 
 
 @bp.route('/trocar-senha', methods=['GET', 'POST'])
 @login_required
 def trocar_senha():
     if request.method == 'POST':
-        atual = request.form.get('atual') or ''
-        nova = request.form.get('nova') or ''
-        confirma = request.form.get('confirma') or ''
-        erro = None
-        if not current_user.check_password(atual):
-            derrubou = _senha_atual_errada(current_user._get_current_object())
-            if derrubou:
-                return derrubou
-            erro = 'A senha atual não confere.'
-        elif len(nova) < SENHA_MINIMA:
-            erro = f'A senha nova precisa ter pelo menos {SENHA_MINIMA} caracteres.'
-        elif nova != confirma:
-            erro = 'A confirmação não é igual à senha nova.'
-        elif nova == atual:
-            erro = 'A senha nova precisa ser diferente da atual.'
-        elif senhas.problema(nova, current_user.email):
-            erro = senhas.problema(nova, current_user.email)
-        if erro:
-            flash(erro, 'danger')
+        resultado, destino = acao_trocar_senha(request.form)
+        if resultado == 'erro':
             return render_template('core/trocar_senha.html'), 400
-        current_user.set_password(nova)
-        current_user.must_change_password = False
-        current_user.session_epoch = (current_user.session_epoch or 0) + 1
-        db.session.commit()
-        # A época mudou: renova a sessão DESTE aparelho com o id novo.
-        login_user(current_user._get_current_object())
-        flash('Senha trocada.', 'success')
-        return redirect(url_for('core.inicio'))
+        return redirect(destino)
     return render_template('core/trocar_senha.html')
+
+
+def acao_trocar_senha(dados):
+    """``(resultado, destino)``: ``'ok'`` (a senha trocada, a sessão deste
+    aparelho renovada), ``'erro'`` (o recado diz o quê; fica na tela) ou
+    ``'derrubou'`` (a senha atual errada bloqueou a conta; vai ao login)."""
+    atual = dados.get('atual') or ''
+    nova = dados.get('nova') or ''
+    confirma = dados.get('confirma') or ''
+    erro = None
+    if not current_user.check_password(atual):
+        if _derrubar_se_bloqueou(current_user._get_current_object()):
+            return 'derrubou', url_for('auth.login')
+        erro = 'A senha atual não confere.'
+    elif len(nova) < SENHA_MINIMA:
+        erro = f'A senha nova precisa ter pelo menos {SENHA_MINIMA} caracteres.'
+    elif nova != confirma:
+        erro = 'A confirmação não é igual à senha nova.'
+    elif nova == atual:
+        erro = 'A senha nova precisa ser diferente da atual.'
+    elif senhas.problema(nova, current_user.email):
+        erro = senhas.problema(nova, current_user.email)
+    if erro:
+        flash(erro, 'danger')
+        return 'erro', None
+    current_user.set_password(nova)
+    current_user.must_change_password = False
+    current_user.session_epoch = (current_user.session_epoch or 0) + 1
+    db.session.commit()
+    # A época mudou: renova a sessão DESTE aparelho com o id novo.
+    login_user(current_user._get_current_object())
+    flash('Senha trocada.', 'success')
+    return 'ok', url_for('core.inicio')
