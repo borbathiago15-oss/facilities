@@ -554,7 +554,9 @@ def test_dentro_das_telas_novas_os_links_sao_os_novos(app_module, cena, auth_cli
     assert nova('/painel?de=2026-09-01') == '/novo/painel?de=2026-09-01'
     assert nova('/painel-x') == '/painel-x' and nova('/painelzinho') == '/painelzinho'
     assert nova('/admin/integracao/') == '/novo/admin/integracao/'
-    assert nova('/admin/usuarios') == '/admin/usuarios'
+    # (As pessoas do administrador entraram na Fase 6a; o armazenamento não muda.)
+    assert nova('/admin/usuarios') == '/novo/admin/usuarios'
+    assert nova('/admin/armazenamento') == '/admin/armazenamento'
     assert nova('/api/integracao/v1/locais') == '/api/integracao/v1/locais'
     # As telas antigas e o menu não mudam.
     c = auth_client
