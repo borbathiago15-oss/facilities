@@ -602,6 +602,31 @@ def test_o_ciclo_do_chamado_como_na_tela_antiga(app_module, cena, auth_client):
     assert _retrato(app_module, y)['status'] == 'cancelado' and _retrato(app_module, y)['anexos'] == []
 
 
+def test_a_acao_da_rota_antiga_aceita_corpo_json(app_module, cena, auth_client):
+    """``POST /chamados/<id>/acao`` lê o corpo como a API das telas novas
+    (``_dados``): em JSON, a ação é feita como pelo formulário; a recusa
+    volta em JSON; o formulário segue igual."""
+    from facilities.chamados.models import Chamado
+    c = auth_client
+    url = f"/chamados/{cena['chamado']}/acao"
+    r = c.post(url, json={'acao': 'comentar', 'texto': 'Comentário em JSON'})
+    assert r.status_code == 302 and r.headers['Location'] == f"/chamados/{cena['chamado']}"
+    with app_module.app.app_context():
+        from app import db
+        ch = db.session.get(Chamado, cena['chamado'])
+        assert [e.texto for e in ch.eventos if e.tipo == 'comentario'][-1] == 'Comentário em JSON'
+    r = c.post(url, json={'acao': 'iniciar'})
+    assert r.status_code == 302
+    with app_module.app.app_context():
+        from app import db
+        assert db.session.get(Chamado, cena['chamado']).status == 'em_atendimento'
+    # A recusa por um campo do corpo (o motivo vazio) volta em JSON.
+    r = c.post(url, json={'acao': 'aguardar', 'texto': ''})
+    assert r.status_code == 400 and r.is_json and r.get_json()['error'].startswith('Diga o que está faltando')
+    r = c.post(url, data={'acao': 'comentar', 'texto': 'Comentário no formulário'})
+    assert r.status_code == 302 and r.headers['Location'] == f"/chamados/{cena['chamado']}"
+
+
 def test_quem_nao_e_responsavel_e_recusado_como_na_tela_antiga(app_module, cena):
     from facilities.chamados.models import Chamado
     with app_module.app.app_context():
