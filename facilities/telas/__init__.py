@@ -113,5 +113,6 @@ from facilities.telas import equipes as _equipes  # noqa: E402,F401
 from facilities.telas import integracao as _integracao  # noqa: E402,F401
 from facilities.telas import materiais as _materiais  # noqa: E402,F401
 from facilities.telas import passagem as _passagem  # noqa: E402,F401
+from facilities.telas import portal as _portal  # noqa: E402,F401
 from facilities.telas import relatorios as _relatorios  # noqa: E402,F401
 from facilities.telas import rotas as _rotas  # noqa: E402,F401
