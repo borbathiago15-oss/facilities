@@ -10,7 +10,7 @@
   <button class="btn btn-outline-primary" type="submit">Ver o dia</button>
 </form>
 <div class="fc-cartao mb-3 d-flex flex-wrap gap-4">
-  <div><div class="small text-muted">Aderência à rota</div><div class="fs-3 fw-bold">{{ aderencia.pct ~ '%' if aderencia.pct is not none else '—' }}</div></div>
+  <div><div class="small text-muted">Aderência à rota</div><div class="fs-3 fw-bold">{% if aderencia.pct is not none %}{{ '%.1f'|format(aderencia.pct)|replace('.', ',') }}%{% else %}—{% endif %}</div></div>
   <div><div class="small text-muted">No prazo / já venceram</div><div class="fs-3 fw-bold">{{ aderencia.no_prazo }} / {{ aderencia.base }}</div></div>
   <div><div class="small text-muted">Previstas no dia</div><div class="fs-3 fw-bold">{{ tarefas|length }}</div></div>
 </div>

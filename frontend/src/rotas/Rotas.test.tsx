@@ -146,7 +146,17 @@ describe('o dia', () => {
     expect(screen.getByRole('link', { name: 'Ana · 07:02–07:10 · hora do celular · 1 não conforme(s)' })).toHaveAttribute('href', '/rotas/execucoes/8');
     expect(screen.getByText('Fora do local (1,1 km)')).toHaveAttribute('title', 'Precisão do celular: 25 m');
     expect(screen.getByText('Sem resposta (respondeu às 09:20)')).toHaveClass('text-bg-danger');
-    expect(screen.getByText('50%')).toBeInTheDocument();
+    // Com vírgula, como a tela antiga, o portal e o PDF ('%.1f' + vírgula).
+    expect(screen.getByText('50,0%')).toBeInTheDocument();
+  });
+
+  it('a aderência com casa decimal usa vírgula; sem base, "—"', () => {
+    const { unmount } = abrir(<Dia dados={{ ...dia, aderencia: { no_prazo: 9, base: 11, pct: 81.8 } }} />);
+    expect(screen.getByText('81,8%')).toBeInTheDocument();
+    expect(screen.queryByText('81.8%')).toBeNull();
+    unmount();
+    abrir(<Dia dados={{ ...dia, aderencia: { no_prazo: 0, base: 0, pct: null } }} />);
+    expect(screen.getByText('Aderência à rota').nextSibling).toHaveTextContent('—');
   });
 
   it('resolve a ocorrência do público pelo mesmo caminho', async () => {
