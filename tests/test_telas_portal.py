@@ -466,11 +466,15 @@ def test_abrir_cobranca_como_na_tela_antiga(app_module, mais):
 
 
 def test_o_mesmo_limite_de_cobrancas_por_hora():
+    """30 cobranças por hora, contadas JUNTAS nas duas telas: o mesmo limite
+    compartilhado (mesmo escopo) na rota antiga e na da tela nova. Com um
+    contador por rota, o cliente chegava a 60 por hora."""
     from facilities.extensions import limiter
-    limites = {k.rsplit('.', 1)[-1]: [g.limit_provider for g in v]
-               for k, v in limiter.limit_manager._decorated_limits.items()}
-    assert limites['abrir_cobranca'] == limites['api_portal_abrir_cobranca'] == ['30 per hour']
-
+    grupos = {k.rsplit('.', 1)[-1]: list(v) for k, v in limiter.limit_manager._decorated_limits.items()}
+    antiga, nova = grupos['abrir_cobranca'], grupos['api_portal_abrir_cobranca']
+    assert [(g.limit_provider, g.shared, g.scope) for g in antiga] == \
+        [(g.limit_provider, g.shared, g.scope) for g in nova] == \
+        [('30 per hour', True, 'portal-abrir-cobranca')]
 
 def test_confirmar_e_reabrir_como_na_tela_antiga(app_module, mais):
     from app import User, db

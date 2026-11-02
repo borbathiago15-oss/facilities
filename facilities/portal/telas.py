@@ -25,6 +25,11 @@ from facilities.portal.models import ABERTA, FECHADA, RESPONDIDA, STATUS, Cobran
 from facilities.portal.servico import RegraDaCobranca
 
 bp = Blueprint('portal', __name__, url_prefix='/cliente')
+
+# Abrir cobrança: 30 por hora, contadas JUNTAS na tela antiga e na nova
+# (``shared_limit`` com o mesmo escopo) — duas telas não dobram o limite.
+LIMITE_DE_COBRANCAS = '30 per hour'
+ESCOPO_DO_LIMITE_DE_COBRANCAS = 'portal-abrir-cobranca'
 bp_interno = Blueprint('cobrancas', __name__, url_prefix='/cobrancas')
 
 
@@ -265,7 +270,7 @@ def contexto_cobrancas(args):
 
 @bp.post('/cobrancas')
 @login_required
-@limiter.limit('30 per hour')
+@limiter.shared_limit(LIMITE_DE_COBRANCAS, scope=ESCOPO_DO_LIMITE_DE_COBRANCAS)
 def abrir_cobranca():
     return redirect(acao_abrir_cobranca(request.form))
 

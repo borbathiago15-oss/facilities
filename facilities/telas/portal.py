@@ -344,7 +344,7 @@ def api_portal_cobranca(cobid):
 
 @api.post('/cliente/cobrancas')
 @login_required
-@limiter.limit('30 per hour')
+@limiter.shared_limit(ptl.LIMITE_DE_COBRANCAS, scope=ptl.ESCOPO_DO_LIMITE_DE_COBRANCAS)
 def api_portal_abrir_cobranca():
     return _feito(ptl.acao_abrir_cobranca(_dados()))
 
