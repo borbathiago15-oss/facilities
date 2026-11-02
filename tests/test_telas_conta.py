@@ -489,7 +489,13 @@ def test_a_lista_das_pessoas_traz_os_dados_da_tela_antiga(app_module, auth_clien
     assert eva['alcance'] == '1 local(is) direto(s)' and eva['segunda_etapa']
     assert eva['cadeia'] == [{'nome': 'Sueli Supervisora', 'perfil': 'Supervisor'}]
     assert 'Cadeia: Sueli Supervisora (Supervisor) › Eva Encarregada' in texto
-    assert [s['nome'] for s in d['superiores']] == sorted(s['nome'] for s in d['superiores'])
+    # A ordem é a do banco (ORDER BY name, que segue a collation do Postgres:
+    # en_US ignora espaço e caixa; o sorted() do Python não): compara com a
+    # lista do primeiro "Superior" da tela antiga, que sai da mesma consulta.
+    bruto = auth_client.get('/admin/usuarios').get_data(as_text=True)
+    sel = re.search(r'name="superior_id">(.*?)</select>', bruto, re.S).group(1)
+    na_antiga = [html_mod.unescape(n) for n in re.findall(r'<option value="\d+"[^>]*>([^<]+?) — ', sel)]
+    assert [s['nome'] for s in d['superiores']] == na_antiga
     assert d['perfis'][0] == ['master', 'Administrador']
     corpo = auth_client.get('/api/v1/admin/usuarios').get_data(as_text=True)
     assert 'password' not in corpo and 'pbkdf2' not in corpo and 'scrypt' not in corpo
