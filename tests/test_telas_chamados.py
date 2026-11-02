@@ -715,6 +715,67 @@ def test_a_preventiva_como_na_tela_antiga(app_module, cena, auth_client):
         c.post('/preventiva/999999', data={'ativo': '1'}).status_code
 
 
+def test_editar_plano_com_ponto_checklist_e_equipamento_desativados(app_module, cena, auth_client):
+    """O "Editar" do plano mantém o ponto, o checklist e o equipamento atuais
+    dele mesmo desativados (com "(desativado)"); salvar sem mexer não muda o
+    plano de lugar. O desativado não aparece no "Novo plano", e outro plano
+    (ou um novo) não pode escolhê-lo."""
+    from app import Client, db
+    from facilities.cadastros import servico as cad
+    from facilities.cadastros.models import Equipamento, PontoInspecao
+    from facilities.preventiva.models import PlanoPreventivo
+    from facilities.rotas import servico as s
+    from facilities.rotas.models import ChecklistModelo
+    c = auth_client
+    a, pid = cena['local'], cena['plano']
+    with app_module.app.app_context():
+        loc = db.session.get(Client, a)
+        # Outras opções ativas, que vêm antes na ordem alfabética: era nelas
+        # que o seletor caía.
+        cad.salvar_equipamento(loc, None, {'nome': 'Ar-condicionado', 'ambiente_id': cena['ambiente']}, None)
+        cad.salvar_ponto(loc, None, {'nome': 'Entrada', 'ambiente_id': cena['ambiente']}, None)
+        m2 = s.criar_modelo(a, {'nome': 'A checklist ativo'}, None)
+        s.publicar(m2, s.normalizar_itens([{'texto': 'Ok?', 'tipo': 'sim_nao'}]), {}, None)
+        for modelo, oid in ((PontoInspecao, cena['ponto']), (ChecklistModelo, cena['modelo']),
+                            (Equipamento, cena['equipamento'])):
+            db.session.get(modelo, oid).is_active = False
+        db.session.commit()
+        p = db.session.get(PlanoPreventivo, pid)
+        rotulos = {'ponto': f'{p.ponto.ambiente.nome} · {p.ponto.nome} (desativado)',
+                   'modelo': f'{p.modelo.nome} (desativado)', 'eq': f'{p.equipamento.nome} (desativado)'}
+        atual = (p.ponto_id, p.modelo_id, p.equipamento_id)
+    antigo = c.get(f'/preventiva/locais/{a}').get_data(as_text=True)
+    d = c.get(f'/api/v1/preventiva/locais/{a}').get_json()
+
+    def selecionada(campo, sufixo):
+        bloco = antigo.split(f'id="{campo}{sufixo}"')[1].split('</select>')[0]
+        return html_mod.unescape(re.findall(r'<option value="\d+" selected>([^<]+)</option>', bloco)[0])
+    for campo, oid in (('ponto', cena['ponto']), ('modelo', cena['modelo']), ('eq', cena['equipamento'])):
+        assert selecionada(campo, pid) == rotulos[campo], campo
+        assert f'<option value="{oid}"' not in antigo.split(f'id="{campo}novo"')[1].split('</select>')[0], campo
+    for lista, oid in (('pontos', cena['ponto']), ('modelos', cena['modelo']), ('equipamentos', cena['equipamento'])):
+        [x] = [x for x in d[lista] if x['id'] == oid]
+        assert x['ativo'] is False, lista
+        assert any(y['ativo'] for y in d[lista]), lista
+    # Salvar sem mexer: aceito, nas duas telas, e o plano fica onde estava.
+    form = {'nome': 'Plano editado', 'ponto_id': str(cena['ponto']), 'modelo_id': str(cena['modelo']),
+            'equipamento_id': str(cena['equipamento']), 'intervalo_dias': '20',
+            'proxima_em': tempo.hoje().isoformat(), 'antecedencia_dias': '0', 'prioridade': 'media',
+            'responsavel_id': str(cena['tec'])}
+    _, _, rec = _antiga(c, f'/preventiva/{pid}', data=form)
+    assert [x['tipo'] for x in rec] == ['success'], rec
+    r, j = _nova(c, f'/api/v1/preventiva/{pid}', json={**form, 'intervalo_dias': '21'})
+    assert r.status_code == 200 and [x['tipo'] for x in j['recados']] == ['success'], j
+    with app_module.app.app_context():
+        p = db.session.get(PlanoPreventivo, pid)
+        assert (p.ponto_id, p.modelo_id, p.equipamento_id) == atual and p.intervalo_dias == 21
+    # O desativado não serve para um plano novo.
+    _, _, rec = _antiga(c, f'/preventiva/locais/{a}', data={**form, 'nome': 'Outro'})
+    assert rec[0]['tipo'] == 'danger' and 'ponto ativo' in rec[0]['texto']
+    r, j = _nova(c, f'/api/v1/preventiva/locais/{a}', json={**form, 'nome': 'Outro'})
+    assert r.status_code == 400 and 'ponto ativo' in j['error']
+
+
 # ── Isolamento ────────────────────────────────────────────────────────────
 
 def test_quem_e_de_outro_local_nao_ve_nem_altera_a(app_module, cena):

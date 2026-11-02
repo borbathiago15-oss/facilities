@@ -326,9 +326,12 @@ def api_preventiva_local(cid):
     return _sem_cache({
         'local': {'id': loc.id, 'nome': loc.name},
         'planos': [plano(p) for p in c['planos']],
-        'modelos': [{'id': m.id, 'nome': m.nome} for m in c['modelos']],
-        'pontos': [{'id': p.id, 'rotulo': f'{p.ambiente.nome} · {p.nome}'} for p in c['pontos']],
-        'equipamentos': [{'id': e.id, 'nome': e.nome} for e in c['equipamentos']],
+        # Com o item desativado que um plano ainda usa (só no "Editar" dele).
+        'modelos': [{'id': m.id, 'nome': m.nome, 'ativo': bool(m.is_active)} for m in c['modelos']],
+        'pontos': [{'id': p.id, 'rotulo': f'{p.ambiente.nome} · {p.nome}', 'ativo': bool(p.is_active)}
+                   for p in c['pontos']],
+        'equipamentos': [{'id': e.id, 'nome': e.nome, 'ativo': bool(e.is_active)}
+                         for e in c['equipamentos']],
         'tecnicos': [{'id': t.id, 'nome': t.name} for t in c['tecnicos']],
         'prioridades': _pares(prioridades), 'hoje': c['hoje'],
         'pode_montar': c['pode_montar'],

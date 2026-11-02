@@ -257,7 +257,8 @@ describe('a preventiva', () => {
         proxima_em_iso: '2026-11-10', prioridade: 'alta', prioridade_rotulo: 'Alta', responsavel_id: 11, responsavel: 'Caio',
         ciclos: [{ vencimento: '10/10/2026', chamado: { url: '/novo/chamados/7', numero: 'OS-00007', status_rotulo: 'Fechado' } },
           { vencimento: '10/09/2026', chamado: null }] }],
-      modelos: [{ id: 9, nome: 'Limpeza' }], pontos: [{ id: 1, rotulo: 'Hall · Porta' }, { id: 2, rotulo: 'Copa · Pia' }],
+      modelos: [{ id: 9, nome: 'Limpeza', ativo: true }],
+      pontos: [{ id: 1, rotulo: 'Hall · Porta', ativo: true }, { id: 2, rotulo: 'Copa · Pia', ativo: true }],
       equipamentos: [], tecnicos: [{ id: 11, nome: 'Caio' }], prioridades: PRI, hoje: '2026-11-02', pode_montar: true,
       links: { pontos: '/novo/cadastros/locais/3', checklists: '/novo/rotas/locais/3' }, ...extra };
   }
@@ -283,6 +284,30 @@ describe('a preventiva', () => {
     await waitFor(() => expect(chamadas).toHaveLength(1));
     expect(chamadas[0].url).toBe('/api/v1/preventiva/5');
     expect((chamadas[0].init!.body as FormData).get('ativo')).toBe('0');
+  });
+
+  it('o "Editar" mantém o ponto, o checklist e o equipamento desativados do plano; o "Novo plano" não os mostra', () => {
+    const base = prev();
+    abrir(<Preventiva dados={prev({
+      planos: [{ ...base.planos[0], equipamento_id: 4, equipamento: 'Ar' }],
+      pontos: [{ id: 1, rotulo: 'Hall · Porta', ativo: true }, { id: 2, rotulo: 'Copa · Pia', ativo: false }],
+      modelos: [{ id: 8, nome: 'Geral', ativo: true }, { id: 9, nome: 'Limpeza', ativo: false }],
+      equipamentos: [{ id: 3, nome: 'Ar novo', ativo: true }, { id: 4, nome: 'Ar', ativo: false }],
+    })} />);
+    for (const [campo, valor, rotulo] of [['ponto', '2', 'Copa · Pia (desativado)'], ['modelo', '9', 'Limpeza (desativado)'],
+      ['eq', '4', 'Ar (desativado)']]) {
+      const editar = document.getElementById(`${campo}5`) as HTMLSelectElement;
+      expect(editar).toHaveValue(valor);
+      expect(editar.selectedOptions[0].textContent).toBe(rotulo);
+      const novo = document.getElementById(`${campo}novo`) as HTMLSelectElement;
+      expect([...novo.options].map((o) => o.value)).not.toContain(valor);
+    }
+  });
+
+  it('só com ponto ou checklist desativados, o aviso no lugar do "Novo plano"', () => {
+    abrir(<Preventiva dados={prev({ modelos: [{ id: 9, nome: 'Limpeza', ativo: false }] })} />);
+    expect(screen.getByText(/precisa de pelo menos um ponto com QR/)).toBeInTheDocument();
+    expect(screen.queryByText('Novo plano')).toBeNull();
   });
 
   it('sem ponto ou sem checklist publicado, o aviso no lugar do "Novo plano"', () => {
