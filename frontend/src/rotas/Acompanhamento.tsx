@@ -5,6 +5,7 @@
 // execucao.html).
 import { useNavigate } from 'react-router';
 import { Ir, Migalhas, RecadosDoEnvio, useFormulario } from '../cadastros/comum';
+import { pct } from '../passagem/gestao';
 import { API, SeloGps } from './comum';
 import type { DadosDaExecucao, DadosDoDia, DadosDosFeriados } from './tipos';
 
@@ -94,7 +95,7 @@ export function Dia({ dados }: { dados: DadosDoDia }) {
         <button className="btn btn-outline-primary" type="submit">Ver o dia</button>
       </form>
       <div className="fc-cartao mb-3 d-flex flex-wrap gap-4">
-        <div><div className="small text-muted">Aderência à rota</div><div className="fs-3 fw-bold">{a.pct !== null ? `${a.pct}%` : '—'}</div></div>
+        <div><div className="small text-muted">Aderência à rota</div><div className="fs-3 fw-bold">{pct(a.pct)}</div></div>
         <div><div className="small text-muted">No prazo / já venceram</div><div className="fs-3 fw-bold">{a.no_prazo} / {a.base}</div></div>
         <div><div className="small text-muted">Previstas no dia</div><div className="fs-3 fw-bold">{dados.tarefas.length}</div></div>
       </div>

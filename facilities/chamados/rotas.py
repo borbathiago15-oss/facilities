@@ -222,7 +222,10 @@ def contexto_ver(chamado_id):
 @login_required
 @module_required(MODULO)
 def acao(chamado_id):
-    destino = acao_executar(chamado_id, request.form, request.files,
+    # O corpo é lido como na API das telas novas: formulário como está, JSON
+    # como o mesmo formulário (antes o JSON era ignorado e sempre recusado).
+    from facilities.telas.cadastros import _dados
+    destino = acao_executar(chamado_id, _dados(), request.files,
                             recusa_em_json=request.is_json)
     return redirect(destino) if isinstance(destino, str) else destino
 

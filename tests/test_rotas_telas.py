@@ -92,7 +92,7 @@ def test_encarregado_executa_pelo_aplicativo(app_module, montado):
 def test_gestao_acompanha_o_dia_e_ve_a_execucao(app_module, montado, auth_client):
     test_encarregado_executa_pelo_aplicativo(app_module, montado)
     html = auth_client.get(f"/rotas/locais/{montado['local']}/dia").get_data(as_text=True)
-    assert 'Ana Tela' in html and 'Concluída no prazo' in html and '100.0%' in html
+    assert 'Ana Tela' in html and 'Concluída no prazo' in html and '100,0%' in html
     with app_module.app.app_context():
         from facilities.rotas.models import Execucao, ExecucaoFoto
         eid = Execucao.query.one().id

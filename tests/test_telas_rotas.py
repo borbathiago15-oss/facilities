@@ -369,6 +369,21 @@ def test_rota_feriados_dia_e_execucao_trazem_os_dados_da_tela_antiga(app_module,
 
 # ── Os envios: a mesma ação das telas antigas ─────────────────────────────
 
+def test_a_aderencia_do_dia_tem_virgula(app_module, cena, auth_client, monkeypatch):
+    """"Aderência à rota" com vírgula, como o portal e o PDF (``'%.1f'|format``
+    + vírgula), e não "81.8%". A API manda o número; a tela nova escreve."""
+    from facilities.rotas import servico
+    monkeypatch.setattr(servico, 'aderencia', lambda tarefas, agora=None: (9, 11, 81.8))
+    a = cena['local']
+    antigo = _texto(auth_client.get(f'/rotas/locais/{a}/dia').get_data(as_text=True))
+    assert '81,8%' in antigo and '81.8' not in antigo and '9 / 11' in antigo
+    assert auth_client.get(f'/api/v1/rotas/locais/{a}/dia').get_json()['aderencia'] == {
+        'no_prazo': 9, 'base': 11, 'pct': 81.8}
+    monkeypatch.setattr(servico, 'aderencia', lambda tarefas, agora=None: (0, 0, None))
+    antigo = _texto(auth_client.get(f'/rotas/locais/{a}/dia').get_data(as_text=True))
+    assert 'Aderência à rota</div><div class="fs-3 fw-bold">—</div>' in antigo
+
+
 def test_checklists_como_na_tela_antiga(app_module, cena, auth_client):
     from app import db
     from facilities.rotas.models import ChecklistDocumento, ChecklistModelo

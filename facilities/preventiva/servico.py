@@ -45,8 +45,11 @@ def salvar_plano(local, plano, dados, autor):
     nome = (dados.get('nome') or '').strip()[:150]
     if not nome:
         raise RegraDaPreventiva('Dê um nome ao plano (ex.: Limpeza do filtro do ar).')
+    # Desativado só vale quando é o que o plano já usa (o "Editar" mostra o
+    # item atual do plano mesmo desativado; salvar sem mexer não o recusa).
     ponto = db.session.get(PontoInspecao, _id(dados, 'ponto_id'))
-    if ponto is None or ponto.client_id != local.id or not ponto.is_active:
+    if ponto is None or ponto.client_id != local.id or not (
+            ponto.is_active or (plano is not None and plano.ponto_id == ponto.id)):
         raise RegraDaPreventiva('Escolha um ponto ativo deste local (onde o técnico lê o QR).')
     eq = None
     if str(dados.get('equipamento_id') or '').isdigit():
@@ -54,8 +57,8 @@ def salvar_plano(local, plano, dados, autor):
         if eq is None or eq.client_id != local.id:
             raise RegraDaPreventiva('Escolha um equipamento deste local.')
     modelo = db.session.get(ChecklistModelo, _id(dados, 'modelo_id'))
-    if modelo is None or modelo.client_id != local.id or not modelo.is_active \
-            or modelo.versao_atual is None:
+    if modelo is None or modelo.client_id != local.id or modelo.versao_atual is None or not (
+            modelo.is_active or (plano is not None and plano.modelo_id == modelo.id)):
         raise RegraDaPreventiva('Escolha um checklist publicado deste local.')
     intervalo = _int(dados, 'intervalo_dias', 1, 730, 'Intervalo em dias')
     antecedencia = _int(dados, 'antecedencia_dias', 0, 60, 'Antecedência em dias', 0)

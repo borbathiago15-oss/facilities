@@ -127,11 +127,13 @@ def contexto_painel(args):
     papel = current_user._effective_role()
     itens = demandas(ids, com_visitas=papel in PERFIS_QUE_VISITAM + ('visualizador',),
                      com_pedidos=ve_custo(current_user), acompanha_rotas=_pode_acompanhar())
-    contagem = {s: sum(1 for i in itens if i['situacao'] == s) for s in SITUACOES}
     tipo = args.get('tipo') or ''
     situacao = args.get('situacao') or ''
     if tipo in TIPOS:
         itens = [i for i in itens if i['tipo'] == tipo]
+    # Os cartões contam com o mesmo local e o mesmo tipo da lista; só a
+    # situação fica de fora (cada cartão é uma situação).
+    contagem = {s: sum(1 for i in itens if i['situacao'] == s) for s in SITUACOES}
     if situacao in SITUACOES:
         itens = [i for i in itens if i['situacao'] == situacao]
     return dict(itens=itens, locais=locais, cid=cid, tipo=tipo, situacao=situacao,

@@ -47,14 +47,26 @@ def contexto_local(cid):
     loc = _local(cid)
     planos = (PlanoPreventivo.query.filter_by(client_id=loc.id)
               .order_by(PlanoPreventivo.is_active.desc(), PlanoPreventivo.proxima_em).all())
+
+    def com_os_dos_planos(modelo, campo, ativos):
+        """Os ativos do local e, para o "Editar" de cada plano, o item atual
+        dele que foi desativado: sem ele, o seletor caía na primeira opção e
+        o "Salvar" mudava o plano de ponto (ou de checklist, ou de
+        equipamento). O desativado só aparece no plano que já o usa."""
+        usados = {getattr(p, campo) for p in planos} - {None} - {x.id for x in ativos}
+        extra = (modelo.query.filter(modelo.client_id == loc.id, modelo.id.in_(usados),
+                                     modelo.is_active.isnot(True)).all() if usados else [])
+        return sorted(ativos + extra, key=lambda x: x.nome) if extra else ativos
+
     modelos = [m for m in ChecklistModelo.query.filter_by(client_id=loc.id, is_active=True)
                .order_by(ChecklistModelo.nome) if m.versao_atual]
     return dict(
-        local=loc, planos=planos, modelos=modelos,
-        pontos=PontoInspecao.query.filter_by(client_id=loc.id, is_active=True)
-        .order_by(PontoInspecao.nome).all(),
-        equipamentos=Equipamento.query.filter_by(client_id=loc.id, is_active=True)
-        .order_by(Equipamento.nome).all(),
+        local=loc, planos=planos,
+        modelos=com_os_dos_planos(ChecklistModelo, 'modelo_id', modelos),
+        pontos=com_os_dos_planos(PontoInspecao, 'ponto_id', PontoInspecao.query.filter_by(
+            client_id=loc.id, is_active=True).order_by(PontoInspecao.nome).all()),
+        equipamentos=com_os_dos_planos(Equipamento, 'equipamento_id', Equipamento.query.filter_by(
+            client_id=loc.id, is_active=True).order_by(Equipamento.nome).all()),
         tecnicos=tecnicos_do_contrato(loc.id), prioridades=PRIORIDADES,
         hoje=tempo.hoje().isoformat(), pode_montar=current_user.e_gestao())
 

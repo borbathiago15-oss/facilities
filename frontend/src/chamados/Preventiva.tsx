@@ -7,6 +7,10 @@ import type { DadosDaPreventiva, PlanoPreventivo } from './tipos';
 
 const API = '/api/v1/preventiva';
 
+/** O item desativado só vem no "Editar" do plano que ainda o usa (o seletor
+ * não cai na primeira opção); no "Novo plano", só os ativos. */
+const desativado = (x: { ativo: boolean }) => (x.ativo ? '' : ' (desativado)');
+
 /** Os campos do plano (a macro ``campos`` da antiga): o novo e os de editar. */
 export function CamposDoPlano({ p, sufixo, dados }: { p: PlanoPreventivo | null; sufixo: string; dados: DadosDaPreventiva }) {
   return (
@@ -15,14 +19,14 @@ export function CamposDoPlano({ p, sufixo, dados }: { p: PlanoPreventivo | null;
         <input className="form-control" id={`nome${sufixo}`} name="nome" required maxLength={150} defaultValue={p ? p.nome : ''} placeholder="Ex.: Limpeza do filtro do ar-condicionado" /></div>
       <div className="col-md-6"><label className="form-label small" htmlFor={`ponto${sufixo}`}>Onde o técnico lê o QR</label>
         <select className="form-select" id={`ponto${sufixo}`} name="ponto_id" required defaultValue={p ? p.ponto_id : undefined}>
-          {dados.pontos.map((pt) => <option value={pt.id} key={pt.id}>{pt.rotulo}</option>)}</select></div>
+          {dados.pontos.filter((pt) => pt.ativo || p?.ponto_id === pt.id).map((pt) => <option value={pt.id} key={pt.id}>{pt.rotulo}{desativado(pt)}</option>)}</select></div>
       <div className="col-md-6"><label className="form-label small" htmlFor={`modelo${sufixo}`}>Checklist que ele vai fazer</label>
         <select className="form-select" id={`modelo${sufixo}`} name="modelo_id" required defaultValue={p ? p.modelo_id : undefined}>
-          {dados.modelos.map((m) => <option value={m.id} key={m.id}>{m.nome}</option>)}</select></div>
+          {dados.modelos.filter((m) => m.ativo || p?.modelo_id === m.id).map((m) => <option value={m.id} key={m.id}>{m.nome}{desativado(m)}</option>)}</select></div>
       <div className="col-md-6"><label className="form-label small" htmlFor={`eq${sufixo}`}>Equipamento (opcional)</label>
         <select className="form-select" id={`eq${sufixo}`} name="equipamento_id" defaultValue={p && p.equipamento_id ? p.equipamento_id : ''}>
           <option value="">Nenhum</option>
-          {dados.equipamentos.map((e) => <option value={e.id} key={e.id}>{e.nome}</option>)}</select></div>
+          {dados.equipamentos.filter((e) => e.ativo || p?.equipamento_id === e.id).map((e) => <option value={e.id} key={e.id}>{e.nome}{desativado(e)}</option>)}</select></div>
       <div className="col-6 col-md-3"><label className="form-label small" htmlFor={`int${sufixo}`}>A cada quantos dias</label>
         <input className="form-control" id={`int${sufixo}`} name="intervalo_dias" type="number" min={1} max={730} required defaultValue={p ? p.intervalo_dias : 30} /></div>
       <div className="col-6 col-md-3"><label className="form-label small" htmlFor={`prox${sufixo}`}>Próximo vencimento</label>
@@ -43,7 +47,7 @@ export function CamposDoPlano({ p, sufixo, dados }: { p: PlanoPreventivo | null;
 export function Preventiva({ dados }: { dados: DadosDaPreventiva }) {
   const { submeter, ocupado, aviso } = useFormulario();
   const loc = dados.local;
-  const podeCadastrar = dados.pontos.length > 0 && dados.modelos.length > 0;
+  const podeCadastrar = dados.pontos.some((x) => x.ativo) && dados.modelos.some((x) => x.ativo);
   return (
     <div data-tela-pronta="preventiva">
       <Migalhas itens={[[loc.nome, dados.links.checklists], ['Preventivas', null]]} />

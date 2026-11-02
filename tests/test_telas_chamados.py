@@ -296,6 +296,8 @@ def test_o_selo_do_prazo_e_os_numeros_sao_os_da_tela_antiga(app_module, cena, au
                         aberto_em=agora - timedelta(hours=3), prazo=agora - timedelta(hours=2)),
         'aguardando vencido': dict(status='aguardando', prazo=agora - timedelta(hours=5),
                                    motivo_espera='Peça'),
+        'aguardando no prazo': dict(status='aguardando', prazo=agora + timedelta(hours=2),
+                                    motivo_espera='Terceiro'),
     }
     ids = {}
     with app_module.app.app_context():
@@ -313,13 +315,13 @@ def test_o_selo_do_prazo_e_os_numeros_sao_os_da_tela_antiga(app_module, cena, au
     esperado = {'atrasado 2h': 'atrasado há 2h', 'atrasado 1 dia': 'atrasado há 1 dia',
                 'atrasado 3 dias': 'atrasado há 3 dias', 'atrasado pouco': 'atrasado há menos de 1h',
                 'vence perto': 'vence em 2h', 'vence logo': 'vence em menos de 1h',
-                'aguardando vencido': 'atrasado há 5h'}
+                'aguardando vencido': 'prazo parado', 'aguardando no prazo': 'prazo parado'}
     for nome, cid in ids.items():
         selo, bloco = por_id[cid]['prazo_selo'], _texto(blocos[str(cid)])
         if selo is None:
             assert 'ch-prazo' not in bloco, nome
             continue
-        classe = {'ok': 'ch-prazo ok', 'atrasado': 'ch-prazo atrasado',
+        classe = {'ok': 'ch-prazo ok', 'atrasado': 'ch-prazo atrasado', 'parado': 'ch-prazo"',
                   'vence': 'ch-prazo perto' if selo['perto'] else 'ch-prazo '}[selo['tipo']]
         assert f'class="{classe}' in bloco and selo['texto'] in bloco, (nome, selo, bloco)
         if nome in esperado:
@@ -329,8 +331,11 @@ def test_o_selo_do_prazo_e_os_numeros_sao_os_da_tela_antiga(app_module, cena, au
     assert por_id[ids['vence perto']]['prazo_selo']['perto'] is True
     assert por_id[ids['sem prazo']]['prazo_selo'] is None and por_id[ids['fechado']]['prazo_selo'] is None
     assert por_id[ids['resolvido']]['prazo_selo']['texto'].startswith('resolvido ')
-    # Defeito da antiga, reproduzido de propósito: o chamado em "Aguardando"
-    # (relógio parado, D8) ganha o selo "atrasado há", mas não a borda.
+    # Em "Aguardando" o relógio do prazo está parado (D8): nem "atrasado há"
+    # nem "vence em" — o selo diz "prazo parado", como a borda e os contadores.
+    for nome in ('aguardando vencido', 'aguardando no prazo'):
+        assert por_id[ids[nome]]['prazo_selo']['tipo'] == 'parado', nome
+        assert 'atrasado' not in _texto(blocos[str(ids[nome])]), nome
     assert por_id[ids['aguardando vencido']]['atrasado'] is False
     assert f'class="ch-item " href="/chamados/{ids["aguardando vencido"]}"' in antigo
     assert f'class="ch-item atrasado" href="/chamados/{ids["atrasado 2h"]}"' in antigo
@@ -431,6 +436,16 @@ def test_as_demandas_trazem_os_dados_da_tela_antiga(app_module, cena, auth_clien
         for k, v in d['situacoes']:
             assert f'<div class="small text-muted">{v}</div><div class="fs-4 fw-bold">{d["contagem"][k]}</div>' in texto
         assert [x['id'] for x in d['locais']] == [int(x) for x in re.findall(r'<option value="(\d+)"', antigo.split('id="flocal"')[1].split('</select>')[0])]
+    # Os cartões contam com o mesmo filtro de tipo (e de local) da lista:
+    # sem situação escolhida, a soma deles é o tamanho da lista.
+    for busca in ('', '?tipo=preventiva', '?tipo=chamado', f"?local={cena['local']}&tipo=chamado"):
+        d = c.get('/api/v1/demandas/' + busca).get_json()
+        assert sum(d['contagem'].values()) == len(d['itens']), busca
+    so_chamados = c.get('/api/v1/demandas/?tipo=chamado').get_json()
+    assert len(so_chamados['itens']) < len(c.get('/api/v1/demandas/').get_json()['itens'])
+    for k in so_chamados['contagem']:
+        com_situacao = c.get(f'/api/v1/demandas/?tipo=chamado&situacao={k}').get_json()
+        assert so_chamados['contagem'][k] == len(com_situacao['itens']), k
     d = c.get(f"/api/v1/demandas/?local={cena['local']}").get_json()
     tipos = {i['tipo'] for i in d['itens']}
     assert {'chamado', 'preventiva'} <= tipos and d['local'] == cena['local']
@@ -587,6 +602,31 @@ def test_o_ciclo_do_chamado_como_na_tela_antiga(app_module, cena, auth_client):
     assert _retrato(app_module, y)['status'] == 'cancelado' and _retrato(app_module, y)['anexos'] == []
 
 
+def test_a_acao_da_rota_antiga_aceita_corpo_json(app_module, cena, auth_client):
+    """``POST /chamados/<id>/acao`` lê o corpo como a API das telas novas
+    (``_dados``): em JSON, a ação é feita como pelo formulário; a recusa
+    volta em JSON; o formulário segue igual."""
+    from facilities.chamados.models import Chamado
+    c = auth_client
+    url = f"/chamados/{cena['chamado']}/acao"
+    r = c.post(url, json={'acao': 'comentar', 'texto': 'Comentário em JSON'})
+    assert r.status_code == 302 and r.headers['Location'] == f"/chamados/{cena['chamado']}"
+    with app_module.app.app_context():
+        from app import db
+        ch = db.session.get(Chamado, cena['chamado'])
+        assert [e.texto for e in ch.eventos if e.tipo == 'comentario'][-1] == 'Comentário em JSON'
+    r = c.post(url, json={'acao': 'iniciar'})
+    assert r.status_code == 302
+    with app_module.app.app_context():
+        from app import db
+        assert db.session.get(Chamado, cena['chamado']).status == 'em_atendimento'
+    # A recusa por um campo do corpo (o motivo vazio) volta em JSON.
+    r = c.post(url, json={'acao': 'aguardar', 'texto': ''})
+    assert r.status_code == 400 and r.is_json and r.get_json()['error'].startswith('Diga o que está faltando')
+    r = c.post(url, data={'acao': 'comentar', 'texto': 'Comentário no formulário'})
+    assert r.status_code == 302 and r.headers['Location'] == f"/chamados/{cena['chamado']}"
+
+
 def test_quem_nao_e_responsavel_e_recusado_como_na_tela_antiga(app_module, cena):
     from facilities.chamados.models import Chamado
     with app_module.app.app_context():
@@ -673,6 +713,67 @@ def test_a_preventiva_como_na_tela_antiga(app_module, cena, auth_client):
     assert retrato('Plano novo')[1][3] == 10 and retrato('Plano novo')[1][-1] is False
     assert c.post('/api/v1/preventiva/999999', data={'ativo': '1'}).status_code == 404 == \
         c.post('/preventiva/999999', data={'ativo': '1'}).status_code
+
+
+def test_editar_plano_com_ponto_checklist_e_equipamento_desativados(app_module, cena, auth_client):
+    """O "Editar" do plano mantém o ponto, o checklist e o equipamento atuais
+    dele mesmo desativados (com "(desativado)"); salvar sem mexer não muda o
+    plano de lugar. O desativado não aparece no "Novo plano", e outro plano
+    (ou um novo) não pode escolhê-lo."""
+    from app import Client, db
+    from facilities.cadastros import servico as cad
+    from facilities.cadastros.models import Equipamento, PontoInspecao
+    from facilities.preventiva.models import PlanoPreventivo
+    from facilities.rotas import servico as s
+    from facilities.rotas.models import ChecklistModelo
+    c = auth_client
+    a, pid = cena['local'], cena['plano']
+    with app_module.app.app_context():
+        loc = db.session.get(Client, a)
+        # Outras opções ativas, que vêm antes na ordem alfabética: era nelas
+        # que o seletor caía.
+        cad.salvar_equipamento(loc, None, {'nome': 'Ar-condicionado', 'ambiente_id': cena['ambiente']}, None)
+        cad.salvar_ponto(loc, None, {'nome': 'Entrada', 'ambiente_id': cena['ambiente']}, None)
+        m2 = s.criar_modelo(a, {'nome': 'A checklist ativo'}, None)
+        s.publicar(m2, s.normalizar_itens([{'texto': 'Ok?', 'tipo': 'sim_nao'}]), {}, None)
+        for modelo, oid in ((PontoInspecao, cena['ponto']), (ChecklistModelo, cena['modelo']),
+                            (Equipamento, cena['equipamento'])):
+            db.session.get(modelo, oid).is_active = False
+        db.session.commit()
+        p = db.session.get(PlanoPreventivo, pid)
+        rotulos = {'ponto': f'{p.ponto.ambiente.nome} · {p.ponto.nome} (desativado)',
+                   'modelo': f'{p.modelo.nome} (desativado)', 'eq': f'{p.equipamento.nome} (desativado)'}
+        atual = (p.ponto_id, p.modelo_id, p.equipamento_id)
+    antigo = c.get(f'/preventiva/locais/{a}').get_data(as_text=True)
+    d = c.get(f'/api/v1/preventiva/locais/{a}').get_json()
+
+    def selecionada(campo, sufixo):
+        bloco = antigo.split(f'id="{campo}{sufixo}"')[1].split('</select>')[0]
+        return html_mod.unescape(re.findall(r'<option value="\d+" selected>([^<]+)</option>', bloco)[0])
+    for campo, oid in (('ponto', cena['ponto']), ('modelo', cena['modelo']), ('eq', cena['equipamento'])):
+        assert selecionada(campo, pid) == rotulos[campo], campo
+        assert f'<option value="{oid}"' not in antigo.split(f'id="{campo}novo"')[1].split('</select>')[0], campo
+    for lista, oid in (('pontos', cena['ponto']), ('modelos', cena['modelo']), ('equipamentos', cena['equipamento'])):
+        [x] = [x for x in d[lista] if x['id'] == oid]
+        assert x['ativo'] is False, lista
+        assert any(y['ativo'] for y in d[lista]), lista
+    # Salvar sem mexer: aceito, nas duas telas, e o plano fica onde estava.
+    form = {'nome': 'Plano editado', 'ponto_id': str(cena['ponto']), 'modelo_id': str(cena['modelo']),
+            'equipamento_id': str(cena['equipamento']), 'intervalo_dias': '20',
+            'proxima_em': tempo.hoje().isoformat(), 'antecedencia_dias': '0', 'prioridade': 'media',
+            'responsavel_id': str(cena['tec'])}
+    _, _, rec = _antiga(c, f'/preventiva/{pid}', data=form)
+    assert [x['tipo'] for x in rec] == ['success'], rec
+    r, j = _nova(c, f'/api/v1/preventiva/{pid}', json={**form, 'intervalo_dias': '21'})
+    assert r.status_code == 200 and [x['tipo'] for x in j['recados']] == ['success'], j
+    with app_module.app.app_context():
+        p = db.session.get(PlanoPreventivo, pid)
+        assert (p.ponto_id, p.modelo_id, p.equipamento_id) == atual and p.intervalo_dias == 21
+    # O desativado não serve para um plano novo.
+    _, _, rec = _antiga(c, f'/preventiva/locais/{a}', data={**form, 'nome': 'Outro'})
+    assert rec[0]['tipo'] == 'danger' and 'ponto ativo' in rec[0]['texto']
+    r, j = _nova(c, f'/api/v1/preventiva/locais/{a}', json={**form, 'nome': 'Outro'})
+    assert r.status_code == 400 and 'ponto ativo' in j['error']
 
 
 # ── Isolamento ────────────────────────────────────────────────────────────

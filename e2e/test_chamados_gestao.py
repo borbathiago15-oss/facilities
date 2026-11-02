@@ -39,7 +39,15 @@ def _outra_pessoa(b, perfil):
 
 def _sem_rolagem(pg, onde):
     largura = pg.evaluate('document.documentElement.scrollWidth')
-    assert largura <= pg.viewport_size['width'], f'{onde} rola de lado ({largura}px)'
+    if largura > pg.viewport_size['width']:
+        # Diz QUEM passa da tela (a falha foi intermitente: o culpado depende
+        # do conteúdo do momento, e sem o nome não há como achar a causa).
+        culpados = pg.evaluate("""(w) => [...document.querySelectorAll('body *')]
+            .filter(e => e.getBoundingClientRect().right > w)
+            .slice(-5).map(e => e.tagName.toLowerCase() + (e.className ? '.' + String(e.className).trim().replace(/ +/g, '.') : '')
+                + ' «' + (e.textContent || '').trim().slice(0, 60) + '» ' + Math.round(e.getBoundingClientRect().right) + 'px')""",
+            pg.viewport_size['width'])
+        raise AssertionError(f'{onde} rola de lado ({largura}px): ' + ' | '.join(culpados))
 
 
 def _pronta(pg, nome):
@@ -70,8 +78,10 @@ def test_o_ciclo_do_chamado(servidor, navegador, perfil, chamados):
         ana.wait_for_selector('text=Diga o que está errado e onde.')
         _pronta(ana, 'chamados-novo')
         assert ana.url.startswith(base + chamados + '/chamados/novo')
-        # Dois contratos: escolhe o contrato, e as áreas dele aparecem.
-        assert ana.locator('#area_id').is_disabled()
+        # Dois contratos: escolhe o contrato, e as áreas dele aparecem. Na
+        # antiga é o chamados_novo.js que desliga a lista, depois de o texto
+        # já estar na tela: espera o estado em vez de olhar uma vez só.
+        ana.wait_for_selector('#area_id:disabled', state='attached', timeout=5000)
         ana.select_option('#client_id', label='GL Armazém 1')
         ana.select_option('#area_id', label='Limpeza')
         ana.fill('#titulo', 'Torneira do banheiro vazando')

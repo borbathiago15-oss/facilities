@@ -98,14 +98,16 @@ def preventiva_local(cid):
 def selo_do_prazo(ch, agora):
     """O selo do prazo, com o texto que a tela antiga escreve (``selo.prazo``).
 
-    Como na antiga, o selo olha só o relógio (``agora > prazo``), e não a
-    situação: o chamado em "Aguardando" que passou do prazo mostra "atrasado
-    há" (a borda vermelha da lista, essa, segue ``Chamado.atrasado``)."""
+    Em "Aguardando" o relógio do prazo está parado (D8): o selo diz isso, e
+    não "atrasado há" nem "vence em" — como a borda vermelha da lista e os
+    contadores (``Chamado.atrasado``)."""
     if ch.status in ('fechado', 'cancelado'):
         return None
     if ch.status == 'resolvido':
         return {'tipo': 'ok', 'perto': False,
                 'texto': 'resolvido ' + _filtro('hora_local', ch.resolvido_em, '%d/%m %H:%M')}
+    if ch.status == 'aguardando' and ch.prazo:
+        return {'tipo': 'parado', 'perto': False, 'texto': 'prazo parado'}
     if ch.prazo and agora > ch.prazo:
         h = int((agora - ch.prazo).total_seconds() // 3600)
         if h < 24:
@@ -324,9 +326,12 @@ def api_preventiva_local(cid):
     return _sem_cache({
         'local': {'id': loc.id, 'nome': loc.name},
         'planos': [plano(p) for p in c['planos']],
-        'modelos': [{'id': m.id, 'nome': m.nome} for m in c['modelos']],
-        'pontos': [{'id': p.id, 'rotulo': f'{p.ambiente.nome} · {p.nome}'} for p in c['pontos']],
-        'equipamentos': [{'id': e.id, 'nome': e.nome} for e in c['equipamentos']],
+        # Com o item desativado que um plano ainda usa (só no "Editar" dele).
+        'modelos': [{'id': m.id, 'nome': m.nome, 'ativo': bool(m.is_active)} for m in c['modelos']],
+        'pontos': [{'id': p.id, 'rotulo': f'{p.ambiente.nome} · {p.nome}', 'ativo': bool(p.is_active)}
+                   for p in c['pontos']],
+        'equipamentos': [{'id': e.id, 'nome': e.nome, 'ativo': bool(e.is_active)}
+                         for e in c['equipamentos']],
         'tecnicos': [{'id': t.id, 'nome': t.name} for t in c['tecnicos']],
         'prioridades': _pares(prioridades), 'hoje': c['hoje'],
         'pode_montar': c['pode_montar'],

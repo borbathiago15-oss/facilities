@@ -5,7 +5,7 @@
 export type Pares = [string, string][];
 
 /** O selo do prazo (templates/chamados/_selo.html). */
-export type SeloDoPrazo = { tipo: 'ok' | 'atrasado' | 'vence'; perto: boolean; texto: string } | null;
+export type SeloDoPrazo = { tipo: 'ok' | 'atrasado' | 'vence' | 'parado'; perto: boolean; texto: string } | null;
 
 export type ResumoDoChamado = {
   id: number; numero: string; titulo: string;
@@ -74,9 +74,10 @@ export type PlanoPreventivo = {
 export type DadosDaPreventiva = {
   local: { id: number; nome: string };
   planos: PlanoPreventivo[];
-  modelos: { id: number; nome: string }[];
-  pontos: { id: number; rotulo: string }[];
-  equipamentos: { id: number; nome: string }[];
+  // Com o item desativado que um plano ainda usa (só no "Editar" dele).
+  modelos: { id: number; nome: string; ativo: boolean }[];
+  pontos: { id: number; rotulo: string; ativo: boolean }[];
+  equipamentos: { id: number; nome: string; ativo: boolean }[];
   tecnicos: { id: number; nome: string }[];
   prioridades: Pares; hoje: string; pode_montar: boolean;
   links: { pontos: string; checklists: string };
