@@ -98,14 +98,16 @@ def preventiva_local(cid):
 def selo_do_prazo(ch, agora):
     """O selo do prazo, com o texto que a tela antiga escreve (``selo.prazo``).
 
-    Como na antiga, o selo olha só o relógio (``agora > prazo``), e não a
-    situação: o chamado em "Aguardando" que passou do prazo mostra "atrasado
-    há" (a borda vermelha da lista, essa, segue ``Chamado.atrasado``)."""
+    Em "Aguardando" o relógio do prazo está parado (D8): o selo diz isso, e
+    não "atrasado há" nem "vence em" — como a borda vermelha da lista e os
+    contadores (``Chamado.atrasado``)."""
     if ch.status in ('fechado', 'cancelado'):
         return None
     if ch.status == 'resolvido':
         return {'tipo': 'ok', 'perto': False,
                 'texto': 'resolvido ' + _filtro('hora_local', ch.resolvido_em, '%d/%m %H:%M')}
+    if ch.status == 'aguardando' and ch.prazo:
+        return {'tipo': 'parado', 'perto': False, 'texto': 'prazo parado'}
     if ch.prazo and agora > ch.prazo:
         h = int((agora - ch.prazo).total_seconds() // 3600)
         if h < 24:

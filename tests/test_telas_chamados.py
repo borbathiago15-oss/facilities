@@ -296,6 +296,8 @@ def test_o_selo_do_prazo_e_os_numeros_sao_os_da_tela_antiga(app_module, cena, au
                         aberto_em=agora - timedelta(hours=3), prazo=agora - timedelta(hours=2)),
         'aguardando vencido': dict(status='aguardando', prazo=agora - timedelta(hours=5),
                                    motivo_espera='Peça'),
+        'aguardando no prazo': dict(status='aguardando', prazo=agora + timedelta(hours=2),
+                                    motivo_espera='Terceiro'),
     }
     ids = {}
     with app_module.app.app_context():
@@ -313,13 +315,13 @@ def test_o_selo_do_prazo_e_os_numeros_sao_os_da_tela_antiga(app_module, cena, au
     esperado = {'atrasado 2h': 'atrasado há 2h', 'atrasado 1 dia': 'atrasado há 1 dia',
                 'atrasado 3 dias': 'atrasado há 3 dias', 'atrasado pouco': 'atrasado há menos de 1h',
                 'vence perto': 'vence em 2h', 'vence logo': 'vence em menos de 1h',
-                'aguardando vencido': 'atrasado há 5h'}
+                'aguardando vencido': 'prazo parado', 'aguardando no prazo': 'prazo parado'}
     for nome, cid in ids.items():
         selo, bloco = por_id[cid]['prazo_selo'], _texto(blocos[str(cid)])
         if selo is None:
             assert 'ch-prazo' not in bloco, nome
             continue
-        classe = {'ok': 'ch-prazo ok', 'atrasado': 'ch-prazo atrasado',
+        classe = {'ok': 'ch-prazo ok', 'atrasado': 'ch-prazo atrasado', 'parado': 'ch-prazo"',
                   'vence': 'ch-prazo perto' if selo['perto'] else 'ch-prazo '}[selo['tipo']]
         assert f'class="{classe}' in bloco and selo['texto'] in bloco, (nome, selo, bloco)
         if nome in esperado:
@@ -329,8 +331,11 @@ def test_o_selo_do_prazo_e_os_numeros_sao_os_da_tela_antiga(app_module, cena, au
     assert por_id[ids['vence perto']]['prazo_selo']['perto'] is True
     assert por_id[ids['sem prazo']]['prazo_selo'] is None and por_id[ids['fechado']]['prazo_selo'] is None
     assert por_id[ids['resolvido']]['prazo_selo']['texto'].startswith('resolvido ')
-    # Defeito da antiga, reproduzido de propósito: o chamado em "Aguardando"
-    # (relógio parado, D8) ganha o selo "atrasado há", mas não a borda.
+    # Em "Aguardando" o relógio do prazo está parado (D8): nem "atrasado há"
+    # nem "vence em" — o selo diz "prazo parado", como a borda e os contadores.
+    for nome in ('aguardando vencido', 'aguardando no prazo'):
+        assert por_id[ids[nome]]['prazo_selo']['tipo'] == 'parado', nome
+        assert 'atrasado' not in _texto(blocos[str(ids[nome])]), nome
     assert por_id[ids['aguardando vencido']]['atrasado'] is False
     assert f'class="ch-item " href="/chamados/{ids["aguardando vencido"]}"' in antigo
     assert f'class="ch-item atrasado" href="/chamados/{ids["atrasado 2h"]}"' in antigo

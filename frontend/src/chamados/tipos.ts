@@ -5,7 +5,7 @@
 export type Pares = [string, string][];
 
 /** O selo do prazo (templates/chamados/_selo.html). */
-export type SeloDoPrazo = { tipo: 'ok' | 'atrasado' | 'vence'; perto: boolean; texto: string } | null;
+export type SeloDoPrazo = { tipo: 'ok' | 'atrasado' | 'vence' | 'parado'; perto: boolean; texto: string } | null;
 
 export type ResumoDoChamado = {
   id: number; numero: string; titulo: string;

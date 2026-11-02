@@ -110,6 +110,10 @@ describe('os selos', () => {
     expect(screen.getByText('vence 05/11 10:00').className).toBe('ch-prazo');
     rerender(<SeloPrazo selo={{ tipo: 'ok', perto: false, texto: 'resolvido 01/11 10:00' }} />);
     expect(screen.getByText('resolvido 01/11 10:00')).toHaveClass('ch-prazo', 'ok');
+    // "Aguardando": o relógio do prazo está parado (D8), sem vermelho nem ícone.
+    rerender(<SeloPrazo selo={{ tipo: 'parado', perto: false, texto: 'prazo parado' }} />);
+    expect(screen.getByText('prazo parado').className).toBe('ch-prazo');
+    expect(document.querySelector('.ch-prazo i')).toBeNull();
     rerender(<SeloPrazo selo={null} />);
     expect(document.querySelector('.ch-prazo')).toBeNull();
   });

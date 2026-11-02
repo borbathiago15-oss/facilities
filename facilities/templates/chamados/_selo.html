@@ -4,6 +4,7 @@
 {% macro prazo(ch, agora) %}
   {%- if ch.status in ('fechado', 'cancelado') -%}
   {%- elif ch.status == 'resolvido' -%}<span class="ch-prazo ok">resolvido {{ ch.resolvido_em|hora_local('%d/%m %H:%M') }}</span>
+  {%- elif ch.status == 'aguardando' and ch.prazo -%}<span class="ch-prazo">prazo parado</span>
   {%- elif ch.prazo and agora > ch.prazo -%}
     {%- set h = ((agora - ch.prazo).total_seconds() // 3600)|int -%}
     <span class="ch-prazo atrasado"><i class="bi bi-exclamation-triangle"></i> atrasado há {% if h < 24 %}{{ h if h > 0 else 'menos de 1' }}h{% else %}{{ h // 24 }} {{ 'dia' if h // 24 == 1 else 'dias' }}{% endif %}</span>
