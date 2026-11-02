@@ -8,6 +8,9 @@ from conftest import abrir_contexto, entrar
 
 
 def _sem_rolagem_lateral(pg):
+    # Mede só com a página inteira carregada: com a máquina ocupada, o CSS
+    # ainda chegando deixa a tabela sem estilo, mais larga que a tela.
+    pg.wait_for_load_state('load')
     assert pg.evaluate('document.documentElement.scrollWidth') <= pg.viewport_size['width']
 
 

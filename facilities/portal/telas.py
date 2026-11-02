@@ -4,6 +4,12 @@ pela equipe (``/cobrancas``).
 O portal só abre para a conta de cliente (a porta em ``facilities/__init__``
 segura o cliente aqui dentro e barra o resto). Cada rota confere o local
 contra os locais do cliente: id de outro cliente dá 404, sem dizer se existe.
+
+As telas antiga e nova (React, Fase 5: ``/novo/cliente/...``,
+``/novo/cobrancas/...`` e ``/api/v1/...``) saem das MESMAS funções:
+``contexto_*`` monta os dados da página; ``acao_*`` faz o envio (a regra, o
+commit e o recado) e devolve o endereço de volta. As checagens de acesso
+moram nelas. As fotos, os POP/FIT e o PDF/Excel continuam só aqui.
 """
 import io
 from datetime import datetime
@@ -19,6 +25,11 @@ from facilities.portal.models import ABERTA, FECHADA, RESPONDIDA, STATUS, Cobran
 from facilities.portal.servico import RegraDaCobranca
 
 bp = Blueprint('portal', __name__, url_prefix='/cliente')
+
+# Abrir cobrança: 30 por hora, contadas JUNTAS na tela antiga e na nova
+# (``shared_limit`` com o mesmo escopo) — duas telas não dobram o limite.
+LIMITE_DE_COBRANCAS = '30 per hour'
+ESCOPO_DO_LIMITE_DE_COBRANCAS = 'portal-abrir-cobranca'
 bp_interno = Blueprint('cobrancas', __name__, url_prefix='/cobrancas')
 
 
@@ -34,10 +45,10 @@ def _local(cid):
     return loc
 
 
-def _erro(erro, destino):
+def _recusa(erro, destino):
     db.session.rollback()
     flash(erro.mensagem, 'danger')
-    return redirect(destino)
+    return destino
 
 
 def _periodo():
@@ -50,6 +61,10 @@ def _periodo():
 @bp.get('/')
 @login_required
 def inicio():
+    return render_template('portal/inicio.html', **contexto_inicio())
+
+
+def contexto_inicio():
     from facilities.chamados.models import STATUS_EM_ABERTO, Chamado
     from facilities.paineis.servico import FAIXAS, notas
     _so_cliente()
@@ -60,27 +75,29 @@ def inicio():
                    .filter(Chamado.client_id.in_(ids), Chamado.status.in_(STATUS_EM_ABERTO))
                    .group_by(Chamado.client_id).all())
     cobrancas = [c for c in servico.cobrancas_do_cliente(current_user) if c.status != FECHADA]
-    return render_template('portal/inicio.html', linhas=notas(locais, de, ate), de=de, ate=ate,
-                           faixas=FAIXAS, abertos=abertos, cobrancas=cobrancas,
-                           agora=datetime.utcnow())
+    return dict(linhas=notas(locais, de, ate), de=de, ate=ate, faixas=FAIXAS, abertos=abertos,
+                cobrancas=cobrancas, agora=datetime.utcnow())
 
 
 @bp.get('/locais/<int:cid>')
 @login_required
 def local(cid):
+    return render_template('portal/local.html', **contexto_local(cid))
+
+
+def contexto_local(cid):
     from facilities.paineis.servico import FAIXAS, INDICADORES, nota_do_local
     _so_cliente()
     loc = _local(cid)
     de, ate = _periodo()
     chamados = servico.chamados_do_local(loc.id)
-    return render_template('portal/local.html', local=loc, de=de, ate=ate,
-                           nota=nota_do_local(loc, de, ate), faixas=FAIXAS,
-                           indicadores=INDICADORES, chamados=chamados,
-                           fotos={ch.id: servico.fotos_do_chamado(ch) for ch in chamados},
-                           execucoes=servico.execucoes_do_local(loc.id),
-                           visitas=servico.visitas_do_local(loc.id),
-                           documentos=_documentos_do_local(loc.id),
-                           quem_fez=servico.quem_fez, agora=datetime.utcnow())
+    return dict(local=loc, de=de, ate=ate, nota=nota_do_local(loc, de, ate), faixas=FAIXAS,
+                indicadores=INDICADORES, chamados=chamados,
+                fotos={ch.id: servico.fotos_do_chamado(ch) for ch in chamados},
+                execucoes=servico.execucoes_do_local(loc.id),
+                visitas=servico.visitas_do_local(loc.id),
+                documentos=_documentos_do_local(loc.id),
+                quem_fez=servico.quem_fez, agora=datetime.utcnow())
 
 
 def _documentos_do_local(cid):
@@ -109,14 +126,17 @@ def documento(did):
 @bp.get('/chamados/<int:chamado_id>')
 @login_required
 def chamado(chamado_id):
+    return render_template('portal/chamado.html', **contexto_chamado(chamado_id))
+
+
+def contexto_chamado(chamado_id):
     from facilities.chamados.models import Chamado
     _so_cliente()
     ch = db.session.get(Chamado, chamado_id)
     if ch is None:
         abort(404)
     loc = _local(ch.client_id)
-    return render_template('portal/chamado.html', ch=ch, local=loc,
-                           fotos=servico.fotos_do_chamado(ch), agora=datetime.utcnow())
+    return dict(ch=ch, local=loc, fotos=servico.fotos_do_chamado(ch), agora=datetime.utcnow())
 
 
 def _imagem(storage_key, mime):
@@ -169,11 +189,14 @@ def foto_visita(vfid):
 @bp.get('/relatorios')
 @login_required
 def relatorios():
+    return render_template('portal/relatorios.html', **contexto_relatorios())
+
+
+def contexto_relatorios():
     from facilities.relatorios.cliente import liberados, nome_do_mes
     _so_cliente()
     locais = servico.locais_do_cliente(current_user)
-    return render_template('portal/relatorios.html', relatorios=liberados([c.id for c in locais]),
-                           nome_do_mes=nome_do_mes)
+    return dict(relatorios=liberados([c.id for c in locais]), nome_do_mes=nome_do_mes)
 
 
 def _relatorio_liberado(cid, mes):
@@ -189,13 +212,16 @@ def _relatorio_liberado(cid, mes):
 @bp.get('/relatorios/<int:cid>/<mes>')
 @login_required
 def relatorio(cid, mes):
+    return render_template('portal/relatorio.html', **contexto_relatorio(cid, mes))
+
+
+def contexto_relatorio(cid, mes):
     from facilities.relatorios.telas import montar, recado_do, url_da_foto
     _so_cliente()
     loc, primeiro = _relatorio_liberado(cid, mes)
     d, registro, _todas, fotos, _auto = montar(loc, primeiro, liberado=True)
-    return render_template('portal/relatorio.html', d=d, registro=registro, fotos=fotos,
-                           recado=recado_do(registro, liberado=True),
-                           url_da_foto=url_da_foto, portal=True, mes=primeiro.strftime('%Y-%m'))
+    return dict(d=d, registro=registro, fotos=fotos, recado=recado_do(registro, liberado=True),
+                url_da_foto=url_da_foto, portal=True, mes=primeiro.strftime('%Y-%m'))
 
 
 @bp.get('/relatorios/<int:cid>/<mes>/arquivo.<formato>')
@@ -207,13 +233,13 @@ def relatorio_arquivo(cid, mes, formato):
     return arquivo(loc, primeiro, formato, so_liberado=True)
 
 
-def _avisos_do_qr(client_ids):
+def _avisos_do_qr(client_ids, args):
     """A aba "Avisos pelo QR" (decisão do dono, 27/10/2026): o que o público
     reclamou pelo QR, com a situação. Não é cobrança: não tem prazo do
     cliente e quem encerra é a equipe."""
     from facilities.rotas import ocorrencias
     from facilities.rotas.models import SITUACOES_OCORRENCIA
-    situacao = request.args.get('situacao') or ''
+    situacao = args.get('situacao') or ''
     if situacao not in SITUACOES_OCORRENCIA:
         situacao = ''
     return {'avisos': ocorrencias.do_periodo(client_ids, situacao or None),
@@ -224,31 +250,40 @@ def _avisos_do_qr(client_ids):
 @bp.get('/cobrancas')
 @login_required
 def cobrancas():
+    c = contexto_cobrancas(request.args)
+    if c['aba'] == 'qr':
+        return render_template('portal/avisos_qr.html', **c)
+    return render_template('portal/cobrancas.html', **c)
+
+
+def contexto_cobrancas(args):
+    """As duas abas: ``aba=qr`` (os avisos pelo QR) ou a das cobranças."""
     _so_cliente()
     locais = servico.locais_do_cliente(current_user)
-    if request.args.get('aba') == 'qr':
-        return render_template('portal/avisos_qr.html', locais=locais,
-                               **_avisos_do_qr([c.id for c in locais]))
-    return render_template('portal/cobrancas.html',
-                           cobrancas=servico.cobrancas_do_cliente(current_user),
-                           locais=servico.locais_do_cliente(current_user),
-                           minimo=servico.prazo_minimo(), status=STATUS,
-                           local_escolhido=request.args.get('local', type=int),
-                           agora=datetime.utcnow())
+    if args.get('aba') == 'qr':
+        return dict(aba='qr', locais=locais, **_avisos_do_qr([c.id for c in locais], args))
+    return dict(aba='cobrancas', cobrancas=servico.cobrancas_do_cliente(current_user),
+                locais=servico.locais_do_cliente(current_user),
+                minimo=servico.prazo_minimo(), status=STATUS,
+                local_escolhido=args.get('local', type=int), agora=datetime.utcnow())
 
 
 @bp.post('/cobrancas')
 @login_required
-@limiter.limit('30 per hour')
+@limiter.shared_limit(LIMITE_DE_COBRANCAS, scope=ESCOPO_DO_LIMITE_DE_COBRANCAS)
 def abrir_cobranca():
+    return redirect(acao_abrir_cobranca(request.form))
+
+
+def acao_abrir_cobranca(dados):
     _so_cliente()
     try:
-        cob = servico.abrir(current_user, request.form)
+        cob = servico.abrir(current_user, dados)
         db.session.commit()
     except RegraDaCobranca as erro:
-        return _erro(erro, url_for('portal.cobrancas'))
+        return _recusa(erro, url_for('portal.cobrancas'))
     flash(f'Cobrança {cob.numero} enviada à coordenação do contrato.', 'success')
-    return redirect(url_for('portal.cobranca', cobid=cob.id))
+    return url_for('portal.cobranca', cobid=cob.id)
 
 
 def _cobranca_do_cliente(cobid):
@@ -262,16 +297,24 @@ def _cobranca_do_cliente(cobid):
 @bp.get('/cobrancas/<int:cobid>')
 @login_required
 def cobranca(cobid):
+    return render_template('portal/cobranca.html', **contexto_cobranca(cobid))
+
+
+def contexto_cobranca(cobid):
     _so_cliente()
     cob = _cobranca_do_cliente(cobid)
-    return render_template('portal/cobranca.html', cob=cob, autor=servico.autor_para_o_cliente,
-                           minimo=servico.prazo_minimo(), respondida=cob.status == RESPONDIDA,
-                           agora=datetime.utcnow())
+    return dict(cob=cob, autor=servico.autor_para_o_cliente, minimo=servico.prazo_minimo(),
+                respondida=cob.status == RESPONDIDA, agora=datetime.utcnow())
 
 
 @bp.post('/cobrancas/<int:cobid>/<acao>')
 @login_required
 def acao_cobranca(cobid, acao):
+    return redirect(acao_na_cobranca(cobid, acao, request.form))
+
+
+def acao_na_cobranca(cobid, acao, dados):
+    """Confirmar ou reabrir (o nome ``acao_cobranca`` é o da rota antiga)."""
     _so_cliente()
     cob = _cobranca_do_cliente(cobid)
     destino = url_for('portal.cobranca', cobid=cob.id)
@@ -281,12 +324,12 @@ def acao_cobranca(cobid, acao):
         abort(404)
     fazer, ok = passos[acao]
     try:
-        fazer(current_user, cob, request.form)
+        fazer(current_user, cob, dados)
         db.session.commit()
     except RegraDaCobranca as erro:
-        return _erro(erro, destino)
+        return _recusa(erro, destino)
     flash(ok, 'success')
-    return redirect(destino)
+    return destino
 
 
 # ── A cobrança vista pela equipe ──────────────────────────────────────────
@@ -299,21 +342,28 @@ def _ve_cobrancas():
 @bp_interno.get('/')
 @login_required
 def lista():
+    c = contexto_lista(request.args)
+    if c['aba'] == 'qr':
+        return render_template('portal/interno_avisos_qr.html', **c)
+    return render_template('portal/interno_lista.html', **c)
+
+
+def contexto_lista(args):
     _ve_cobrancas()
     ids = allowed_client_ids_or_none()
-    if request.args.get('aba') == 'qr':
+    if args.get('aba') == 'qr':
         from facilities.core.acesso import clientes_visiveis
         locais = ids if ids is not None else [c.id for c in clientes_visiveis()]
-        return render_template('portal/interno_avisos_qr.html', **_avisos_do_qr(locais))
+        return dict(aba='qr', **_avisos_do_qr(locais, args))
     q = Cobranca.query
     if ids is not None:
         q = q.filter(Cobranca.client_id.in_(ids or [-1]))
-    status = request.args.get('status') or ''
+    status = args.get('status') or ''
     if status in STATUS:
         q = q.filter(Cobranca.status == status)
     itens = q.order_by(Cobranca.status != ABERTA, Cobranca.prazo).limit(300).all()
-    return render_template('portal/interno_lista.html', itens=itens, status=status,
-                           rotulos=STATUS, agora=datetime.utcnow())
+    return dict(aba='cobrancas', itens=itens, status=status, rotulos=STATUS,
+                agora=datetime.utcnow())
 
 
 def _cobranca_interna(cobid):
@@ -325,23 +375,30 @@ def _cobranca_interna(cobid):
 @bp_interno.get('/<int:cobid>')
 @login_required
 def ver(cobid):
+    return render_template('portal/interno_ver.html', **contexto_ver(cobid))
+
+
+def contexto_ver(cobid):
     _ve_cobrancas()
     cob = _cobranca_interna(cobid)
-    return render_template('portal/interno_ver.html', cob=cob,
-                           pode_responder=servico.pode_responder(current_user, cob)
-                           and cob.status == ABERTA, agora=datetime.utcnow())
+    return dict(cob=cob, pode_responder=servico.pode_responder(current_user, cob)
+                and cob.status == ABERTA, agora=datetime.utcnow())
 
 
 @bp_interno.post('/<int:cobid>/responder')
 @login_required
 def responder(cobid):
+    return redirect(acao_responder(cobid, request.form))
+
+
+def acao_responder(cobid, dados):
     _ve_cobrancas()
     cob = _cobranca_interna(cobid)
     destino = url_for('cobrancas.ver', cobid=cob.id)
     try:
-        servico.responder(current_user, cob, request.form)
+        servico.responder(current_user, cob, dados)
         db.session.commit()
     except RegraDaCobranca as erro:
-        return _erro(erro, destino)
+        return _recusa(erro, destino)
     flash('Resposta enviada. O cliente confirma ou reabre pelo portal.', 'success')
-    return redirect(destino)
+    return destino

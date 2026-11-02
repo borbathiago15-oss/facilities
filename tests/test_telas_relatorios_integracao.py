@@ -545,10 +545,11 @@ def test_dentro_das_telas_novas_os_links_sao_os_novos(app_module, cena, auth_cli
     assert nova('/relatorios/') == '/novo/relatorios/'
     assert nova('/relatorios/?mes=2026-09') == '/novo/relatorios/?mes=2026-09'
     assert nova('/relatorios/cliente/1/2026-09') == '/novo/relatorios/cliente/1/2026-09'
-    # O PDF, o Excel e o portal do cliente continuam onde estão.
+    # O PDF e o Excel continuam onde estão; o portal do cliente entrou na Fase 5.
     assert nova('/relatorios/cliente/1/2026-09/arquivo.pdf') == '/relatorios/cliente/1/2026-09/arquivo.pdf'
     assert nova('/relatorios/cliente/1/2026-09/arquivo.xlsx') == '/relatorios/cliente/1/2026-09/arquivo.xlsx'
-    assert nova('/cliente/relatorios/1/2026-09') == '/cliente/relatorios/1/2026-09'
+    assert nova('/cliente/relatorios/1/2026-09') == '/novo/cliente/relatorios/1/2026-09'
+    assert nova('/cliente/relatorios/1/2026-09/arquivo.pdf') == '/cliente/relatorios/1/2026-09/arquivo.pdf'
     assert nova('/painel') == '/novo/painel'
     assert nova('/painel?de=2026-09-01') == '/novo/painel?de=2026-09-01'
     assert nova('/painel-x') == '/painel-x' and nova('/painelzinho') == '/painelzinho'

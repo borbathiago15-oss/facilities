@@ -390,6 +390,11 @@ def _sessao(app):
             return redirect(url_for('auth.seguranca'))
         if ep.startswith('portal.') or ep in _LIVRES_DO_CLIENTE:
             return None
+        # Fase 5: o portal nas telas novas (as páginas, as APIs dele e o
+        # ``/api/v1/eu`` da casca) — e só ele; o resto de /novo e /api/v1 não.
+        from facilities.telas.portal import ENDPOINTS_DO_CLIENTE
+        if ep in ENDPOINTS_DO_CLIENTE:
+            return None
         if ep == 'core.inicio':
             return redirect(url_for('portal.inicio'))
         if quer_json:

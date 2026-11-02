@@ -20,6 +20,8 @@ const materiais = () => import('./materiais/paginas');
 const relatorios = () => import('./relatorios/paginas');
 const paineis = () => import('./paineis/paginas');
 const integracao = () => import('./integracao/paginas');
+const portal = () => import('./portal/paginas');
+const cobrancas = () => import('./cobrancas/paginas');
 const admin = () => import('./paginas/admin/PaginaArmazenamento');
 
 function pedaco<M extends Record<string, ComponentType<any>>, K extends keyof M>(carregar: () => Promise<M>, nome: K) {
@@ -78,6 +80,15 @@ const RelatoriosInicio = pedaco(relatorios, 'PaginaInicio');
 const RelatoriosCliente = pedaco(relatorios, 'PaginaCliente');
 const PainelDosLocais = pedaco(paineis, 'PaginaPainel');
 const IntegracaoChaves = pedaco(integracao, 'PaginaIntegracao');
+const PortalInicio = pedaco(portal, 'PaginaInicio');
+const PortalLocal = pedaco(portal, 'PaginaLocal');
+const PortalChamado = pedaco(portal, 'PaginaChamado');
+const PortalRelatorios = pedaco(portal, 'PaginaRelatorios');
+const PortalRelatorio = pedaco(portal, 'PaginaRelatorio');
+const PortalCobrancas = pedaco(portal, 'PaginaCobrancas');
+const PortalCobranca = pedaco(portal, 'PaginaCobranca');
+const CobrancasLista = pedaco(cobrancas, 'PaginaLista');
+const CobrancasVer = pedaco(cobrancas, 'PaginaCobranca');
 const PaginaArmazenamento = pedaco(admin, 'PaginaArmazenamento');
 
 const CARREGANDO = <p className="p-4 text-muted" role="status">Carregando…</p>;
@@ -183,6 +194,15 @@ export function App() {
               <Route path="/relatorios/cliente/:id/:mes" element={<RelatoriosCliente />} />
               <Route path="/painel" element={<PainelDosLocais />} />
               <Route path="/admin/integracao" element={<IntegracaoChaves />} />
+              <Route path="/cliente" element={<PortalInicio />} />
+              <Route path="/cliente/locais/:id" element={<PortalLocal />} />
+              <Route path="/cliente/chamados/:id" element={<PortalChamado />} />
+              <Route path="/cliente/relatorios" element={<PortalRelatorios />} />
+              <Route path="/cliente/relatorios/:id/:mes" element={<PortalRelatorio />} />
+              <Route path="/cliente/cobrancas" element={<PortalCobrancas />} />
+              <Route path="/cliente/cobrancas/:id" element={<PortalCobranca />} />
+              <Route path="/cobrancas" element={<CobrancasLista />} />
+              <Route path="/cobrancas/:id" element={<CobrancasVer />} />
               <Route path="*" element={<NaoEncontrada inicio={eu.data.links.inicio} />} />
             </Routes>
           </Carregar>

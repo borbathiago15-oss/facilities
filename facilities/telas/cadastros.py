@@ -42,10 +42,12 @@ from facilities.telas import _casca, api, bp
 # Os endereços já migrados: dentro das telas novas, levam às novas (a
 # rotina dos locais entrou na Fase 3b; os chamados, as demandas e a
 # preventiva, na 4a; a equipe, os materiais e as visitas do local, na 4b; os
-# relatórios do cliente, o painel e as chaves da integração, na 4c).
+# relatórios do cliente, o painel e as chaves da integração, na 4c; o portal
+# do cliente e as cobranças vistas pela equipe, na 5).
 MIGRADOS = ('/cadastros/', '/clientes', '/centros/', '/novo-contrato', '/convites', '/rotas/',
             '/chamados/', '/demandas/', '/preventiva/locais/', '/equipes/locais/',
-            '/materiais/', '/visitas/locais/', '/relatorios/', '/admin/integracao/')
+            '/materiais/', '/visitas/locais/', '/relatorios/', '/admin/integracao/',
+            '/cliente/', '/cobrancas/')
 # O painel: só o endereço exato (com ou sem a busca), nada que comece igual.
 MIGRADOS_EXATOS = ('/painel',)
 # Os arquivos continuam no servidor: as etiquetas, a logo, a foto do pedido
@@ -53,9 +55,12 @@ MIGRADOS_EXATOS = ('/painel',)
 # relatório do cliente (``/relatorios/cliente/<id>/<mês>/arquivo.pdf``).
 FORA = ('/etiquetas.pdf', '/logo.png', '/foto', '/arquivo.pdf', '/arquivo.xlsx')
 # Da rotina dos locais, os arquivos (POP/FIT, fotos, referências) e o
-# agendador continuam no servidor; dos chamados, as fotos e os PDFs.
+# agendador continuam no servidor; dos chamados, as fotos e os PDFs; do
+# portal do cliente, as fotos e os POP/FIT (o PDF e o Excel do relatório já
+# saem pelo ``FORA``).
 FORA_DAS_ROTAS = ('/rotas/documentos/', '/rotas/fotos/', '/rotas/referencias/',
-                  '/rotas/ocorrencias/', '/rotas/agendador', '/chamados/anexos/')
+                  '/rotas/ocorrencias/', '/rotas/agendador', '/chamados/anexos/',
+                  '/cliente/fotos/', '/cliente/documentos/')
 
 
 def nova(url):

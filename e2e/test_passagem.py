@@ -18,6 +18,9 @@ PNG = bytes.fromhex(
 
 
 def _sem_rolagem_lateral(pg, tela):
+    # Mede só com a página inteira carregada: com a máquina ocupada, o CSS
+    # ainda chegando deixa a tabela sem estilo, mais larga que a tela.
+    pg.wait_for_load_state('load')
     largura = pg.evaluate('document.documentElement.scrollWidth')
     assert largura <= pg.viewport_size['width'], f'{tela} rola de lado ({largura}px)'
 
