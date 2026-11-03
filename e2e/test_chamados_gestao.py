@@ -11,7 +11,7 @@ import struct
 import tempfile
 import zlib
 
-from conftest import PERFIS, VIOLACOES_CSP, abrir, abrir_contexto, entrar
+from conftest import PERFIS, VIOLACOES_CSP, abrir, abrir_contexto, contar_quando, entrar
 
 
 def _png():
@@ -120,8 +120,8 @@ def test_o_ciclo_do_chamado(servidor, navegador, perfil, chamados):
         adm.locator('select[name=prioridade]').select_option('urgente')
         adm.wait_for_url('**prioridade=urgente**')
         _pronta(adm, 'chamados')
+        assert contar_quando(adm.locator('.ch-item', has_text='Filtro do secador'), 0) == 0
         assert adm.locator('.ch-item', has_text='Torneira do banheiro vazando').count() == 1
-        assert adm.locator('.ch-item', has_text='Filtro do secador').count() == 0
 
         # O Caio atende, espera a peça, retoma e resolve com a foto.
         caio = _outra_pessoa(b, perfil)
@@ -167,7 +167,7 @@ def test_demandas_e_preventiva(servidor, navegador, perfil, chamados):
         pg.get_by_role('button', name='Filtrar').click()
         pg.wait_for_url('**tipo=preventiva**')
         _pronta(pg, 'demandas')
-        assert pg.locator('.fc-cartao.p-0 a').count() == 1
+        assert contar_quando(pg.locator('.fc-cartao.p-0 a'), 1) == 1
         pg.locator('.fc-cartao.p-0 a', has_text='Filtro do secador').click()
         pg.wait_for_selector('text=Manutenção preventiva programada')
         _pronta(pg, 'chamado')
