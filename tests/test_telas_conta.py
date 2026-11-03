@@ -35,6 +35,23 @@ def _flashes(c):
                 for t, x in s.pop('_flashes', [])]
 
 
+def _cookie_da_sessao(c):
+    """O que o cookie da sessão leva, decodificado como qualquer um que o
+    copie consegue ler: o Flask ASSINA o cookie, não o cifra (a carga é
+    JSON em base64, comprimida quando começa com ponto)."""
+    import base64
+    import zlib
+    ck = c.get_cookie('session')
+    if ck is None:
+        return ''
+    valor = ck.value
+    carga = valor.lstrip('.').split('.')[0]
+    bruto = base64.urlsafe_b64decode(carga + '=' * (-len(carga) % 4))
+    if valor.startswith('.'):
+        bruto = zlib.decompress(bruto)
+    return bruto.decode()
+
+
 def _antiga(c, url, **kw):
     r = c.post(url, **kw)
     assert r.status_code == 302, (url, r.status_code, r.get_data(as_text=True)[:300])
@@ -559,9 +576,16 @@ def test_a_lista_das_pessoas_traz_os_dados_da_tela_antiga(app_module, auth_clien
 def test_cadastrar_a_senha_so_na_resposta_do_envio(app_module, auth_client):
     from app import User
     fabrica.CRIADAS.update({'nova.pessoa@trino.com', 'antiga.pessoa@trino.com'})
-    loc, rec = _antiga(auth_client, '/admin/usuarios', data={
+    # A antiga desenha a senha na resposta do envio (no-store), sem recado:
+    # o recado passaria pelo cookie da sessão.
+    r = auth_client.post('/admin/usuarios', data={
         'name': 'Pessoa Antiga', 'email': 'antiga.pessoa@trino.com', 'role': 'encarregado'})
-    assert loc == '/admin/usuarios' and 'Senha temporária:' in rec[0]['texto']
+    assert r.status_code == 200 and r.headers['Cache-Control'] == 'no-store'
+    antiga = _segredo_temporario(r.get_data(as_text=True))
+    assert antiga and f'Cadastro de Pessoa Antiga criado. Senha temporária: {antiga} — ' in \
+        _texto(re.sub(r'<[^>]+>', '', r.get_data(as_text=True)))
+    assert _flashes(auth_client) == [] and antiga not in _cookie_da_sessao(auth_client)
+    assert antiga not in auth_client.get('/admin/usuarios').get_data(as_text=True)
     r, j = _nova(auth_client, '/api/v1/admin/usuarios', data={
         'name': 'Pessoa Nova', 'email': 'NOVA.pessoa@trino.com', 'role': 'supervisor',
         'clients': [str(fabrica_local_id(app_module))]})
@@ -581,6 +605,61 @@ def test_cadastrar_a_senha_so_na_resposta_do_envio(app_module, auth_client):
     novo = app_module.app.test_client()
     assert novo.post('/login', data={'email': 'nova.pessoa@trino.com', 'password': senha}) \
         .headers['Location'].endswith('/trocar-senha')
+
+
+def _segredo_temporario(html):
+    m = re.search(r'<div class="alert alert-success" role="status">.*?<code class="user-select-all">'
+                  r'([^<]+)</code>', html, re.S)
+    return m.group(1) if m else None
+
+
+def test_a_senha_temporaria_nunca_passa_pelo_cookie(app_module, auth_client):
+    """O cookie da sessão é assinado, não cifrado: quem o copia lê o que vai
+    nele. A senha temporária (cadastrar e gerar, nas duas telas) não vai."""
+    uid = _pessoa(app_module, 'cookie.alvo@trino.com', 'encarregado', nome='Cora')
+    fabrica.CRIADAS.update({'cookie.um@trino.com', 'cookie.dois@trino.com'})
+    vistas = []
+    for url, dados in (('/admin/usuarios', {'name': 'Um', 'email': 'cookie.um@trino.com'}),
+                       (f'/admin/usuarios/{uid}/nova-senha', ADM)):
+        r = auth_client.post(url, data=dados)
+        # Nem a senha nem o recado dela no cookie (antes ia no recado).
+        assert 'Senha tempor' not in _cookie_da_sessao(auth_client), url
+        vistas.append(_segredo_temporario(r.get_data(as_text=True)))
+        corpo = {'name': 'Dois', 'email': 'cookie.dois@trino.com'} if 'nova' not in url else ADM
+        vistas.append(auth_client.post('/api/v1' + url, data=corpo).get_json()['senha']['senha'])
+        assert 'Senha tempor' not in _cookie_da_sessao(auth_client), url
+    assert all(vistas) and len(set(vistas)) == 4
+    bruto = _cookie_da_sessao(auth_client)
+    assert '_user_id' in bruto                  # o cookie foi lido mesmo
+    for senha in vistas:
+        assert senha not in bruto
+    # A página seguinte (o recado de antes) também não a traz.
+    html = auth_client.get('/admin/usuarios').get_data(as_text=True)
+    assert not any(s in html for s in vistas)
+
+
+def test_a_senha_temporaria_nao_vale_para_a_propria_conta(app_module, auth_client):
+    """Gerar a senha temporária da PRÓPRIA conta derrubava a sessão e mostrava
+    a senha nova na tela de login. Recusa nas duas telas, com o caminho
+    ("Trocar senha"); nada muda e a sessão segue."""
+    from facilities.core.admin import MSG_SENHA_PROPRIA
+    admin = _admin_id(app_module)
+    antes = _usuario(app_module, admin)
+    d1, rec, j = _par(auth_client, f'/admin/usuarios/{admin}/nova-senha',
+                      f'/api/v1/admin/usuarios/{admin}/nova-senha', ADM)
+    assert d1 == '/admin/usuarios' and rec == [{'tipo': 'danger', 'texto': MSG_SENHA_PROPRIA}]
+    assert 'Trocar senha' in MSG_SENHA_PROPRIA and 'senha' not in j
+    depois = _usuario(app_module, admin)
+    assert depois.password_hash == antes.password_hash and not depois.must_change_password
+    assert depois.session_epoch == antes.session_epoch and depois.failed_login_count == 0
+    assert auth_client.get('/api/v1/eu').status_code == 200
+    # As telas mostram o caminho em vez do botão na própria linha.
+    html = auth_client.get('/admin/usuarios').get_data(as_text=True)
+    assert f'action="/admin/usuarios/{admin}/nova-senha"' not in html
+    assert 'Para mudar a sua própria senha, use <a href="/trocar-senha">Trocar senha</a>.' in html
+    pessoas = auth_client.get('/api/v1/admin/usuarios').get_json()['pessoas']
+    assert [p['propria'] for p in pessoas if p['id'] == admin] == [True]
+    assert not any(p['propria'] for p in pessoas if p['id'] != admin)
 
 
 def fabrica_local_id(app_module):
@@ -631,8 +710,12 @@ def test_nova_senha_e_desligar_o_codigo_como_a_tela_antiga(app_module, auth_clie
     u = _usuario(app_module, uid)
     assert u.check_password(senha) and u.must_change_password
     assert sessao.get('/api/v1/eu').status_code == 401
-    loc, rec = _antiga(auth_client, f'/admin/usuarios/{uid}/nova-senha', data=ADM)
-    assert rec[0]['texto'].startswith('Senha temporária de Pedro: ')
+    r = auth_client.post(f'/admin/usuarios/{uid}/nova-senha', data=ADM)
+    assert r.status_code == 200 and r.headers['Cache-Control'] == 'no-store'
+    antiga = _segredo_temporario(r.get_data(as_text=True))
+    assert antiga != senha and _usuario(app_module, uid).check_password(antiga)
+    assert f'Senha temporária de Pedro: {antiga}' in _texto(re.sub(r'<[^>]+>', '', r.get_data(as_text=True)))
+    assert _flashes(auth_client) == []
     with app_module.app.app_context():
         u = db.session.get(User, uid)
         u.totp_ativo, u.totp_segredo = True, 'JBSWY3DPEHPK3PXP'

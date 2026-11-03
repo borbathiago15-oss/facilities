@@ -33,10 +33,10 @@ function pessoas(): DadosDasPessoas {
     pessoas: [
       { id: 1, nome: 'Administrador', email: 'admin@x.com', perfil: 'master', perfil_rotulo: 'Administrador',
         ativo: true, todos_os_locais: false, superior_id: null, cliente_id: null, locais: [], permissoes: [],
-        segunda_etapa: true, alcance: 'todos os locais', cadeia: [] },
+        segunda_etapa: true, propria: false, alcance: 'todos os locais', cadeia: [] },
       { id: 2, nome: 'Ana', email: 'ana@x.com', perfil: 'encarregado', perfil_rotulo: 'Encarregado / ASG',
         ativo: false, todos_os_locais: false, superior_id: 3, cliente_id: null, locais: [7], permissoes: [],
-        segunda_etapa: false, alcance: '1 local(is) direto(s)',
+        segunda_etapa: false, propria: false, alcance: '1 local(is) direto(s)',
         cadeia: [{ nome: 'Gustavo', perfil: 'Gerente' }, { nome: 'Sueli', perfil: 'Supervisor' }] }],
     locais: [{ id: 7, nome: 'CD 1', ativo: true }, { id: 8, nome: 'CD 2', ativo: false }],
     perfis: [['master', 'Administrador'], ['encarregado', 'Encarregado / ASG']],
@@ -135,6 +135,20 @@ describe('as pessoas', () => {
     await waitFor(() => expect(ir).toHaveBeenCalledWith('/login'));
     const envio = chamadas.find((c) => c.url.endsWith('/1/desligar-codigo'))!;
     expect((envio.init!.body as FormData).get('senha_atual')).toBe('errada');
+  });
+
+  it('na própria conta, nada de senha temporária: o caminho é "Trocar senha"', async () => {
+    const base = pessoas();
+    base.pessoas[0].propria = true;
+    vi.mocked(globalThis.fetch).mockImplementation(async (url) => {
+      chamadas.push({ url: String(url) });
+      return new Response(JSON.stringify(base), { status: 200 });
+    });
+    abrirPessoas();
+    await screen.findByText('Ana');
+    expect(screen.getAllByRole('button', { name: /Gerar senha temporária/ })).toHaveLength(1);
+    expect(document.querySelector('#senhaNova1')).toBeNull();
+    expect(screen.getByRole('link', { name: 'Trocar senha' })).toHaveAttribute('href', '/trocar-senha');
   });
 
   it('salvar vai ao mesmo caminho da antiga, com as caixas marcadas', async () => {

@@ -7,7 +7,7 @@ dono ("quem encerrou esta passagem?").
 import json
 import secrets
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, flash, make_response, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from facilities.extensions import db
@@ -29,9 +29,12 @@ def _senha_temporaria():
 # recado). Só o administrador (``admin_required`` nas rotas das duas telas).
 #
 # A senha temporária (cadastrar e "Gerar senha temporária"): a ação a
-# devolve e NÃO deixa recado com ela. A tela antiga a põe no recado (como
-# sempre fez); a nova a recebe só na resposta do envio (``no-store``), como
-# a chave da integração.
+# devolve e NÃO deixa recado com ela. As duas telas a mostram só na resposta
+# do envio que a cria (``no-store``), como a chave da integração: a antiga
+# desenha a página ali mesmo (``_pagina_com_senha``), sem passar pelo recado.
+# O recado (``flash``) mora no cookie da sessão, que o Flask assina mas NÃO
+# cifra: a senha ficava legível no cookie até a página seguinte (auditoria
+# da Fase 6a, 03/11/2026).
 
 def _texto_da_senha_nova(u, senha):
     return (f'Cadastro de {u.name} criado. Senha temporária: {senha} — entregue '
@@ -49,6 +52,8 @@ def _texto_da_senha_gerada(u, senha):
 # (``auth._derrubar_se_bloqueou``): no 5º erro a conta dele bloqueia e a
 # sessão cai, nas duas telas.
 MSG_SENHA_DO_ADMIN = 'A sua senha não confere. Nada foi alterado.'
+MSG_SENHA_PROPRIA = ('A senha temporária é só para outras pessoas. Para mudar a sua, use '
+                     '"Trocar senha", no menu da sua conta.')
 
 
 def _senha_do_admin_errada(dados):
@@ -74,6 +79,18 @@ def usuarios():
     from facilities.core.hierarquia import cadeia_acima
     return render_template('core/usuarios.html', cadeia_acima=cadeia_acima,
                            **contexto_usuarios())
+
+
+def _pagina_com_senha(texto, senha):
+    """A tela antiga das pessoas com a senha temporária, desenhada na
+    resposta do envio (nada no cookie, nada guardado pelo navegador)."""
+    from facilities.core.hierarquia import cadeia_acima
+    resp = make_response(render_template(
+        'core/usuarios.html', cadeia_acima=cadeia_acima,
+        senha_gerada={'texto': texto, 'senha': senha}, **contexto_usuarios()))
+    resp.headers['Cache-Control'] = 'no-store'
+    resp.headers['Pragma'] = 'no-cache'
+    return resp
 
 
 def contexto_usuarios():
@@ -144,7 +161,8 @@ def _validar(u, original_id=None):
 def criar_usuario():
     feito = acao_criar_usuario(request.form)
     if feito is not None:
-        flash(_texto_da_senha_nova(*feito), 'success')
+        u, senha = feito
+        return _pagina_com_senha(_texto_da_senha_nova(u, senha), senha)
     return redirect(url_for('admin.usuarios'))
 
 
@@ -202,7 +220,8 @@ def nova_senha(uid):
     if derrubou:
         return redirect(url_for('auth.login'))
     if feito is not None:
-        flash(_texto_da_senha_gerada(*feito), 'success')
+        u, senha = feito
+        return _pagina_com_senha(_texto_da_senha_gerada(u, senha), senha)
     return redirect(url_for('admin.usuarios'))
 
 
@@ -212,6 +231,12 @@ def acao_nova_senha(uid, dados):
     recado diz por quê); ``derrubou`` quando a senha errada do
     administrador bloqueou a conta dele e a sessão caiu."""
     u = db.get_or_404(User, uid)
+    if u.id == current_user.id:
+        # A própria senha se troca em "Trocar senha" (pede a atual). Gerar a
+        # temporária para si derrubava a própria sessão, e a senha nova ia
+        # parar na tela de login, à vista de quem estivesse perto.
+        flash(MSG_SENHA_PROPRIA, 'danger')
+        return None, False
     errada = _senha_do_admin_errada(dados)
     if errada is not None:
         return None, errada

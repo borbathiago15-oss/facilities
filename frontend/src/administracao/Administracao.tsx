@@ -171,10 +171,14 @@ export function Pessoas({ dados, senha, aoGerar }: {
                 <label className="form-check-label small" htmlFor={`ativo${u.id}`}>Ativo (desmarque para bloquear o acesso)</label></div>
               <button className="btn btn-primary btn-sm fw-bold mt-2" type="submit" disabled={ocupado}>Salvar</button>
             </form>
-            <form method="post" className="mt-2 mb-2" onSubmit={gerar(u)} autoComplete="off">
-              <SuaSenha id={`senhaNova${u.id}`} />
-              <button className="btn btn-outline-secondary btn-sm" type="submit" disabled={gerando}><i className="bi bi-key"></i> Gerar senha temporária</button>
-            </form>
+            {u.propria ? (
+              <p className="small text-muted mt-2 mb-2">Para mudar a sua própria senha, use <Ir href="/novo/trocar-senha">Trocar senha</Ir>.</p>
+            ) : (
+              <form method="post" className="mt-2 mb-2" onSubmit={gerar(u)} autoComplete="off">
+                <SuaSenha id={`senhaNova${u.id}`} />
+                <button className="btn btn-outline-secondary btn-sm" type="submit" disabled={gerando}><i className="bi bi-key"></i> Gerar senha temporária</button>
+              </form>
+            )}
             {u.segunda_etapa && (
               <form method="post" className="mb-2" onSubmit={submeter(`${API}/usuarios/${u.id}/desligar-codigo`)} autoComplete="off">
                 <SuaSenha id={`senhaCodigo${u.id}`} />
