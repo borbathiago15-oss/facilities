@@ -76,10 +76,10 @@ def test_ativar_e_desativar_pela_propria_pessoa(app_module):
     html = c.get('/conta/seguranca').get_data(as_text=True)
     segredo = re.search(r'<code class="user-select-all">([A-Z2-7]+)</code>', html).group(1)
     assert '<svg' in html
-    c.post('/conta/seguranca/ativar', data={'codigo': '123456'})
+    c.post('/conta/seguranca/ativar', data={'codigo': '123456', 'senha': fabrica.SENHA})
     with app_module.app.app_context():
         assert db.session.get(User, uid).totp_ativo is False
-    c.post('/conta/seguranca/ativar', data={'codigo': totp.codigo(segredo)})
+    c.post('/conta/seguranca/ativar', data={'codigo': totp.codigo(segredo), 'senha': fabrica.SENHA})
     with app_module.app.app_context():
         assert db.session.get(User, uid).totp_ativo is True
     c.post('/conta/seguranca/desativar', data={'senha': 'errada'})

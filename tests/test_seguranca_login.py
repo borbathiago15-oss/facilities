@@ -75,7 +75,8 @@ def test_ativar_o_codigo_libera_e_derruba_as_outras_sessoes(app_module, mfa_liga
     c.get('/conta/seguranca')
     with c.session_transaction() as s:
         segredo = s['_totp_novo']
-    r = c.post('/conta/seguranca/ativar', data={'codigo': totp.codigo(segredo)})
+    r = c.post('/conta/seguranca/ativar', data={'codigo': totp.codigo(segredo),
+                                                'senha': fabrica.SENHA})
     assert r.status_code == 302
     assert c.get('/').status_code in (200, 302)
     assert '/conta/seguranca' not in (c.get('/').headers.get('Location') or '')

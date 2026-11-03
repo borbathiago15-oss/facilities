@@ -119,7 +119,7 @@ def _marcar_codigo_usado(u, passo):
 
 def _senha_atual_errada(u):
     """A senha atual errou numa tela de quem já está logado (trocar a senha,
-    desligar o código): conta como erro de login. No limite, a conta bloqueia
+    ligar ou desligar o código, as ações do administrador): conta como erro de login. No limite, a conta bloqueia
     e a sessão cai — quem roubou a sessão não descobre a senha por tentativa
     (auditoria SEC-011). Devolve a resposta quando derrubou a sessão."""
     if not _derrubar_se_bloqueou(u):
@@ -386,19 +386,32 @@ def preparar_codigo():
 @bp.route('/conta/seguranca/ativar', methods=['POST'])
 @login_required
 def ativar_codigo():
-    return redirect(acao_ativar_codigo(request.form))
+    destino, _derrubou = acao_ativar_codigo(request.form)
+    return redirect(destino)
 
 
 def acao_ativar_codigo(dados):
+    """``(destino, derrubou)``, como ``acao_desativar_codigo``.
+
+    Ativar pede a senha atual (auditoria da Fase 6a, 03/11/2026): sem ela,
+    quem tivesse só a sessão (um cookie copiado, um computador esquecido
+    aberto) cadastrava o PRÓPRIO autenticador, derrubava as outras sessões
+    e passava a ser o único a entrar. A senha errada conta no mesmo
+    contador do login (``_derrubar_se_bloqueou``)."""
     segredo = session.get('_totp_novo')
     if not segredo or current_user.totp_ativo:
-        return url_for('auth.seguranca')
+        return url_for('auth.seguranca'), False
+    u = current_user._get_current_object()
+    if not u.check_password(dados.get('senha') or ''):
+        if _derrubar_se_bloqueou(u):
+            return url_for('auth.login'), True
+        flash('A senha atual não confere.', 'danger')
+        return url_for('auth.seguranca'), False
     aceito = totp.verificar(segredo, dados.get('codigo'))
     if aceito is None:
         flash('O código não confere. Confira se o aplicativo leu o QR desta tela e digite '
               'o código que aparece agora.', 'danger')
-        return url_for('auth.seguranca')
-    u = current_user._get_current_object()
+        return url_for('auth.seguranca'), False
     u.totp_segredo = segredo
     u.totp_ativo = True
     u.totp_ultimo_passo = aceito
@@ -411,7 +424,7 @@ def acao_ativar_codigo(dados):
     login_user(u)
     flash('Segunda etapa ativada. A partir de agora, o login pede a senha e o código do '
           'aplicativo.', 'success')
-    return url_for('auth.seguranca')
+    return url_for('auth.seguranca'), False
 
 
 @bp.route('/conta/seguranca/desativar', methods=['POST'])

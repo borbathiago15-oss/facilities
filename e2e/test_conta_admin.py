@@ -89,12 +89,20 @@ def test_a_segunda_etapa_e_a_troca_de_senha(servidor, navegador, perfil, conta):
         assert re.fullmatch(r'[A-Z2-7]{32}', segredo)
         assert pg.locator('.fc-qr-totp').bounding_box()['width'] > 100
         _sem_rolagem(pg, 'a segurança da conta')
+        # Ativar pede a senha atual: com ela errada, nada muda.
+        assert pg.get_by_label('Sua senha atual').get_attribute('type') == 'password'
+        pg.fill('#codigo', totp.codigo(segredo))
+        pg.fill('#senha', 'senha-errada')
+        pg.get_by_role('button', name='Ativar a segunda etapa').click()
+        _recado(pg, 'A senha atual não confere.', 'seguranca')
         pg.fill('#codigo', '000000')
+        pg.fill('#senha', SENHA)
         pg.get_by_role('button', name='Ativar a segunda etapa').click()
         _recado(pg, 'O código não confere.', 'seguranca')
-        # O mesmo segredo (o da sessão) depois da recusa.
+        # O mesmo segredo depois da recusa.
         assert pg.locator('code.user-select-all').inner_text().strip() == segredo
         pg.fill('#codigo', totp.codigo(segredo))
+        pg.fill('#senha', SENHA)
         pg.get_by_role('button', name='Ativar a segunda etapa').click()
         _recado(pg, 'Segunda etapa ativada. A partir de agora', 'seguranca')
         assert pg.locator('text=Segunda etapa ativada.').first.is_visible()

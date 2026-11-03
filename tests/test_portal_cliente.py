@@ -143,7 +143,8 @@ def test_sem_a_segunda_etapa_so_abre_a_tela_de_seguranca(app_module, cena, liber
     assert pagina.status_code == 200
     with c.session_transaction() as s:
         segredo = s['_totp_novo']
-    r = c.post('/conta/seguranca/ativar', data={'codigo': totp.codigo(segredo)})
+    r = c.post('/conta/seguranca/ativar', data={'codigo': totp.codigo(segredo),
+                                                'senha': fabrica.SENHA})
     assert r.status_code == 302
     assert c.get('/cliente/').status_code == 200
     # E não dá para desligar depois.

@@ -323,12 +323,15 @@ def test_ativar_pela_tela_nova_como_na_antiga(app_module):
     c = fabrica.entrar(app_module, 'mfa.ativar@trino.com')
     outro = fabrica.entrar(app_module, 'mfa.ativar@trino.com')
     # Sem segredo preparado: volta à tela, sem recado (as duas).
-    _par(c, '/conta/seguranca/ativar', '/api/v1/conta/seguranca/ativar', {'codigo': '123456'})
+    _par(c, '/conta/seguranca/ativar', '/api/v1/conta/seguranca/ativar',
+         {'codigo': '123456', 'senha': SENHA})
     segredo = c.post('/api/v1/conta/seguranca/codigo-novo').get_json()['novo']['segredo']
     # Código errado: o mesmo recado.
-    _par(c, '/conta/seguranca/ativar', '/api/v1/conta/seguranca/ativar', {'codigo': '000000'})
+    _par(c, '/conta/seguranca/ativar', '/api/v1/conta/seguranca/ativar',
+         {'codigo': '000000', 'senha': SENHA})
     epoca = _usuario(app_module, uid).session_epoch or 0
-    r, j = _nova(c, '/api/v1/conta/seguranca/ativar', json={'codigo': totp.codigo(segredo)})
+    r, j = _nova(c, '/api/v1/conta/seguranca/ativar', json={'codigo': totp.codigo(segredo),
+                                                            'senha': SENHA})
     assert r.status_code == 200 and j == {'recados': [{'tipo': 'success', 'texto':
         'Segunda etapa ativada. A partir de agora, o login pede a senha e o código do aplicativo.'}],
         'destino': '/novo/conta/seguranca'}
@@ -342,6 +345,57 @@ def test_ativar_pela_tela_nova_como_na_antiga(app_module):
     with c.session_transaction() as s:
         assert '_totp_novo' not in s
 
+
+
+def test_ativar_pede_a_senha_atual_nas_duas_telas(app_module):
+    """Ativar a segunda etapa pede a senha atual (auditoria da Fase 6a): só
+    com a sessão (um cookie copiado, um computador aberto), ninguém cadastra
+    o próprio autenticador e tranca o dono fora. Sem a senha, ou com ela
+    errada, nada muda, mesmo com o código certo; o erro conta no MESMO
+    contador do login, nas duas telas, e o 5º bloqueia e derruba a sessão."""
+    from facilities.core import totp
+    from facilities.core.auth import MSG_LOGIN_RECUSADO
+    uid = _pessoa(app_module, 'mfa.senha@trino.com', 'pleno')
+    c = fabrica.entrar(app_module, 'mfa.senha@trino.com')
+    outro = fabrica.entrar(app_module, 'mfa.senha@trino.com')
+    segredo = c.post('/api/v1/conta/seguranca/codigo-novo').get_json()['novo']['segredo']
+    for dados in ({'codigo': totp.codigo(segredo)},
+                  {'codigo': totp.codigo(segredo), 'senha': 'errada'}):
+        d1, rec, j = _par(c, '/conta/seguranca/ativar', '/api/v1/conta/seguranca/ativar', dados)
+        assert d1 == '/conta/seguranca'
+        assert rec == [{'tipo': 'danger', 'texto': 'A senha atual não confere.'}]
+    u = _usuario(app_module, uid)
+    assert not u.totp_ativo and u.failed_login_count == 4
+    assert outro.get('/api/v1/eu').status_code == 200        # ninguém caiu
+    r, j = _nova(c, '/api/v1/conta/seguranca/ativar', data={'codigo': totp.codigo(segredo),
+                                                            'senha': 'errada'})
+    assert r.status_code == 400 and j == {'destino': '/login', 'error': MSG_LOGIN_RECUSADO}
+    u = _usuario(app_module, uid)
+    assert not u.totp_ativo and u.lockout_until is not None
+    assert c.get('/api/v1/eu').status_code == 401
+    assert MSG_LOGIN_RECUSADO in _texto(c.get('/login').get_data(as_text=True))
+    # A tela antiga: o 5º erro leva ao login do mesmo jeito.
+    uid2 = _pessoa(app_module, 'mfa.senha2@trino.com', 'pleno')
+    c = fabrica.entrar(app_module, 'mfa.senha2@trino.com')
+    c.get('/conta/seguranca')
+    with app_module.app.app_context():
+        from app import User, db
+        db.session.get(User, uid2).failed_login_count = 4
+        db.session.commit()
+    r = c.post('/conta/seguranca/ativar', data={'codigo': '123456', 'senha': 'errada'})
+    assert r.status_code == 302 and r.headers['Location'] == '/login'
+    assert _usuario(app_module, uid2).lockout_until is not None
+    assert c.get('/api/v1/eu').status_code == 401
+
+
+def test_as_telas_de_seguranca_pedem_a_senha_atual(app_module):
+    _pessoa(app_module, 'mfa.campo@trino.com', 'encarregado')
+    c = fabrica.entrar(app_module, 'mfa.campo@trino.com')
+    html = c.get('/conta/seguranca').get_data(as_text=True)
+    form = re.search(r'<form method="post" action="/conta/seguranca/ativar">(.*?)</form>',
+                     html, re.S).group(1)
+    assert 'Sua senha atual' in form
+    assert re.search(r'<input[^>]*name="senha"[^>]*type="password"[^>]*required', form)
 
 def test_desativar_como_na_tela_antiga(app_module):
     from facilities.core import totp

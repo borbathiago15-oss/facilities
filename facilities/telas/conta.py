@@ -22,7 +22,7 @@ O segredo da segunda etapa (o texto e o QR): nunca vem numa leitura
 sem recado), o mesmo segredo que a tela antiga mostra (guardado na sessão
 até ativar); a tela nova o guarda só no estado do componente.
 
-Os envios de senha (trocar a senha, desligar o código) contam o erro da
+Os envios de senha (trocar a senha, ativar e desligar o código) contam o erro da
 senha atual no MESMO contador das telas antigas (``failed_login_count``, no
 banco): cinco erros, somando as duas telas, bloqueiam a conta e derrubam a
 sessão. Nenhuma dessas rotas antigas tem limite do Flask-Limiter; as novas
@@ -161,7 +161,10 @@ def api_seguranca_codigo_novo():
 @api.post('/conta/seguranca/ativar')
 @login_required
 def api_ativar_codigo():
-    return _feito(auth.acao_ativar_codigo(_dados()))
+    destino, derrubou = auth.acao_ativar_codigo(_dados())
+    if derrubou:
+        return _derrubada(destino)
+    return _feito(destino)
 
 
 @api.post('/conta/seguranca/desativar')
