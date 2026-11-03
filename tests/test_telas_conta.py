@@ -406,6 +406,50 @@ def test_ativar_pede_a_senha_atual_nas_duas_telas(app_module):
     assert c.get('/api/v1/eu').status_code == 401
 
 
+
+def test_o_segredo_pendente_nunca_vai_no_cookie(app_module):
+    """O cookie da sessão é assinado, não cifrado: o segredo mostrado para
+    cadastrar (tela antiga e nova) não vai nele, nem antes nem depois de
+    ativar. Ele fica pendente na linha da pessoa (``totp_segredo`` com
+    ``totp_ativo`` falso), que o login ignora; na sessão, só a marca."""
+    from app import User, db
+    from facilities.core import totp
+    from tests.test_cifra_campos import _bruto
+    uid = _pessoa(app_module, 'mfa.cookie@trino.com', 'pleno')
+    c = fabrica.entrar(app_module, 'mfa.cookie@trino.com')
+    segredo = _segredo_da_pagina(c.get('/conta/seguranca').get_data(as_text=True))
+    assert segredo and segredo not in _cookie_da_sessao(c)
+    assert '_totp_novo' in _cookie_da_sessao(c)                # a marca, não o segredo
+    assert c.post('/api/v1/conta/seguranca/codigo-novo').get_json()['novo']['segredo'] == segredo
+    assert segredo not in _cookie_da_sessao(c)
+    # Pendente na linha da pessoa, cifrado no banco; o login segue só com a senha.
+    u = _usuario(app_module, uid)
+    assert u.totp_segredo == segredo and not u.totp_ativo
+    with app_module.app.app_context():
+        assert segredo not in (_bruto('users', 'totp_segredo', uid) or '')
+    outro = app_module.app.test_client()
+    r = outro.post('/login', data={'email': 'mfa.cookie@trino.com', 'password': SENHA})
+    assert r.status_code == 302 and '/login/codigo' not in r.headers['Location']
+    # A outra sessão abriu a tela: sorteia o dela, e o desta deixa de valer
+    # (quem viu um segredo noutra sessão não sabe o que o dono ativa).
+    s2 = _segredo_da_pagina(outro.get('/conta/seguranca').get_data(as_text=True))
+    assert s2 and s2 != segredo
+    _par(c, '/conta/seguranca/ativar', '/api/v1/conta/seguranca/ativar',
+         {'codigo': totp.codigo(segredo), 'senha': SENHA})
+    assert not _usuario(app_module, uid).totp_ativo
+    segredo = _segredo_da_pagina(c.get('/conta/seguranca').get_data(as_text=True))
+    assert segredo not in (s2,) and _usuario(app_module, uid).totp_segredo == segredo
+    r = c.post('/conta/seguranca/ativar', data={'codigo': totp.codigo(segredo), 'senha': SENHA})
+    assert r.status_code == 302
+    u = _usuario(app_module, uid)
+    assert u.totp_ativo and u.totp_segredo == segredo
+    assert segredo not in _cookie_da_sessao(c) and '_totp_novo' not in _cookie_da_sessao(c)
+    # Ativada: abrir a tela (nas duas) não mexe no segredo ativo.
+    c.get('/conta/seguranca')
+    assert c.post('/api/v1/conta/seguranca/codigo-novo').get_json() == {'novo': None}
+    with app_module.app.app_context():
+        assert db.session.get(User, uid).totp_segredo == segredo
+
 def test_as_telas_de_seguranca_pedem_a_senha_atual(app_module):
     _pessoa(app_module, 'mfa.campo@trino.com', 'encarregado')
     c = fabrica.entrar(app_module, 'mfa.campo@trino.com')

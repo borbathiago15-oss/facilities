@@ -6,6 +6,7 @@
 * SEC-007: conta bloqueada avisa o administrador.
 * SEC-011: errar a senha atual em "trocar a senha" conta como erro de login.
 """
+import re
 import threading
 
 import pytest
@@ -72,9 +73,9 @@ def test_ativar_o_codigo_libera_e_derruba_as_outras_sessoes(app_module, mfa_liga
     _pessoa(app_module, 'mfa.ativa@trino.com')
     outra = fabrica.entrar(app_module, 'mfa.ativa@trino.com')
     c = fabrica.entrar(app_module, 'mfa.ativa@trino.com')
-    c.get('/conta/seguranca')
-    with c.session_transaction() as s:
-        segredo = s['_totp_novo']
+    html = c.get('/conta/seguranca').get_data(as_text=True)
+    # O segredo vem da página (na sessão fica só a marca dele, não ele).
+    segredo = re.search(r'<code class="user-select-all">([A-Z2-7]+)</code>', html).group(1)
     r = c.post('/conta/seguranca/ativar', data={'codigo': totp.codigo(segredo),
                                                 'senha': fabrica.SENHA})
     assert r.status_code == 302

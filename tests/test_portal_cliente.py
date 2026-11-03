@@ -8,6 +8,7 @@ de quem fez o checklist só aparece com o interruptor do cliente ligado. Tudo
 atrás de ``CLIENTE_EXTERNO_LIBERADO`` (desligado por padrão), com a segunda
 etapa obrigatória.
 """
+import re
 from datetime import datetime, time, timedelta
 
 import pytest
@@ -141,8 +142,9 @@ def test_sem_a_segunda_etapa_so_abre_a_tela_de_seguranca(app_module, cena, liber
     assert c.post('/cliente/cobrancas', data={}).status_code == 403
     pagina = c.get('/conta/seguranca')
     assert pagina.status_code == 200
-    with c.session_transaction() as s:
-        segredo = s['_totp_novo']
+    # O segredo vem da página (na sessão fica só a marca dele, não ele).
+    segredo = re.search(r'<code class="user-select-all">([A-Z2-7]+)</code>',
+                        pagina.get_data(as_text=True)).group(1)
     r = c.post('/conta/seguranca/ativar', data={'codigo': totp.codigo(segredo),
                                                 'senha': fabrica.SENHA})
     assert r.status_code == 302
