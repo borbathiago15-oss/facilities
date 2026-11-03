@@ -189,6 +189,17 @@ def test_as_pessoas_e_os_locais(servidor, navegador, perfil, conta):
         _recado(pg, 'Cadastro de Paula Editada atualizado.', 'pessoas')
         paula = pg.locator('details', has=pg.locator('summary', has_text='Paula Editada'))
         paula.locator('summary').click()
+        # Gerar a senha pede a senha do próprio administrador: errada, nada muda.
+        gerar = paula.locator('form', has=pg.get_by_role('button', name='Gerar senha temporária'))
+        gerar.get_by_label('Sua senha atual').fill('senha-errada')
+        pg.once('dialog', lambda d: d.accept())
+        paula.get_by_role('button', name='Gerar senha temporária').click()
+        _recado(pg, 'A sua senha não confere. Nada foi alterado.', 'pessoas')
+        paula = pg.locator('details', has=pg.locator('summary', has_text='Paula Editada'))
+        if paula.get_attribute('open') is None:
+            paula.locator('summary').click()
+        gerar = paula.locator('form', has=pg.get_by_role('button', name='Gerar senha temporária'))
+        gerar.get_by_label('Sua senha atual').fill(SENHA)
         pg.once('dialog', lambda d: d.accept())
         paula.get_by_role('button', name='Gerar senha temporária').click()
         _recado(pg, 'Senha temporária de Paula Editada:', 'pessoas')

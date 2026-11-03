@@ -10,6 +10,7 @@ import re
 
 from facilities.core import totp
 from tests import fabrica
+from tests.conftest import TEST_ADMIN_PASSWORD
 
 
 def _com_codigo(app_module, email, papel='pleno'):
@@ -97,7 +98,8 @@ def test_administrador_desliga_para_quem_perdeu_o_celular(app_module, auth_clien
     c, _ = _senha(app_module, 'totp6@trino.com')
     c.post('/login/codigo', data={'codigo': totp.codigo(segredo)})
     assert c.get('/').status_code == 200
-    auth_client.post(f'/admin/usuarios/{uid}/desligar-codigo')
+    auth_client.post(f'/admin/usuarios/{uid}/desligar-codigo',
+                     data={'senha_atual': TEST_ADMIN_PASSWORD})
     with app_module.app.app_context():
         assert db.session.get(User, uid).totp_ativo is False
     assert c.get('/').status_code == 302                       # a sessão aberta caiu

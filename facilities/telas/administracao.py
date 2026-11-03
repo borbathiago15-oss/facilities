@@ -17,6 +17,11 @@ A senha temporária (cadastrar e "Gerar senha temporária") aparece uma vez
 só, como a chave da integração: a leitura nunca a traz (nem o hash); o
 texto vai só na resposta do envio que a cria (``no-store``, sem recado na
 sessão) e a tela nova o guarda só no estado do componente.
+
+"Gerar senha temporária" e "Desligar a segunda etapa" pedem a senha do
+próprio administrador (``senha_atual``), conferida na MESMA ação das duas
+telas; a errada conta no bloqueio da conta dele e, no limite, a sessão cai
+(a resposta é a de ``conta._derrubada``: o recado fica para o login).
 """
 from flask import jsonify, url_for
 from flask_login import login_required
@@ -26,6 +31,7 @@ from facilities.core.acesso import admin_required
 from facilities.core.hierarquia import cadeia_acima
 from facilities.telas import _casca, api, bp
 from facilities.telas.cadastros import _dados, _feito, _recados, _sem_cache, nova
+from facilities.telas.conta import _derrubada
 
 
 @bp.get('/novo/admin/usuarios')
@@ -104,15 +110,20 @@ def api_admin_editar_usuario(uid):
 @login_required
 @admin_required
 def api_admin_nova_senha(uid):
-    return _com_senha(adm.acao_nova_senha(uid), adm._texto_da_senha_gerada,
-                      url_for('admin.usuarios'))
+    feito, derrubou = adm.acao_nova_senha(uid, _dados())
+    if derrubou:
+        return _derrubada(url_for('auth.login'))
+    return _com_senha(feito, adm._texto_da_senha_gerada, url_for('admin.usuarios'))
 
 
 @api.post('/admin/usuarios/<int:uid>/desligar-codigo')
 @login_required
 @admin_required
 def api_admin_desligar_codigo(uid):
-    return _feito(adm.acao_desligar_codigo(uid))
+    destino, derrubou = adm.acao_desligar_codigo(uid, _dados())
+    if derrubou:
+        return _derrubada(destino)
+    return _feito(destino)
 
 
 # ── Locais ───────────────────────────────────────────────────────────────

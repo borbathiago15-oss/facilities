@@ -18,10 +18,11 @@ import re
 import pytest
 
 from tests import fabrica
-from tests.conftest import ADMIN_EMAIL
+from tests.conftest import ADMIN_EMAIL, TEST_ADMIN_PASSWORD
 
 MODULOS = ('facilities.telas.conta', 'facilities.telas.administracao')
 SENHA = fabrica.SENHA
+ADM = {'senha_atual': TEST_ADMIN_PASSWORD}
 
 
 def _texto(html):
@@ -622,7 +623,7 @@ def test_nova_senha_e_desligar_o_codigo_como_a_tela_antiga(app_module, auth_clie
     from app import User, db
     uid = _pessoa(app_module, 'perdeu@trino.com', 'encarregado', nome='Pedro')
     sessao = fabrica.entrar(app_module, 'perdeu@trino.com')
-    r, j = _nova(auth_client, f'/api/v1/admin/usuarios/{uid}/nova-senha')
+    r, j = _nova(auth_client, f'/api/v1/admin/usuarios/{uid}/nova-senha', data=ADM)
     assert r.headers['Cache-Control'] == 'no-store' and j['recados'] == []
     senha = j['senha']['senha']
     assert j['senha']['texto'] == f'Senha temporária de Pedro: {senha}'
@@ -630,18 +631,96 @@ def test_nova_senha_e_desligar_o_codigo_como_a_tela_antiga(app_module, auth_clie
     u = _usuario(app_module, uid)
     assert u.check_password(senha) and u.must_change_password
     assert sessao.get('/api/v1/eu').status_code == 401
-    loc, rec = _antiga(auth_client, f'/admin/usuarios/{uid}/nova-senha')
+    loc, rec = _antiga(auth_client, f'/admin/usuarios/{uid}/nova-senha', data=ADM)
     assert rec[0]['texto'].startswith('Senha temporária de Pedro: ')
     with app_module.app.app_context():
         u = db.session.get(User, uid)
         u.totp_ativo, u.totp_segredo = True, 'JBSWY3DPEHPK3PXP'
         db.session.commit()
     d1, rec, j = _par(auth_client, f'/admin/usuarios/{uid}/desligar-codigo',
-                      f'/api/v1/admin/usuarios/{uid}/desligar-codigo', {})
+                      f'/api/v1/admin/usuarios/{uid}/desligar-codigo', ADM)
     assert rec[0]['texto'].startswith('Segunda etapa de Pedro desligada.')
     u = _usuario(app_module, uid)
     assert not u.totp_ativo and u.totp_segredo is None
-    assert auth_client.post('/api/v1/admin/usuarios/999999/nova-senha').status_code == 404
+    assert auth_client.post('/api/v1/admin/usuarios/999999/nova-senha', data=ADM).status_code == 404
+
+
+def test_as_acoes_sensiveis_pedem_a_senha_do_administrador(app_module):
+    """"Gerar senha temporária" e "Desligar a segunda etapa" entregam a conta
+    de outra pessoa (inclusive a de outro administrador): pedem a senha do
+    PRÓPRIO administrador nas duas telas. Sem ela, ou errada, nada muda; o
+    erro conta no bloqueio da conta DELE (o mesmo contador do login), e o
+    5º bloqueia e derruba a sessão."""
+    from app import User, db
+    from facilities.core.auth import MSG_LOGIN_RECUSADO
+    from facilities.core.admin import MSG_SENHA_DO_ADMIN
+    adm_id = _pessoa(app_module, 'adm.dois@trino.com', 'master', nome='Outro Admin')
+    alvo = _pessoa(app_module, 'alvo.adm@trino.com', 'master', nome='Alvo Admin')
+    with app_module.app.app_context():
+        u = db.session.get(User, alvo)
+        u.totp_ativo, u.totp_segredo = True, 'JBSWY3DPEHPK3PXP'
+        db.session.commit()
+    hash_antes = _usuario(app_module, alvo).password_hash
+    c = fabrica.entrar(app_module, 'adm.dois@trino.com')
+    recusa = [{'tipo': 'danger', 'texto': MSG_SENHA_DO_ADMIN}]
+    for dados in ({}, {'senha_atual': 'errada'}):
+        loc, rec = _antiga(c, f'/admin/usuarios/{alvo}/nova-senha', data=dados)
+        assert loc == '/admin/usuarios' and rec == recusa
+        r, j = _nova(c, f'/api/v1/admin/usuarios/{alvo}/nova-senha', data=dados)
+        assert r.status_code == 400 and j['recados'] == recusa and 'senha' not in j
+    assert _usuario(app_module, adm_id).failed_login_count == 4
+    u = _usuario(app_module, alvo)
+    assert u.password_hash == hash_antes and not u.must_change_password and u.totp_ativo
+    # O 5º erro (no desligar o código, na tela nova): a conta do administrador
+    # bloqueia e a sessão dele cai; o recado fica para o login.
+    r, j = _nova(c, f'/api/v1/admin/usuarios/{alvo}/desligar-codigo', data={'senha_atual': 'x'})
+    assert r.status_code == 400 and j == {'destino': '/login', 'error': MSG_LOGIN_RECUSADO}
+    assert _usuario(app_module, adm_id).lockout_until is not None
+    assert _usuario(app_module, alvo).totp_ativo
+    assert c.get('/api/v1/eu').status_code == 401
+    assert MSG_LOGIN_RECUSADO in _texto(c.get('/login').get_data(as_text=True))
+    # A antiga, do mesmo jeito: a recusa, e o 5º erro leva ao login.
+    with app_module.app.app_context():
+        a = db.session.get(User, adm_id)
+        a.lockout_until, a.failed_login_count = None, 0
+        db.session.commit()
+    c = fabrica.entrar(app_module, 'adm.dois@trino.com')
+    d1, rec, j = _par(c, f'/admin/usuarios/{alvo}/desligar-codigo',
+                      f'/api/v1/admin/usuarios/{alvo}/desligar-codigo', {'senha_atual': 'errada'})
+    assert rec == recusa and _usuario(app_module, alvo).totp_ativo
+    with app_module.app.app_context():
+        db.session.get(User, adm_id).failed_login_count = 4
+        db.session.commit()
+    r = c.post(f'/admin/usuarios/{alvo}/desligar-codigo', data={'senha_atual': 'errada'})
+    assert r.status_code == 302 and r.headers['Location'] == '/login'
+    assert _usuario(app_module, alvo).totp_ativo
+    assert c.get('/api/v1/eu').status_code == 401
+    # Com a senha certa, as duas ações valem para outro administrador também.
+    with app_module.app.app_context():
+        a = db.session.get(User, adm_id)
+        a.lockout_until, a.failed_login_count = None, 0
+        db.session.commit()
+    c = fabrica.entrar(app_module, 'adm.dois@trino.com')
+    certa = {'senha_atual': SENHA}
+    r, j = _nova(c, f'/api/v1/admin/usuarios/{alvo}/desligar-codigo', data=certa)
+    assert r.status_code == 200 and not _usuario(app_module, alvo).totp_ativo
+    r, j = _nova(c, f'/api/v1/admin/usuarios/{alvo}/nova-senha', data=certa)
+    assert r.status_code == 200 and _usuario(app_module, alvo).check_password(j['senha']['senha'])
+    assert _usuario(app_module, adm_id).failed_login_count == 0
+
+
+def test_a_tela_antiga_das_pessoas_pede_a_senha_do_administrador(app_module, auth_client):
+    uid = _pessoa(app_module, 'campo.senha@trino.com', 'encarregado')
+    with app_module.app.app_context():
+        from app import User, db
+        db.session.get(User, uid).totp_ativo = True
+        db.session.commit()
+    html = auth_client.get('/admin/usuarios').get_data(as_text=True)
+    for acao in ('nova-senha', 'desligar-codigo'):
+        form = re.search(rf'<form method="post" action="/admin/usuarios/{uid}/{acao}"(.*?)</form>',
+                         html, re.S).group(1)
+        assert 'Sua senha atual' in form, acao
+        assert re.search(r'<input[^>]*name="senha_atual"[^>]*type="password"[^>]*required', form)
 
 
 # ── Locais ───────────────────────────────────────────────────────────────

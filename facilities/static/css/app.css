@@ -298,6 +298,7 @@ a { text-decoration: none; }
 .fc-tabela { width: 100%; }
 .fc-tabela th { font-size: 12px; text-transform: uppercase; letter-spacing: .4px; color: var(--gray-500); }
 .fc-estreito { max-width: 480px; }
+.fc-campo-curto { max-width: 280px; }
 .fc-qr-totp { width: 200px; height: 200px; margin: 8px 0 12px; }
 .fc-qr-totp svg { width: 100%; height: 100%; }
 .fc-vazio { color: var(--gray-500); text-align: center; padding: 28px 12px; }

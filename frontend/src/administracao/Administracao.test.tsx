@@ -106,11 +106,35 @@ describe('as pessoas', () => {
     abrirPessoas();
     await screen.findByText('Ana');
     const botoes = screen.getAllByRole('button', { name: /Gerar senha temporária/ });
+    await userEvent.type(screen.getByLabelText('Sua senha atual', { selector: '#senhaNova2' }), 'senha-do-admin');
     await userEvent.click(botoes[1]);
     expect(confirmar).toHaveBeenLastCalledWith('Gerar uma senha temporária nova para Ana? A atual deixa de valer.');
     expect(chamadas.some((c) => c.url.endsWith('/nova-senha'))).toBe(false);
     await userEvent.click(botoes[1]);
     expect(await screen.findByText(SENHA)).toBeInTheDocument();
+    // A senha do próprio administrador vai junto, no campo que a ação confere.
+    const envio = chamadas.find((c) => c.url.endsWith('/2/nova-senha'))!;
+    expect((envio.init!.body as FormData).get('senha_atual')).toBe('senha-do-admin');
+  });
+
+  it('as duas ações sensíveis pedem a senha do administrador; errada a ponto de bloquear, leva ao login', async () => {
+    respostas['/api/v1/admin/usuarios/1/desligar-codigo'] = { status: 400, corpo: {
+      destino: '/login', error: 'E-mail ou senha incorretos.' } };
+    const ir = vi.fn();
+    vi.spyOn(window, 'location', 'get').mockReturnValue({ ...window.location, assign: ir } as Location);
+    abrirPessoas();
+    await screen.findByText('Ana');
+    for (const id of ['#senhaNova1', '#senhaNova2', '#senhaCodigo1']) {
+      const campo = screen.getByLabelText('Sua senha atual', { selector: id });
+      expect(campo).toBeRequired();
+      expect(campo).toHaveAttribute('type', 'password');
+      expect(campo).toHaveAttribute('name', 'senha_atual');
+    }
+    await userEvent.type(screen.getByLabelText('Sua senha atual', { selector: '#senhaCodigo1' }), 'errada');
+    await userEvent.click(screen.getByRole('button', { name: /Desligar a segunda etapa/ }));
+    await waitFor(() => expect(ir).toHaveBeenCalledWith('/login'));
+    const envio = chamadas.find((c) => c.url.endsWith('/1/desligar-codigo'))!;
+    expect((envio.init!.body as FormData).get('senha_atual')).toBe('errada');
   });
 
   it('salvar vai ao mesmo caminho da antiga, com as caixas marcadas', async () => {

@@ -42,6 +42,29 @@ def _texto_da_senha_gerada(u, senha):
     return f'Senha temporária de {u.name}: {senha}'
 
 
+# "Gerar senha temporária" e "Desligar a segunda etapa" entregam a conta de
+# outra pessoa (inclusive a de outro administrador) a quem estiver com a
+# sessão: pedem a senha do PRÓPRIO administrador (auditoria da Fase 6a,
+# 03/11/2026). A senha errada conta no mesmo contador do login dele
+# (``auth._derrubar_se_bloqueou``): no 5º erro a conta dele bloqueia e a
+# sessão cai, nas duas telas.
+MSG_SENHA_DO_ADMIN = 'A sua senha não confere. Nada foi alterado.'
+
+
+def _senha_do_admin_errada(dados):
+    """None quando a senha do administrador confere; senão ``derrubou``
+    (True: a conta dele bloqueou e a sessão caiu, com o recado para o
+    login; False: o recado da recusa ficou)."""
+    from facilities.core.auth import _derrubar_se_bloqueou
+    eu = current_user._get_current_object()
+    if eu.check_password(dados.get('senha_atual') or ''):
+        return None
+    if _derrubar_se_bloqueou(eu):
+        return True
+    flash(MSG_SENHA_DO_ADMIN, 'danger')
+    return False
+
+
 # ── Pessoas ──────────────────────────────────────────────────────────────
 
 @bp.get('/usuarios')
@@ -175,15 +198,23 @@ def acao_editar_usuario(uid, dados):
 @login_required
 @admin_required
 def nova_senha(uid):
-    u, senha = acao_nova_senha(uid)
-    flash(_texto_da_senha_gerada(u, senha), 'success')
+    feito, derrubou = acao_nova_senha(uid, request.form)
+    if derrubou:
+        return redirect(url_for('auth.login'))
+    if feito is not None:
+        flash(_texto_da_senha_gerada(*feito), 'success')
     return redirect(url_for('admin.usuarios'))
 
 
-def acao_nova_senha(uid):
-    """``(pessoa, senha temporária)``: a atual deixa de valer e as sessões
-    abertas caem."""
+def acao_nova_senha(uid, dados):
+    """``(feito, derrubou)``: ``feito`` é ``(pessoa, senha temporária)`` (a
+    atual deixa de valer e as sessões abertas caem) ou None na recusa (o
+    recado diz por quê); ``derrubou`` quando a senha errada do
+    administrador bloqueou a conta dele e a sessão caiu."""
     u = db.get_or_404(User, uid)
+    errada = _senha_do_admin_errada(dados)
+    if errada is not None:
+        return None, errada
     senha = _senha_temporaria()
     u.set_password(senha)
     u.must_change_password = True
@@ -191,20 +222,27 @@ def acao_nova_senha(uid):
     u.lockout_until = None
     u.session_epoch = (u.session_epoch or 0) + 1
     db.session.commit()
-    return u, senha
+    return (u, senha), False
 
 
 @bp.post('/usuarios/<int:uid>/desligar-codigo')
 @login_required
 @admin_required
 def desligar_codigo(uid):
-    return redirect(acao_desligar_codigo(uid))
+    destino, _derrubou = acao_desligar_codigo(uid, request.form)
+    return redirect(destino)
 
 
-def acao_desligar_codigo(uid):
+def acao_desligar_codigo(uid, dados):
     """A pessoa perdeu o celular: o administrador desliga a segunda etapa.
-    As sessões abertas caem (quem achou o celular não continua dentro)."""
+    As sessões abertas caem (quem achou o celular não continua dentro).
+    ``(destino, derrubou)``, como ``acao_nova_senha``."""
     u = db.get_or_404(User, uid)
+    errada = _senha_do_admin_errada(dados)
+    if errada:
+        return url_for('auth.login'), True
+    if errada is False:
+        return url_for('admin.usuarios'), False
     u.totp_ativo = False
     u.totp_segredo = None
     u.totp_ultimo_passo = None
@@ -212,7 +250,7 @@ def acao_desligar_codigo(uid):
     db.session.commit()
     flash(f'Segunda etapa de {u.name} desligada. No próximo login ela entra só com a '
           f'senha e pode ativar de novo em "Segurança da conta".', 'success')
-    return url_for('admin.usuarios')
+    return url_for('admin.usuarios'), False
 
 
 # ── Locais (a tabela ``clients``; o endereço /admin/contratos é o de sempre) ─

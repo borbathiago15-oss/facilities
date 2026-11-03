@@ -89,11 +89,15 @@
           data-nome="{{ u.name }}"
           data-confirmar="Gerar uma senha temporária nova para {nome}? A atual deixa de valer.">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label class="form-label small fw-semibold" for="senhaNova{{ u.id }}">Sua senha atual</label>
+      <input class="form-control form-control-sm mb-2 fc-campo-curto" id="senhaNova{{ u.id }}" name="senha_atual" type="password" autocomplete="current-password" required>
       <button class="btn btn-outline-secondary btn-sm" type="submit"><i class="bi bi-key"></i> Gerar senha temporária</button>
     </form>
     {% if u.totp_ativo %}
     <form method="post" action="{{ url_for('admin.desligar_codigo', uid=u.id) }}" class="mb-2">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label class="form-label small fw-semibold" for="senhaCodigo{{ u.id }}">Sua senha atual</label>
+      <input class="form-control form-control-sm mb-2 fc-campo-curto" id="senhaCodigo{{ u.id }}" name="senha_atual" type="password" autocomplete="current-password" required>
       <button class="btn btn-outline-secondary btn-sm" type="submit"><i class="bi bi-shield-x"></i> Desligar a segunda etapa (perdeu o celular)</button>
     </form>
     {% endif %}
