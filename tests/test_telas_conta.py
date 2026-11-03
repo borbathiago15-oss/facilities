@@ -324,7 +324,7 @@ def test_a_leitura_nunca_traz_o_segredo(app_module):
     assert r.get_json() == {'ativo': False} and r.headers['Cache-Control'] == 'no-store'
     segredo = _segredo_da_pagina(c.get('/conta/seguranca').get_data(as_text=True))
     assert segredo
-    # O envio que prepara traz o MESMO segredo da tela antiga (o da sessão).
+    # O envio que prepara traz o MESMO segredo da tela antiga (o pendente desta sessão).
     r = c.post('/api/v1/conta/seguranca/codigo-novo')
     assert r.headers['Cache-Control'] == 'no-store'
     novo = r.get_json()['novo']
@@ -358,7 +358,7 @@ def test_ativar_pela_tela_nova_como_na_antiga(app_module):
     # Este aparelho segue logado (a sessão girou); o outro caiu.
     assert c.get('/api/v1/conta/seguranca').get_json() == {'ativo': True}
     assert outro.get('/api/v1/eu').status_code == 401
-    # Ativada: nenhum segredo novo, e o da sessão foi embora.
+    # Ativada: nenhum segredo novo, e a marca dele saiu da sessão.
     assert c.post('/api/v1/conta/seguranca/codigo-novo').get_json() == {'novo': None}
     with c.session_transaction() as s:
         assert '_totp_novo' not in s

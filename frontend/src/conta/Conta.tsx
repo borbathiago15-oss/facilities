@@ -151,9 +151,9 @@ export function Avisos({ dados }: { dados: DadosDosAvisos }) {
 
 // ── A segurança da conta ──────────────────────────────────────────────────
 
-/** Pede o segredo novo ao servidor (o mesmo da tela antiga, guardado na
- * sessão até ativar). Um pedido por abertura da tela: o StrictMode roda o
- * efeito duas vezes, e dois pedidos ao mesmo tempo, sem segredo na sessão,
+/** Pede o segredo novo ao servidor (o mesmo da tela antiga, pendente até
+ * ativar, nunca no cookie). Um pedido por abertura da tela: o StrictMode roda o
+ * efeito duas vezes, e dois pedidos ao mesmo tempo, sem segredo pendente,
  * sorteariam dois segredos diferentes. O segredo vive só enquanto esta tela
  * está aberta: sair dela (ou o envio, que leva de volta a ela) o esquece. */
 function useCodigoNovo(pedir: boolean) {
