@@ -793,3 +793,31 @@ def test_dentro_das_telas_novas_os_links_sao_os_novos(app_module, cena, auth_cli
     assert nova('/cadastros/locais/1/etiquetas.pdf') == '/cadastros/locais/1/etiquetas.pdf'
     assert nova('/rotas/locais/1') == '/novo/rotas/locais/1'      # Fase 3b
     assert nova('/convites') == '/novo/convites'
+
+
+def test_o_mesmo_limite_de_convites_por_hora():
+    """60 convites por hora, contados JUNTOS nas duas telas: o mesmo limite
+    compartilhado (mesmo escopo) na rota antiga e na da tela nova. Com um
+    contador por rota, a gestão chegava a 120 por hora."""
+    from facilities.extensions import limiter
+    grupos = {k.rsplit('.', 1)[-1]: list(v) for k, v in limiter.limit_manager._decorated_limits.items()}
+    antiga, nova = grupos['convidar'], grupos['api_montagem_convidar']
+    assert [(g.limit_provider, g.shared, g.scope) for g in antiga] == \
+        [(g.limit_provider, g.shared, g.scope) for g in nova] == \
+        [('60 per hour', True, 'montagem-convidar')]
+
+
+def test_nenhuma_tela_nova_dobra_o_limite_da_antiga():
+    """Toda rota das telas novas (``facilities.telas``) com limite do
+    Flask-Limiter divide o contador com a gêmea antiga: só ``shared_limit``,
+    e o mesmo escopo numa rota de fora das telas novas. Um ``limit`` próprio
+    dobraria o teto (um na antiga, outro na nova)."""
+    from facilities.extensions import limiter
+    marcados = limiter.limit_manager._decorated_limits
+    novas = {k: list(v) for k, v in marcados.items() if k.startswith('facilities.telas.')}
+    escopos_antigos = {g.scope for k, v in marcados.items()
+                       if not k.startswith('facilities.telas.') for g in v if g.shared}
+    assert novas, 'a varredura não achou rota nenhuma'
+    for rota, limites in novas.items():
+        for g in limites:
+            assert g.shared and g.scope in escopos_antigos, (rota, g.limit_provider, g.scope)

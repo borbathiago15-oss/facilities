@@ -695,7 +695,7 @@ def api_montagem_criar_estrutura(cid):
 
 @api.post('/cadastros/novo-contrato/<int:cid>/equipe')
 @login_required
-@limiter.limit('60 per hour')
+@limiter.shared_limit(nc.LIMITE_DE_CONVITES, scope=nc.ESCOPO_DO_LIMITE_DE_CONVITES)
 def api_montagem_convidar(cid):
     loc = nc._local(cid)
     try:
