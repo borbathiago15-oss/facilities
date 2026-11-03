@@ -155,12 +155,16 @@ describe('a segurança da conta', () => {
     comRotas('/conta/seguranca', <PaginaSeguranca />);
     await screen.findByText(SEGREDO);
     await userEvent.type(screen.getByLabelText('Código do aplicativo'), '123456');
+    await userEvent.type(screen.getByLabelText('Sua senha atual'), 'minha-senha');
     ativo = true;
     await userEvent.click(screen.getByRole('button', { name: 'Ativar a segunda etapa' }));
     expect(await screen.findByText(/Segunda etapa ativada. A partir de agora/)).toBeInTheDocument();
     expect(await screen.findByText('Segunda etapa ativada.')).toBeInTheDocument();
     const envio = chamadas.find((c) => c.url === '/api/v1/conta/seguranca/ativar')!;
     expect((envio.init!.body as FormData).get('codigo')).toBe('123456');
+    // A senha atual vai junto: sem ela, quem tem só a sessão cadastraria o
+    // próprio autenticador.
+    expect((envio.init!.body as FormData).get('senha')).toBe('minha-senha');
     expect(screen.queryByText(SEGREDO)).toBeNull();
     expect(chamadas.filter((c) => c.url === '/api/v1/conta/seguranca/codigo-novo')).toHaveLength(1);
     expect(screen.getByRole('button', { name: 'Desativar a segunda etapa' })).toBeInTheDocument();
@@ -173,8 +177,24 @@ describe('a segurança da conta', () => {
     const ir = vi.fn();
     vi.spyOn(window, 'location', 'get').mockReturnValue({ ...window.location, assign: ir } as Location);
     comRotas('/conta/seguranca', <PaginaSeguranca />);
-    await userEvent.type(await screen.findByLabelText('Senha'), 'errada');
+    await userEvent.type(await screen.findByLabelText('Sua senha atual'), 'errada');
     await userEvent.click(screen.getByRole('button', { name: 'Desativar a segunda etapa' }));
+    await waitFor(() => expect(ir).toHaveBeenCalledWith('/login'));
+  });
+
+  it('ativar pede a senha atual; errada a ponto de bloquear, leva ao login', async () => {
+    respostas['/api/v1/conta/seguranca/ativar'] = { status: 400, corpo: {
+      destino: '/login', error: 'E-mail ou senha incorretos.' } };
+    const ir = vi.fn();
+    vi.spyOn(window, 'location', 'get').mockReturnValue({ ...window.location, assign: ir } as Location);
+    comRotas('/conta/seguranca', <PaginaSeguranca />);
+    await screen.findByText(SEGREDO);
+    const senha = screen.getByLabelText('Sua senha atual');
+    expect(senha).toBeRequired();
+    expect(senha).toHaveAttribute('type', 'password');
+    await userEvent.type(screen.getByLabelText('Código do aplicativo'), '123456');
+    await userEvent.type(senha, 'errada');
+    await userEvent.click(screen.getByRole('button', { name: 'Ativar a segunda etapa' }));
     await waitFor(() => expect(ir).toHaveBeenCalledWith('/login'));
   });
 });

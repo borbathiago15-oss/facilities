@@ -44,6 +44,12 @@ FORA = {
     # resto passaria sem sessão. Testadas em test_telas_conta.py.
     'api_v1.api_trocar_senha': 'conta erro de senha (bloqueio) e derrubaria a sessão',
     'api_v1.api_desativar_codigo': 'conta erro de senha (bloqueio) e derrubaria a sessão',
+    # Ativar o código passou a pedir a senha atual (auditoria da Fase 6a,
+    # 03/11/2026) e a contar o erro no mesmo bloqueio: com as duas (antiga e
+    # nova), a varredura somaria 8 erros e deslogaria a pessoa de B. Só
+    # mexem na conta de quem chama. Testadas em test_telas_conta.py.
+    'auth.ativar_codigo': 'conta erro de senha (bloqueio) e derrubaria a sessão',
+    'api_v1.api_ativar_codigo': 'conta erro de senha (bloqueio) e derrubaria a sessão',
 }
 # Rotas fora da varredura só para UM perfil, com o motivo.
 FORA_PARA = {

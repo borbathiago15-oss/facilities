@@ -19,10 +19,11 @@ e ``core.auth.preparar_codigo``); os envios chamam a MESMA ação
 
 O segredo da segunda etapa (o texto e o QR): nunca vem numa leitura
 (``GET``). Só a resposta do ``POST`` que o prepara o traz (``no-store``,
-sem recado), o mesmo segredo que a tela antiga mostra (guardado na sessão
-até ativar); a tela nova o guarda só no estado do componente.
+sem recado), o mesmo segredo que a tela antiga mostra (pendente até ativar,
+na linha da pessoa e nunca no cookie; ver ``auth.preparar_codigo``); a tela
+nova o guarda só no estado do componente.
 
-Os envios de senha (trocar a senha, desligar o código) contam o erro da
+Os envios de senha (trocar a senha, ativar e desligar o código) contam o erro da
 senha atual no MESMO contador das telas antigas (``failed_login_count``, no
 banco): cinco erros, somando as duas telas, bloqueiam a conta e derrubam a
 sessão. Nenhuma dessas rotas antigas tem limite do Flask-Limiter; as novas
@@ -151,7 +152,7 @@ def api_seguranca():
 @login_required
 def api_seguranca_codigo_novo():
     """O segredo e o QR para o aplicativo autenticador — os mesmos que a tela
-    antiga mostra (o da sessão, até ativar). Só nesta resposta."""
+    antiga mostra (o pendente desta sessão, até ativar). Só nesta resposta."""
     novo = auth.preparar_codigo()
     resp = jsonify({'novo': novo})
     resp.headers['Cache-Control'] = 'no-store'
@@ -161,7 +162,10 @@ def api_seguranca_codigo_novo():
 @api.post('/conta/seguranca/ativar')
 @login_required
 def api_ativar_codigo():
-    return _feito(auth.acao_ativar_codigo(_dados()))
+    destino, derrubou = auth.acao_ativar_codigo(_dados())
+    if derrubou:
+        return _derrubada(destino)
+    return _feito(destino)
 
 
 @api.post('/conta/seguranca/desativar')

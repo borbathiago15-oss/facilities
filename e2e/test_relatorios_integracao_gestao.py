@@ -7,7 +7,7 @@ não volta depois de sair da tela) e a revoga. Os recados são os mesmos nas
 duas, e nenhuma tela rola de lado."""
 from datetime import date, timedelta
 
-from conftest import abrir, abrir_contexto, entrar
+from conftest import abrir, abrir_contexto, contar_quando, entrar
 
 
 def _sem_rolagem(pg, onde):
@@ -80,7 +80,7 @@ def test_o_painel_por_periodo(servidor, navegador, perfil, relatorios):
         pg.get_by_role('button', name='Ver').click()
         pg.wait_for_url('**/painel?de=2026-01-01&ate=2026-01-31')
         _pronta(pg, 'painel')
-        assert pg.locator('text=O período vai de 01/01/2026 a 31/01/2026.').count() == 1
+        assert contar_quando(pg.locator('text=O período vai de 01/01/2026 a 31/01/2026.'), 1) == 1
         assert pg.locator('text=GL Armazém 1').count() >= 1
     finally:
         b.close()

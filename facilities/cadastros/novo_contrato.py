@@ -28,6 +28,12 @@ from facilities.cadastros.servico import CadastroInvalido
 
 bp = Blueprint('montagem', __name__)
 
+# Convidar pessoas para a equipe: 60 por hora, contadas JUNTAS na tela antiga
+# e na nova (``shared_limit`` com o mesmo escopo, como as cobranças do
+# portal). Com um ``limit`` em cada rota, as duas telas somavam 120.
+LIMITE_DE_CONVITES = '60 per hour'
+ESCOPO_DO_LIMITE_DE_CONVITES = 'montagem-convidar'
+
 
 def _exigir_montagem():
     if not current_user.is_authenticated or not montagem.pode_montar(current_user):
@@ -285,7 +291,7 @@ def _enviar_por_email(convite, token):
 
 @bp.post('/novo-contrato/<int:cid>/equipe')
 @login_required
-@limiter.limit('60 per hour')
+@limiter.shared_limit(LIMITE_DE_CONVITES, scope=ESCOPO_DO_LIMITE_DE_CONVITES)
 def convidar(cid):
     loc = _local(cid)
     try:

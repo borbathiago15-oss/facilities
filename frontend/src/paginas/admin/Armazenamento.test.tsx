@@ -32,7 +32,7 @@ describe('contas da tela', () => {
     expect(tamanho(2 * 1024 ** 3)).toBe('2,0 GB');
   });
   it('prazo, barras, progresso e dias', () => {
-    expect(resumoDoPrazo({ fotos: 0, bytes: 0, sem_tamanho: 0 })).toBe('Nenhuma foto passou do prazo.');
+    expect(resumoDoPrazo({ fotos: 0, bytes: 0, sem_tamanho: 0 })).toBe('nenhuma foto passou do prazo');
     expect(resumoDoPrazo({ fotos: 2, bytes: 2048, sem_tamanho: 1 })).toBe('2 fotos (pelo menos 2,0 KB)');
     expect(barras([{ bytes: 50 }, { bytes: 100 }, { bytes: 0 }])).toEqual([50, 100, 0]);
     expect(barras([{ bytes: 0 }])).toEqual([0]);
@@ -62,6 +62,13 @@ describe('Armazenamento de fotos', () => {
     await u.click(screen.getByRole('button', { name: 'Confirmar e começar' }));
     await waitFor(() => expect(arquivar).toHaveBeenCalledTimes(1));
     expect(await screen.findByText(/Arquivamento começou/)).toBeInTheDocument();
+  });
+
+  it('sem foto no prazo, a frase termina com um ponto só', () => {
+    montar({ pendentes: { fotos: 0, bytes: 0, sem_tamanho: 0 } });
+    const ajuda = document.getElementById('arquivo-dias-ajuda')!;
+    expect(ajuda).toHaveTextContent('Hoje entram as fotos tiradas antes de 02/09/2026: nenhuma foto passou do prazo.');
+    expect(ajuda.textContent).not.toMatch(/\.\.\s*$/);
   });
 
   it('salva o prazo e recusa o que não é número', async () => {

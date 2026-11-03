@@ -6,6 +6,7 @@ import re
 from datetime import timedelta
 
 from conftest import abrir, abrir_contexto, entrar, tela_pronta
+from servidor import SENHA
 
 
 def _sem_rolagem_lateral(pg):
@@ -28,6 +29,7 @@ def test_cliente_cobra_e_a_coordenacao_responde(servidor, navegador, perfil, por
         assert '/conta/seguranca' in cli.url
         segredo = cli.locator('code.user-select-all').inner_text().strip()
         cli.fill('#codigo', totp.codigo(segredo))
+        cli.fill('#senha', SENHA)
         cli.click('button:has-text("Ativar a segunda etapa")')
         cli.goto(base + '/')
         assert cli.url.endswith('/cliente/')

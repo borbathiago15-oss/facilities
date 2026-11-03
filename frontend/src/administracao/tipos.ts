@@ -5,7 +5,7 @@ export type Pessoa = {
   id: number; nome: string; email: string; perfil: string; perfil_rotulo: string;
   ativo: boolean; todos_os_locais: boolean; superior_id: number | null;
   cliente_id: number | null; locais: number[]; permissoes: string[];
-  segunda_etapa: boolean; alcance: string; cadeia: { nome: string; perfil: string }[];
+  segunda_etapa: boolean; propria: boolean; alcance: string; cadeia: { nome: string; perfil: string }[];
 };
 
 export type DadosDasPessoas = {

@@ -151,9 +151,9 @@ export function Avisos({ dados }: { dados: DadosDosAvisos }) {
 
 // ── A segurança da conta ──────────────────────────────────────────────────
 
-/** Pede o segredo novo ao servidor (o mesmo da tela antiga, guardado na
- * sessão até ativar). Um pedido por abertura da tela: o StrictMode roda o
- * efeito duas vezes, e dois pedidos ao mesmo tempo, sem segredo na sessão,
+/** Pede o segredo novo ao servidor (o mesmo da tela antiga, pendente até
+ * ativar, nunca no cookie). Um pedido por abertura da tela: o StrictMode roda o
+ * efeito duas vezes, e dois pedidos ao mesmo tempo, sem segredo pendente,
  * sorteariam dois segredos diferentes. O segredo vive só enquanto esta tela
  * está aberta: sair dela (ou o envio, que leva de volta a ela) o esquece. */
 function useCodigoNovo(pedir: boolean) {
@@ -202,7 +202,7 @@ export function Seguranca({ dados }: { dados: DadosDaSeguranca }) {
             <p className="fw-semibold text-success"><i className="bi bi-shield-check"></i> Segunda etapa ativada.</p>
             <p className="small">Para desligar, confirme a sua senha.</p>
             <form method="post" onSubmit={submeter(`${API}/conta/seguranca/desativar`)}>
-              <label className="form-label small fw-semibold" htmlFor="senha">Senha</label>
+              <label className="form-label small fw-semibold" htmlFor="senha">Sua senha atual</label>
               <input className="form-control mb-3" id="senha" name="senha" type="password" autoComplete="current-password" required />
               <button className="btn btn-outline-danger fw-bold" type="submit" disabled={ocupado}>Desativar a segunda etapa</button>
             </form>
@@ -225,6 +225,9 @@ export function Seguranca({ dados }: { dados: DadosDaSeguranca }) {
             <form method="post" onSubmit={submeter(`${API}/conta/seguranca/ativar`)} autoComplete="off">
               <label className="form-label small fw-semibold" htmlFor="codigo">Código do aplicativo</label>
               <input className="form-control mb-3 fs-4 text-center" id="codigo" name="codigo" inputMode="numeric" pattern="[0-9 ]*" maxLength={7} autoComplete="one-time-code" required />
+              <label className="form-label small fw-semibold" htmlFor="senha">Sua senha atual</label>
+              <input className="form-control mb-1" id="senha" name="senha" type="password" autoComplete="current-password" required />
+              <p className="form-text mb-3">A mesma senha que você usa para entrar. Ela confirma que é você mesmo quem está ligando a segunda etapa.</p>
               <button className="btn btn-primary fw-bold" type="submit" disabled={ocupado || !novo}>Ativar a segunda etapa</button>
             </form>
           </>

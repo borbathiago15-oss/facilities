@@ -18,10 +18,11 @@ import re
 import pytest
 
 from tests import fabrica
-from tests.conftest import ADMIN_EMAIL
+from tests.conftest import ADMIN_EMAIL, TEST_ADMIN_PASSWORD
 
 MODULOS = ('facilities.telas.conta', 'facilities.telas.administracao')
 SENHA = fabrica.SENHA
+ADM = {'senha_atual': TEST_ADMIN_PASSWORD}
 
 
 def _texto(html):
@@ -32,6 +33,23 @@ def _flashes(c):
     with c.session_transaction() as s:
         return [{'tipo': 'danger' if t == 'error' else t, 'texto': x}
                 for t, x in s.pop('_flashes', [])]
+
+
+def _cookie_da_sessao(c):
+    """O que o cookie da sessão leva, decodificado como qualquer um que o
+    copie consegue ler: o Flask ASSINA o cookie, não o cifra (a carga é
+    JSON em base64, comprimida quando começa com ponto)."""
+    import base64
+    import zlib
+    ck = c.get_cookie('session')
+    if ck is None:
+        return ''
+    valor = ck.value
+    carga = valor.lstrip('.').split('.')[0]
+    bruto = base64.urlsafe_b64decode(carga + '=' * (-len(carga) % 4))
+    if valor.startswith('.'):
+        bruto = zlib.decompress(bruto)
+    return bruto.decode()
 
 
 def _antiga(c, url, **kw):
@@ -306,7 +324,7 @@ def test_a_leitura_nunca_traz_o_segredo(app_module):
     assert r.get_json() == {'ativo': False} and r.headers['Cache-Control'] == 'no-store'
     segredo = _segredo_da_pagina(c.get('/conta/seguranca').get_data(as_text=True))
     assert segredo
-    # O envio que prepara traz o MESMO segredo da tela antiga (o da sessão).
+    # O envio que prepara traz o MESMO segredo da tela antiga (o pendente desta sessão).
     r = c.post('/api/v1/conta/seguranca/codigo-novo')
     assert r.headers['Cache-Control'] == 'no-store'
     novo = r.get_json()['novo']
@@ -323,12 +341,15 @@ def test_ativar_pela_tela_nova_como_na_antiga(app_module):
     c = fabrica.entrar(app_module, 'mfa.ativar@trino.com')
     outro = fabrica.entrar(app_module, 'mfa.ativar@trino.com')
     # Sem segredo preparado: volta à tela, sem recado (as duas).
-    _par(c, '/conta/seguranca/ativar', '/api/v1/conta/seguranca/ativar', {'codigo': '123456'})
+    _par(c, '/conta/seguranca/ativar', '/api/v1/conta/seguranca/ativar',
+         {'codigo': '123456', 'senha': SENHA})
     segredo = c.post('/api/v1/conta/seguranca/codigo-novo').get_json()['novo']['segredo']
     # Código errado: o mesmo recado.
-    _par(c, '/conta/seguranca/ativar', '/api/v1/conta/seguranca/ativar', {'codigo': '000000'})
+    _par(c, '/conta/seguranca/ativar', '/api/v1/conta/seguranca/ativar',
+         {'codigo': '000000', 'senha': SENHA})
     epoca = _usuario(app_module, uid).session_epoch or 0
-    r, j = _nova(c, '/api/v1/conta/seguranca/ativar', json={'codigo': totp.codigo(segredo)})
+    r, j = _nova(c, '/api/v1/conta/seguranca/ativar', json={'codigo': totp.codigo(segredo),
+                                                            'senha': SENHA})
     assert r.status_code == 200 and j == {'recados': [{'tipo': 'success', 'texto':
         'Segunda etapa ativada. A partir de agora, o login pede a senha e o código do aplicativo.'}],
         'destino': '/novo/conta/seguranca'}
@@ -337,11 +358,106 @@ def test_ativar_pela_tela_nova_como_na_antiga(app_module):
     # Este aparelho segue logado (a sessão girou); o outro caiu.
     assert c.get('/api/v1/conta/seguranca').get_json() == {'ativo': True}
     assert outro.get('/api/v1/eu').status_code == 401
-    # Ativada: nenhum segredo novo, e o da sessão foi embora.
+    # Ativada: nenhum segredo novo, e a marca dele saiu da sessão.
     assert c.post('/api/v1/conta/seguranca/codigo-novo').get_json() == {'novo': None}
     with c.session_transaction() as s:
         assert '_totp_novo' not in s
 
+
+
+def test_ativar_pede_a_senha_atual_nas_duas_telas(app_module):
+    """Ativar a segunda etapa pede a senha atual (auditoria da Fase 6a): só
+    com a sessão (um cookie copiado, um computador aberto), ninguém cadastra
+    o próprio autenticador e tranca o dono fora. Sem a senha, ou com ela
+    errada, nada muda, mesmo com o código certo; o erro conta no MESMO
+    contador do login, nas duas telas, e o 5º bloqueia e derruba a sessão."""
+    from facilities.core import totp
+    from facilities.core.auth import MSG_LOGIN_RECUSADO
+    uid = _pessoa(app_module, 'mfa.senha@trino.com', 'pleno')
+    c = fabrica.entrar(app_module, 'mfa.senha@trino.com')
+    outro = fabrica.entrar(app_module, 'mfa.senha@trino.com')
+    segredo = c.post('/api/v1/conta/seguranca/codigo-novo').get_json()['novo']['segredo']
+    for dados in ({'codigo': totp.codigo(segredo)},
+                  {'codigo': totp.codigo(segredo), 'senha': 'errada'}):
+        d1, rec, j = _par(c, '/conta/seguranca/ativar', '/api/v1/conta/seguranca/ativar', dados)
+        assert d1 == '/conta/seguranca'
+        assert rec == [{'tipo': 'danger', 'texto': 'A senha atual não confere.'}]
+    u = _usuario(app_module, uid)
+    assert not u.totp_ativo and u.failed_login_count == 4
+    assert outro.get('/api/v1/eu').status_code == 200        # ninguém caiu
+    r, j = _nova(c, '/api/v1/conta/seguranca/ativar', data={'codigo': totp.codigo(segredo),
+                                                            'senha': 'errada'})
+    assert r.status_code == 400 and j == {'destino': '/login', 'error': MSG_LOGIN_RECUSADO}
+    u = _usuario(app_module, uid)
+    assert not u.totp_ativo and u.lockout_until is not None
+    assert c.get('/api/v1/eu').status_code == 401
+    assert MSG_LOGIN_RECUSADO in _texto(c.get('/login').get_data(as_text=True))
+    # A tela antiga: o 5º erro leva ao login do mesmo jeito.
+    uid2 = _pessoa(app_module, 'mfa.senha2@trino.com', 'pleno')
+    c = fabrica.entrar(app_module, 'mfa.senha2@trino.com')
+    c.get('/conta/seguranca')
+    with app_module.app.app_context():
+        from app import User, db
+        db.session.get(User, uid2).failed_login_count = 4
+        db.session.commit()
+    r = c.post('/conta/seguranca/ativar', data={'codigo': '123456', 'senha': 'errada'})
+    assert r.status_code == 302 and r.headers['Location'] == '/login'
+    assert _usuario(app_module, uid2).lockout_until is not None
+    assert c.get('/api/v1/eu').status_code == 401
+
+
+
+def test_o_segredo_pendente_nunca_vai_no_cookie(app_module):
+    """O cookie da sessão é assinado, não cifrado: o segredo mostrado para
+    cadastrar (tela antiga e nova) não vai nele, nem antes nem depois de
+    ativar. Ele fica pendente na linha da pessoa (``totp_segredo`` com
+    ``totp_ativo`` falso), que o login ignora; na sessão, só a marca."""
+    from app import User, db
+    from facilities.core import totp
+    from tests.test_cifra_campos import _bruto
+    uid = _pessoa(app_module, 'mfa.cookie@trino.com', 'pleno')
+    c = fabrica.entrar(app_module, 'mfa.cookie@trino.com')
+    segredo = _segredo_da_pagina(c.get('/conta/seguranca').get_data(as_text=True))
+    assert segredo and segredo not in _cookie_da_sessao(c)
+    assert '_totp_novo' in _cookie_da_sessao(c)                # a marca, não o segredo
+    assert c.post('/api/v1/conta/seguranca/codigo-novo').get_json()['novo']['segredo'] == segredo
+    assert segredo not in _cookie_da_sessao(c)
+    # Pendente na linha da pessoa, cifrado no banco; o login segue só com a senha.
+    u = _usuario(app_module, uid)
+    assert u.totp_segredo == segredo and not u.totp_ativo
+    with app_module.app.app_context():
+        assert segredo not in (_bruto('users', 'totp_segredo', uid) or '')
+    outro = app_module.app.test_client()
+    r = outro.post('/login', data={'email': 'mfa.cookie@trino.com', 'password': SENHA})
+    assert r.status_code == 302 and '/login/codigo' not in r.headers['Location']
+    # A outra sessão abriu a tela: sorteia o dela, e o desta deixa de valer
+    # (quem viu um segredo noutra sessão não sabe o que o dono ativa).
+    s2 = _segredo_da_pagina(outro.get('/conta/seguranca').get_data(as_text=True))
+    assert s2 and s2 != segredo
+    _par(c, '/conta/seguranca/ativar', '/api/v1/conta/seguranca/ativar',
+         {'codigo': totp.codigo(segredo), 'senha': SENHA})
+    assert not _usuario(app_module, uid).totp_ativo
+    segredo = _segredo_da_pagina(c.get('/conta/seguranca').get_data(as_text=True))
+    assert segredo not in (s2,) and _usuario(app_module, uid).totp_segredo == segredo
+    r = c.post('/conta/seguranca/ativar', data={'codigo': totp.codigo(segredo), 'senha': SENHA})
+    assert r.status_code == 302
+    u = _usuario(app_module, uid)
+    assert u.totp_ativo and u.totp_segredo == segredo
+    assert segredo not in _cookie_da_sessao(c) and '_totp_novo' not in _cookie_da_sessao(c)
+    # Ativada: abrir a tela (nas duas) não mexe no segredo ativo.
+    c.get('/conta/seguranca')
+    assert c.post('/api/v1/conta/seguranca/codigo-novo').get_json() == {'novo': None}
+    with app_module.app.app_context():
+        assert db.session.get(User, uid).totp_segredo == segredo
+
+def test_as_telas_de_seguranca_pedem_a_senha_atual(app_module):
+    _pessoa(app_module, 'mfa.campo@trino.com', 'encarregado')
+    c = fabrica.entrar(app_module, 'mfa.campo@trino.com')
+    html = c.get('/conta/seguranca').get_data(as_text=True)
+    form = re.search(r'<form method="post" action="/conta/seguranca/ativar">(.*?)</form>',
+                     html, re.S).group(1)
+    assert 'Sua senha atual' in form
+    assert re.search(r'<input[^>]*name="senha"[^>]*type="password"[^>]*required', form)
 
 def test_desativar_como_na_tela_antiga(app_module):
     from facilities.core import totp
@@ -504,9 +620,16 @@ def test_a_lista_das_pessoas_traz_os_dados_da_tela_antiga(app_module, auth_clien
 def test_cadastrar_a_senha_so_na_resposta_do_envio(app_module, auth_client):
     from app import User
     fabrica.CRIADAS.update({'nova.pessoa@trino.com', 'antiga.pessoa@trino.com'})
-    loc, rec = _antiga(auth_client, '/admin/usuarios', data={
+    # A antiga desenha a senha na resposta do envio (no-store), sem recado:
+    # o recado passaria pelo cookie da sessão.
+    r = auth_client.post('/admin/usuarios', data={
         'name': 'Pessoa Antiga', 'email': 'antiga.pessoa@trino.com', 'role': 'encarregado'})
-    assert loc == '/admin/usuarios' and 'Senha temporária:' in rec[0]['texto']
+    assert r.status_code == 200 and r.headers['Cache-Control'] == 'no-store'
+    antiga = _segredo_temporario(r.get_data(as_text=True))
+    assert antiga and f'Cadastro de Pessoa Antiga criado. Senha temporária: {antiga} — ' in \
+        _texto(re.sub(r'<[^>]+>', '', r.get_data(as_text=True)))
+    assert _flashes(auth_client) == [] and antiga not in _cookie_da_sessao(auth_client)
+    assert antiga not in auth_client.get('/admin/usuarios').get_data(as_text=True)
     r, j = _nova(auth_client, '/api/v1/admin/usuarios', data={
         'name': 'Pessoa Nova', 'email': 'NOVA.pessoa@trino.com', 'role': 'supervisor',
         'clients': [str(fabrica_local_id(app_module))]})
@@ -526,6 +649,61 @@ def test_cadastrar_a_senha_so_na_resposta_do_envio(app_module, auth_client):
     novo = app_module.app.test_client()
     assert novo.post('/login', data={'email': 'nova.pessoa@trino.com', 'password': senha}) \
         .headers['Location'].endswith('/trocar-senha')
+
+
+def _segredo_temporario(html):
+    m = re.search(r'<div class="alert alert-success" role="status">.*?<code class="user-select-all">'
+                  r'([^<]+)</code>', html, re.S)
+    return m.group(1) if m else None
+
+
+def test_a_senha_temporaria_nunca_passa_pelo_cookie(app_module, auth_client):
+    """O cookie da sessão é assinado, não cifrado: quem o copia lê o que vai
+    nele. A senha temporária (cadastrar e gerar, nas duas telas) não vai."""
+    uid = _pessoa(app_module, 'cookie.alvo@trino.com', 'encarregado', nome='Cora')
+    fabrica.CRIADAS.update({'cookie.um@trino.com', 'cookie.dois@trino.com'})
+    vistas = []
+    for url, dados in (('/admin/usuarios', {'name': 'Um', 'email': 'cookie.um@trino.com'}),
+                       (f'/admin/usuarios/{uid}/nova-senha', ADM)):
+        r = auth_client.post(url, data=dados)
+        # Nem a senha nem o recado dela no cookie (antes ia no recado).
+        assert 'Senha tempor' not in _cookie_da_sessao(auth_client), url
+        vistas.append(_segredo_temporario(r.get_data(as_text=True)))
+        corpo = {'name': 'Dois', 'email': 'cookie.dois@trino.com'} if 'nova' not in url else ADM
+        vistas.append(auth_client.post('/api/v1' + url, data=corpo).get_json()['senha']['senha'])
+        assert 'Senha tempor' not in _cookie_da_sessao(auth_client), url
+    assert all(vistas) and len(set(vistas)) == 4
+    bruto = _cookie_da_sessao(auth_client)
+    assert '_user_id' in bruto                  # o cookie foi lido mesmo
+    for senha in vistas:
+        assert senha not in bruto
+    # A página seguinte (o recado de antes) também não a traz.
+    html = auth_client.get('/admin/usuarios').get_data(as_text=True)
+    assert not any(s in html for s in vistas)
+
+
+def test_a_senha_temporaria_nao_vale_para_a_propria_conta(app_module, auth_client):
+    """Gerar a senha temporária da PRÓPRIA conta derrubava a sessão e mostrava
+    a senha nova na tela de login. Recusa nas duas telas, com o caminho
+    ("Trocar senha"); nada muda e a sessão segue."""
+    from facilities.core.admin import MSG_SENHA_PROPRIA
+    admin = _admin_id(app_module)
+    antes = _usuario(app_module, admin)
+    d1, rec, j = _par(auth_client, f'/admin/usuarios/{admin}/nova-senha',
+                      f'/api/v1/admin/usuarios/{admin}/nova-senha', ADM)
+    assert d1 == '/admin/usuarios' and rec == [{'tipo': 'danger', 'texto': MSG_SENHA_PROPRIA}]
+    assert 'Trocar senha' in MSG_SENHA_PROPRIA and 'senha' not in j
+    depois = _usuario(app_module, admin)
+    assert depois.password_hash == antes.password_hash and not depois.must_change_password
+    assert depois.session_epoch == antes.session_epoch and depois.failed_login_count == 0
+    assert auth_client.get('/api/v1/eu').status_code == 200
+    # As telas mostram o caminho em vez do botão na própria linha.
+    html = auth_client.get('/admin/usuarios').get_data(as_text=True)
+    assert f'action="/admin/usuarios/{admin}/nova-senha"' not in html
+    assert 'Para mudar a sua própria senha, use <a href="/trocar-senha">Trocar senha</a>.' in html
+    pessoas = auth_client.get('/api/v1/admin/usuarios').get_json()['pessoas']
+    assert [p['propria'] for p in pessoas if p['id'] == admin] == [True]
+    assert not any(p['propria'] for p in pessoas if p['id'] != admin)
 
 
 def fabrica_local_id(app_module):
@@ -568,7 +746,7 @@ def test_nova_senha_e_desligar_o_codigo_como_a_tela_antiga(app_module, auth_clie
     from app import User, db
     uid = _pessoa(app_module, 'perdeu@trino.com', 'encarregado', nome='Pedro')
     sessao = fabrica.entrar(app_module, 'perdeu@trino.com')
-    r, j = _nova(auth_client, f'/api/v1/admin/usuarios/{uid}/nova-senha')
+    r, j = _nova(auth_client, f'/api/v1/admin/usuarios/{uid}/nova-senha', data=ADM)
     assert r.headers['Cache-Control'] == 'no-store' and j['recados'] == []
     senha = j['senha']['senha']
     assert j['senha']['texto'] == f'Senha temporária de Pedro: {senha}'
@@ -576,18 +754,100 @@ def test_nova_senha_e_desligar_o_codigo_como_a_tela_antiga(app_module, auth_clie
     u = _usuario(app_module, uid)
     assert u.check_password(senha) and u.must_change_password
     assert sessao.get('/api/v1/eu').status_code == 401
-    loc, rec = _antiga(auth_client, f'/admin/usuarios/{uid}/nova-senha')
-    assert rec[0]['texto'].startswith('Senha temporária de Pedro: ')
+    r = auth_client.post(f'/admin/usuarios/{uid}/nova-senha', data=ADM)
+    assert r.status_code == 200 and r.headers['Cache-Control'] == 'no-store'
+    antiga = _segredo_temporario(r.get_data(as_text=True))
+    assert antiga != senha and _usuario(app_module, uid).check_password(antiga)
+    assert f'Senha temporária de Pedro: {antiga}' in _texto(re.sub(r'<[^>]+>', '', r.get_data(as_text=True)))
+    assert _flashes(auth_client) == []
     with app_module.app.app_context():
         u = db.session.get(User, uid)
         u.totp_ativo, u.totp_segredo = True, 'JBSWY3DPEHPK3PXP'
         db.session.commit()
     d1, rec, j = _par(auth_client, f'/admin/usuarios/{uid}/desligar-codigo',
-                      f'/api/v1/admin/usuarios/{uid}/desligar-codigo', {})
+                      f'/api/v1/admin/usuarios/{uid}/desligar-codigo', ADM)
     assert rec[0]['texto'].startswith('Segunda etapa de Pedro desligada.')
     u = _usuario(app_module, uid)
     assert not u.totp_ativo and u.totp_segredo is None
-    assert auth_client.post('/api/v1/admin/usuarios/999999/nova-senha').status_code == 404
+    assert auth_client.post('/api/v1/admin/usuarios/999999/nova-senha', data=ADM).status_code == 404
+
+
+def test_as_acoes_sensiveis_pedem_a_senha_do_administrador(app_module):
+    """"Gerar senha temporária" e "Desligar a segunda etapa" entregam a conta
+    de outra pessoa (inclusive a de outro administrador): pedem a senha do
+    PRÓPRIO administrador nas duas telas. Sem ela, ou errada, nada muda; o
+    erro conta no bloqueio da conta DELE (o mesmo contador do login), e o
+    5º bloqueia e derruba a sessão."""
+    from app import User, db
+    from facilities.core.auth import MSG_LOGIN_RECUSADO
+    from facilities.core.admin import MSG_SENHA_DO_ADMIN
+    adm_id = _pessoa(app_module, 'adm.dois@trino.com', 'master', nome='Outro Admin')
+    alvo = _pessoa(app_module, 'alvo.adm@trino.com', 'master', nome='Alvo Admin')
+    with app_module.app.app_context():
+        u = db.session.get(User, alvo)
+        u.totp_ativo, u.totp_segredo = True, 'JBSWY3DPEHPK3PXP'
+        db.session.commit()
+    hash_antes = _usuario(app_module, alvo).password_hash
+    c = fabrica.entrar(app_module, 'adm.dois@trino.com')
+    recusa = [{'tipo': 'danger', 'texto': MSG_SENHA_DO_ADMIN}]
+    for dados in ({}, {'senha_atual': 'errada'}):
+        loc, rec = _antiga(c, f'/admin/usuarios/{alvo}/nova-senha', data=dados)
+        assert loc == '/admin/usuarios' and rec == recusa
+        r, j = _nova(c, f'/api/v1/admin/usuarios/{alvo}/nova-senha', data=dados)
+        assert r.status_code == 400 and j['recados'] == recusa and 'senha' not in j
+    assert _usuario(app_module, adm_id).failed_login_count == 4
+    u = _usuario(app_module, alvo)
+    assert u.password_hash == hash_antes and not u.must_change_password and u.totp_ativo
+    # O 5º erro (no desligar o código, na tela nova): a conta do administrador
+    # bloqueia e a sessão dele cai; o recado fica para o login.
+    r, j = _nova(c, f'/api/v1/admin/usuarios/{alvo}/desligar-codigo', data={'senha_atual': 'x'})
+    assert r.status_code == 400 and j == {'destino': '/login', 'error': MSG_LOGIN_RECUSADO}
+    assert _usuario(app_module, adm_id).lockout_until is not None
+    assert _usuario(app_module, alvo).totp_ativo
+    assert c.get('/api/v1/eu').status_code == 401
+    assert MSG_LOGIN_RECUSADO in _texto(c.get('/login').get_data(as_text=True))
+    # A antiga, do mesmo jeito: a recusa, e o 5º erro leva ao login.
+    with app_module.app.app_context():
+        a = db.session.get(User, adm_id)
+        a.lockout_until, a.failed_login_count = None, 0
+        db.session.commit()
+    c = fabrica.entrar(app_module, 'adm.dois@trino.com')
+    d1, rec, j = _par(c, f'/admin/usuarios/{alvo}/desligar-codigo',
+                      f'/api/v1/admin/usuarios/{alvo}/desligar-codigo', {'senha_atual': 'errada'})
+    assert rec == recusa and _usuario(app_module, alvo).totp_ativo
+    with app_module.app.app_context():
+        db.session.get(User, adm_id).failed_login_count = 4
+        db.session.commit()
+    r = c.post(f'/admin/usuarios/{alvo}/desligar-codigo', data={'senha_atual': 'errada'})
+    assert r.status_code == 302 and r.headers['Location'] == '/login'
+    assert _usuario(app_module, alvo).totp_ativo
+    assert c.get('/api/v1/eu').status_code == 401
+    # Com a senha certa, as duas ações valem para outro administrador também.
+    with app_module.app.app_context():
+        a = db.session.get(User, adm_id)
+        a.lockout_until, a.failed_login_count = None, 0
+        db.session.commit()
+    c = fabrica.entrar(app_module, 'adm.dois@trino.com')
+    certa = {'senha_atual': SENHA}
+    r, j = _nova(c, f'/api/v1/admin/usuarios/{alvo}/desligar-codigo', data=certa)
+    assert r.status_code == 200 and not _usuario(app_module, alvo).totp_ativo
+    r, j = _nova(c, f'/api/v1/admin/usuarios/{alvo}/nova-senha', data=certa)
+    assert r.status_code == 200 and _usuario(app_module, alvo).check_password(j['senha']['senha'])
+    assert _usuario(app_module, adm_id).failed_login_count == 0
+
+
+def test_a_tela_antiga_das_pessoas_pede_a_senha_do_administrador(app_module, auth_client):
+    uid = _pessoa(app_module, 'campo.senha@trino.com', 'encarregado')
+    with app_module.app.app_context():
+        from app import User, db
+        db.session.get(User, uid).totp_ativo = True
+        db.session.commit()
+    html = auth_client.get('/admin/usuarios').get_data(as_text=True)
+    for acao in ('nova-senha', 'desligar-codigo'):
+        form = re.search(rf'<form method="post" action="/admin/usuarios/{uid}/{acao}"(.*?)</form>',
+                         html, re.S).group(1)
+        assert 'Sua senha atual' in form, acao
+        assert re.search(r'<input[^>]*name="senha_atual"[^>]*type="password"[^>]*required', form)
 
 
 # ── Locais ───────────────────────────────────────────────────────────────

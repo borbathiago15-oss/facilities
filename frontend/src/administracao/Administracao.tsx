@@ -69,6 +69,17 @@ function CamposDaPessoa({ dados, u }: { dados: DadosDasPessoas; u: Pessoa | null
   );
 }
 
+/** A senha do próprio administrador, que "Gerar senha temporária" e
+ * "Desligar a segunda etapa" pedem (a mesma conferência da tela antiga). */
+function SuaSenha({ id }: { id: string }) {
+  return (
+    <>
+      <label className="form-label small fw-semibold" htmlFor={id}>Sua senha atual</label>
+      <input className="form-control form-control-sm mb-2 fc-campo-curto" id={id} name="senha_atual" type="password" autoComplete="current-password" required />
+    </>
+  );
+}
+
 /** A senha temporária no recado, com a senha destacada para copiar. */
 function RecadoDaSenha({ senha }: { senha: SenhaNova }) {
   const n = senha.texto.indexOf(senha.senha);
@@ -160,11 +171,17 @@ export function Pessoas({ dados, senha, aoGerar }: {
                 <label className="form-check-label small" htmlFor={`ativo${u.id}`}>Ativo (desmarque para bloquear o acesso)</label></div>
               <button className="btn btn-primary btn-sm fw-bold mt-2" type="submit" disabled={ocupado}>Salvar</button>
             </form>
-            <form method="post" className="mt-2 mb-2" onSubmit={gerar(u)}>
-              <button className="btn btn-outline-secondary btn-sm" type="submit" disabled={gerando}><i className="bi bi-key"></i> Gerar senha temporária</button>
-            </form>
+            {u.propria ? (
+              <p className="small text-muted mt-2 mb-2">Para mudar a sua própria senha, use <Ir href="/novo/trocar-senha">Trocar senha</Ir>.</p>
+            ) : (
+              <form method="post" className="mt-2 mb-2" onSubmit={gerar(u)} autoComplete="off">
+                <SuaSenha id={`senhaNova${u.id}`} />
+                <button className="btn btn-outline-secondary btn-sm" type="submit" disabled={gerando}><i className="bi bi-key"></i> Gerar senha temporária</button>
+              </form>
+            )}
             {u.segunda_etapa && (
-              <form method="post" className="mb-2" onSubmit={submeter(`${API}/usuarios/${u.id}/desligar-codigo`)}>
+              <form method="post" className="mb-2" onSubmit={submeter(`${API}/usuarios/${u.id}/desligar-codigo`)} autoComplete="off">
+                <SuaSenha id={`senhaCodigo${u.id}`} />
                 <button className="btn btn-outline-secondary btn-sm" type="submit" disabled={ocupado}><i className="bi bi-shield-x"></i> Desligar a segunda etapa (perdeu o celular)</button>
               </form>
             )}

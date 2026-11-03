@@ -49,6 +49,15 @@
   </div>
 {% endmacro %}
 {% block content %}
+{% if senha_gerada %}
+{# A senha temporária vem só nesta resposta (no-store), nunca no recado: o
+   recado passa pelo cookie da sessão, que é assinado, não cifrado. #}
+{% set partes = senha_gerada.texto.split(senha_gerada.senha, 1) %}
+<div class="alert alert-success" role="status">
+  {{ partes[0] }}{% if partes|length > 1 %}<code class="user-select-all">{{ senha_gerada.senha }}</code>{{ partes[1] }}{% endif %}
+  <p class="small mb-0 mt-1">Esta senha não aparece de novo depois que você sair desta tela.</p>
+</div>
+{% endif %}
 <h1 class="fc-titulo">Pessoas</h1>
 <p class="fc-sub">Quem entra no sistema, com que perfil, abaixo de quem e em quais locais. Ninguém é apagado: desative quem saiu, e o histórico continua com o nome certo.</p>
 
@@ -85,15 +94,23 @@
     {# O nome vai num data-, nunca dentro do JavaScript do onsubmit: lá o |e
        não protege (o navegador desfaz o &#39; antes de rodar o JS, e um nome
        como x'+alert(1)+' virava código). #}
+    {% if u.id == current_user.id %}
+    <p class="small text-muted mt-2 mb-2">Para mudar a sua própria senha, use <a href="{{ url_for('auth.trocar_senha') }}">Trocar senha</a>.</p>
+    {% else %}
     <form method="post" action="{{ url_for('admin.nova_senha', uid=u.id) }}" class="mt-2 mb-2"
           data-nome="{{ u.name }}"
           data-confirmar="Gerar uma senha temporária nova para {nome}? A atual deixa de valer.">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label class="form-label small fw-semibold" for="senhaNova{{ u.id }}">Sua senha atual</label>
+      <input class="form-control form-control-sm mb-2 fc-campo-curto" id="senhaNova{{ u.id }}" name="senha_atual" type="password" autocomplete="current-password" required>
       <button class="btn btn-outline-secondary btn-sm" type="submit"><i class="bi bi-key"></i> Gerar senha temporária</button>
     </form>
+    {% endif %}
     {% if u.totp_ativo %}
     <form method="post" action="{{ url_for('admin.desligar_codigo', uid=u.id) }}" class="mb-2">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label class="form-label small fw-semibold" for="senhaCodigo{{ u.id }}">Sua senha atual</label>
+      <input class="form-control form-control-sm mb-2 fc-campo-curto" id="senhaCodigo{{ u.id }}" name="senha_atual" type="password" autocomplete="current-password" required>
       <button class="btn btn-outline-secondary btn-sm" type="submit"><i class="bi bi-shield-x"></i> Desligar a segunda etapa (perdeu o celular)</button>
     </form>
     {% endif %}

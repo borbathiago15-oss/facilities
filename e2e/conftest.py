@@ -283,3 +283,20 @@ def esperar(pagina, expressao, timeout=15000):
             return
         pagina.wait_for_timeout(150)
     raise AssertionError(f'Não aconteceu a tempo: {expressao}')
+
+
+def contar_quando(localizador, esperado, timeout=10000):
+    """Quantos ``localizador`` há, esperando chegar a ``esperado``.
+
+    Depois de um filtro, a tela nova muda o endereço na hora e redesenha
+    quando os dados filtrados chegam: contar logo depois do ``wait_for_url``
+    pega a lista de antes. Devolve a contagem final (o ``assert`` é de quem
+    chama), sem esconder um número errado: se não chegar, devolve o que há.
+    """
+    import time
+    fim = time.monotonic() + timeout / 1000
+    n = localizador.count()
+    while n != esperado and time.monotonic() < fim:
+        localizador.page.wait_for_timeout(100)
+        n = localizador.count()
+    return n

@@ -7,6 +7,8 @@
 * cadastros são do administrador; o gestor não cadastra;
 * ``/healthz``, ``/sw.js`` e ``/app/sessao`` respondem sem login.
 """
+import re
+
 import pytest
 
 from tests.conftest import ADMIN_EMAIL, TEST_ADMIN_PASSWORD
@@ -108,7 +110,9 @@ def test_o_administrador_cadastra_com_senha_temporaria(app_module, auth_client):
         'clients': [str(cid)]}, follow_redirects=True)
     corpo = r.get_data(as_text=True)
     assert 'Senha temporária:' in corpo
-    senha = corpo.split('Senha temporária: ')[1].split(' ')[0]
+    # A senha vem destacada na própria resposta (não no recado da sessão).
+    senha = re.search(r'Senha temporária: <code class="user-select-all">([^<]+)</code>',
+                      corpo).group(1)
     with app_module.app.app_context():
         from app import User
         u = User.query.filter_by(email='rita.portaria@trino.com').one()

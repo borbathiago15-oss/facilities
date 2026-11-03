@@ -6,7 +6,7 @@ uma visita de supervisão; no estoque, cadastra um material, lança entrada,
 saída recusada e consumo, confere o mês e o custo e marca como visto o pedido
 que a Ana fez pelo aplicativo. Os recados são os mesmos nas duas, e nenhuma
 tela rola de lado."""
-from conftest import abrir, abrir_contexto, entrar
+from conftest import abrir, abrir_contexto, contar_quando, entrar
 
 
 def _sem_rolagem(pg, onde):
@@ -194,7 +194,7 @@ def test_os_materiais_do_local(servidor, navegador, perfil, equipes):
         pg.get_by_role('button', name='Ver').click()
         pg.wait_for_url('**de=2020-01-01**')
         _pronta(pg, 'materiais-custo')
-        assert pg.locator('.fs-4', has_text='R$ 0,00').count() == 1
+        assert contar_quando(pg.locator('.fs-4', has_text='R$ 0,00'), 1) == 1
         assert pg.locator('text=Nada no período.').count() == 3
         _sem_rolagem(pg, 'o custo')
         # Os pedidos de insumo: o da Ana, marcado como visto.

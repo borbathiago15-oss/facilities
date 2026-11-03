@@ -10,6 +10,7 @@ import re
 
 from facilities.core import totp
 from tests import fabrica
+from tests.conftest import TEST_ADMIN_PASSWORD
 
 
 def _com_codigo(app_module, email, papel='pleno'):
@@ -76,10 +77,10 @@ def test_ativar_e_desativar_pela_propria_pessoa(app_module):
     html = c.get('/conta/seguranca').get_data(as_text=True)
     segredo = re.search(r'<code class="user-select-all">([A-Z2-7]+)</code>', html).group(1)
     assert '<svg' in html
-    c.post('/conta/seguranca/ativar', data={'codigo': '123456'})
+    c.post('/conta/seguranca/ativar', data={'codigo': '123456', 'senha': fabrica.SENHA})
     with app_module.app.app_context():
         assert db.session.get(User, uid).totp_ativo is False
-    c.post('/conta/seguranca/ativar', data={'codigo': totp.codigo(segredo)})
+    c.post('/conta/seguranca/ativar', data={'codigo': totp.codigo(segredo), 'senha': fabrica.SENHA})
     with app_module.app.app_context():
         assert db.session.get(User, uid).totp_ativo is True
     c.post('/conta/seguranca/desativar', data={'senha': 'errada'})
@@ -97,7 +98,8 @@ def test_administrador_desliga_para_quem_perdeu_o_celular(app_module, auth_clien
     c, _ = _senha(app_module, 'totp6@trino.com')
     c.post('/login/codigo', data={'codigo': totp.codigo(segredo)})
     assert c.get('/').status_code == 200
-    auth_client.post(f'/admin/usuarios/{uid}/desligar-codigo')
+    auth_client.post(f'/admin/usuarios/{uid}/desligar-codigo',
+                     data={'senha_atual': TEST_ADMIN_PASSWORD})
     with app_module.app.app_context():
         assert db.session.get(User, uid).totp_ativo is False
     assert c.get('/').status_code == 302                       # a sessão aberta caiu

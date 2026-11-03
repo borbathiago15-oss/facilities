@@ -94,6 +94,42 @@ SHA-256 antes de sair do principal, e nenhuma linha do banco é apagada. As
 chaves do bucket do arquivo ficam só nas variáveis do serviço, como as do R2
 principal. Ver `docs/ARQUIVO_FOTOS.md`.
 
+## Contas e sessões
+
+O cookie da sessão (Flask) é **assinado, não cifrado**: quem o copia não
+consegue alterá-lo, mas lê tudo o que vai nele. Por isso (auditoria da
+Fase 6a, 03/11/2026, valendo nas telas antigas e nas novas, que chamam as
+mesmas funções em `core/auth.py` e `core/admin.py`):
+
+* **Nenhum segredo no cookie.** A senha temporária (cadastrar e "Gerar
+  senha temporária") aparece só na resposta do envio que a cria
+  (`Cache-Control: no-store`), nunca no recado (`flash`), que mora no
+  cookie. O segredo da segunda etapa ainda não ativado fica na linha da
+  pessoa (`users.totp_segredo`, cifrado com a `FIELD_ENCRYPTION_KEY` quando
+  ligada) enquanto `totp_ativo` é falso — o login só pede o código com
+  `totp_ativo`, e com a etapa ativada nada mexe no segredo; na sessão vai
+  só uma marca dele (HMAC com a `SECRET_KEY`), que o prende à sessão que o
+  pediu: outra sessão que abra a tela sorteia outro segredo, e o primeiro
+  deixa de valer.
+* **Ligar e desligar a segunda etapa pedem a senha atual.** Só com a
+  sessão (um cookie copiado, um computador esquecido aberto) ninguém
+  cadastra o próprio autenticador nem tranca o dono fora.
+* **As ações do administrador que entregam a conta de outra pessoa**
+  ("Gerar senha temporária" e "Desligar a segunda etapa", para qualquer
+  pessoa, inclusive outro administrador) pedem a senha do **próprio**
+  administrador. A senha temporária não vale para a própria conta: a
+  própria senha se troca em "Trocar senha".
+* **Senha errada conta no bloqueio da conta**, no mesmo contador do login
+  (`failed_login_count`, atualizado no banco): trocar a senha, ligar ou
+  desligar o código e as ações do administrador (no contador dele). No 5º
+  erro, somando as duas telas, a conta bloqueia por 15 minutos e a sessão
+  cai.
+* **Limite por hora dividido entre as duas telas.** Rota com limite do
+  Flask-Limiter que tem gêmea em `/api/v1` usa `limiter.shared_limit` com
+  o mesmo escopo nas duas (convidar para a equipe: 60/h; abrir cobrança no
+  portal: 30/h). Um `limit` em cada uma dobraria o teto
+  (`tests/test_telas_cadastros.py::test_nenhuma_tela_nova_dobra_o_limite_da_antiga`).
+
 ## Regras para quem mexe no código
 
 * Campo sensível novo: `db.Column(Cifrado())` (`facilities/core/cifra.py`),

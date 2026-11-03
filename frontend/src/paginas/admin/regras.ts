@@ -19,9 +19,10 @@ export function fotos(n: number): string {
 }
 
 /** Quantas fotos passaram do prazo, e quanto pesam (as sem tamanho
- * registrado entram como "pelo menos"). */
+ * registrado entram como "pelo menos"). Um pedaço de frase, sem ponto: a
+ * tela põe o ponto final. */
 export function resumoDoPrazo(p: PainelDoArmazenamento['pendentes']): string {
-  if (!p.fotos) return 'Nenhuma foto passou do prazo.';
+  if (!p.fotos) return 'nenhuma foto passou do prazo';
   const peso = p.sem_tamanho ? `pelo menos ${tamanho(p.bytes)}` : tamanho(p.bytes);
   return `${fotos(p.fotos)} (${peso})`;
 }

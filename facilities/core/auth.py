@@ -19,6 +19,8 @@
   também contam os erros da senha atual.
 """
 import functools
+import hashlib
+import hmac
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
 
@@ -119,7 +121,7 @@ def _marcar_codigo_usado(u, passo):
 
 def _senha_atual_errada(u):
     """A senha atual errou numa tela de quem já está logado (trocar a senha,
-    desligar o código): conta como erro de login. No limite, a conta bloqueia
+    ligar ou desligar o código, as ações do administrador): conta como erro de login. No limite, a conta bloqueia
     e a sessão cai — quem roubou a sessão não descobre a senha por tentativa
     (auditoria SEC-011). Devolve a resposta quando derrubou a sessão."""
     if not _derrubar_se_bloqueou(u):
@@ -360,7 +362,7 @@ def logout():
 #
 # As telas antiga e nova (React, Fase 6a: ``/novo/conta/seguranca``,
 # ``/novo/trocar-senha`` e ``/api/v1/conta/...``) saem das MESMAS funções:
-# ``preparar_codigo`` (o segredo novo, guardado na sessão até ativar),
+# ``preparar_codigo`` (o segredo novo, pendente até ativar),
 # ``acao_ativar_codigo``, ``acao_desativar_codigo`` e ``acao_trocar_senha``
 # (a regra, o commit, a rotação da sessão e o recado).
 
@@ -370,35 +372,84 @@ def seguranca():
     return render_template('core/seguranca.html', novo=preparar_codigo())
 
 
+# O segredo pendente (mostrado, ainda não ativado) NÃO vai no cookie: o
+# cookie da sessão do Flask é assinado, não cifrado, e quem o copiasse lia o
+# segredo (auditoria da Fase 6a, 03/11/2026). Ele fica na própria linha da
+# pessoa, em ``totp_segredo`` (cifrado com a ``FIELD_ENCRYPTION_KEY``, quando
+# ligada), e só enquanto ``totp_ativo`` é falso — situação em que a coluna
+# não vale para nada: o login só pede o código com ``totp_ativo``. Com a
+# segunda etapa ativada nada aqui toca no segredo (``preparar_codigo``
+# devolve None e o ativar recusa); para cadastrar outro celular, desliga-se
+# antes. Na sessão fica só a MARCA do segredo (HMAC com a ``SECRET_KEY``,
+# sem volta): ela prende o segredo à sessão que o pediu. Outra sessão que
+# abra a tela sorteia um segredo novo, e o da primeira deixa de valer — quem
+# viu um segredo noutra sessão não fica sabendo o que o dono vai ativar.
+
+def _marca_do_segredo(segredo):
+    chave = current_app.secret_key
+    chave = chave if isinstance(chave, bytes) else str(chave or '').encode()
+    return hmac.new(chave, b'segredo-pendente-da-segunda-etapa:' + segredo.encode(),
+                    hashlib.sha256).hexdigest()
+
+
+def _segredo_pendente(u):
+    """O segredo que ESTA sessão pediu e ainda não ativou, ou None."""
+    marca = session.get('_totp_novo')
+    if u.totp_ativo or not u.totp_segredo or not isinstance(marca, str):
+        return None
+    if not hmac.compare_digest(marca, _marca_do_segredo(u.totp_segredo)):
+        return None
+    return u.totp_segredo
+
+
 def preparar_codigo():
     """O segredo e o QR para cadastrar no aplicativo autenticador, ou None
-    com a segunda etapa já ativada. O segredo fica na sessão até ativar (o
-    mesmo em cada abertura, nas duas telas): o código digitado é conferido
-    contra ele."""
-    if current_user.totp_ativo:
+    com a segunda etapa já ativada. O segredo fica pendente até ativar (o
+    mesmo em cada abertura desta sessão, nas duas telas): o código digitado
+    é conferido contra ele."""
+    u = current_user._get_current_object()
+    if u.totp_ativo:
         return None
-    segredo = session.get('_totp_novo') or totp.novo_segredo()
-    session['_totp_novo'] = segredo
-    endereco = totp.uri(segredo, current_user.email)
+    segredo = _segredo_pendente(u)
+    if segredo is None:
+        segredo = totp.novo_segredo()
+        u.totp_segredo = segredo
+        u.totp_ultimo_passo = None
+        db.session.commit()
+        session['_totp_novo'] = _marca_do_segredo(segredo)
+    endereco = totp.uri(segredo, u.email)
     return {'segredo': segredo, 'qr': totp.qr_svg(endereco)}
 
 
 @bp.route('/conta/seguranca/ativar', methods=['POST'])
 @login_required
 def ativar_codigo():
-    return redirect(acao_ativar_codigo(request.form))
+    destino, _derrubou = acao_ativar_codigo(request.form)
+    return redirect(destino)
 
 
 def acao_ativar_codigo(dados):
-    segredo = session.get('_totp_novo')
-    if not segredo or current_user.totp_ativo:
-        return url_for('auth.seguranca')
+    """``(destino, derrubou)``, como ``acao_desativar_codigo``.
+
+    Ativar pede a senha atual (auditoria da Fase 6a, 03/11/2026): sem ela,
+    quem tivesse só a sessão (um cookie copiado, um computador esquecido
+    aberto) cadastrava o PRÓPRIO autenticador, derrubava as outras sessões
+    e passava a ser o único a entrar. A senha errada conta no mesmo
+    contador do login (``_derrubar_se_bloqueou``)."""
+    u = current_user._get_current_object()
+    segredo = _segredo_pendente(u)
+    if not segredo:
+        return url_for('auth.seguranca'), False
+    if not u.check_password(dados.get('senha') or ''):
+        if _derrubar_se_bloqueou(u):
+            return url_for('auth.login'), True
+        flash('A senha atual não confere.', 'danger')
+        return url_for('auth.seguranca'), False
     aceito = totp.verificar(segredo, dados.get('codigo'))
     if aceito is None:
         flash('O código não confere. Confira se o aplicativo leu o QR desta tela e digite '
               'o código que aparece agora.', 'danger')
-        return url_for('auth.seguranca')
-    u = current_user._get_current_object()
+        return url_for('auth.seguranca'), False
     u.totp_segredo = segredo
     u.totp_ativo = True
     u.totp_ultimo_passo = aceito
@@ -411,7 +462,7 @@ def acao_ativar_codigo(dados):
     login_user(u)
     flash('Segunda etapa ativada. A partir de agora, o login pede a senha e o código do '
           'aplicativo.', 'success')
-    return url_for('auth.seguranca')
+    return url_for('auth.seguranca'), False
 
 
 @bp.route('/conta/seguranca/desativar', methods=['POST'])
