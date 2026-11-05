@@ -104,7 +104,7 @@ def test_senha_curta_ou_diferente_e_recusada(app_module):
 def test_o_administrador_cadastra_com_senha_temporaria(app_module, auth_client):
     with app_module.app.app_context():
         from app import Client
-        cid = Client.query.first().id
+        cid = Client.query.order_by(Client.id).first().id
     r = auth_client.post('/admin/usuarios', data={
         'name': 'Rita Portaria', 'email': 'rita.portaria@trino.com', 'role': 'encarregado',
         'clients': [str(cid)]}, follow_redirects=True)

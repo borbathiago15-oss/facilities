@@ -43,7 +43,7 @@ TIPOS = [{'nome': 'Disciplinar'}, {'nome': 'Operacional'}]
 def operacao(app_module):
     """Um contrato com modelo de passagem, um encarregado e outro contrato."""
     with app_module.app.app_context():
-        cliente = app_module.Client.query.first()
+        cliente = app_module.Client.query.order_by(app_module.Client.id).first()
         outro = (app_module.Client.query
                  .filter(app_module.Client.id != cliente.id).first())
         admin = app_module.User.query.filter_by(

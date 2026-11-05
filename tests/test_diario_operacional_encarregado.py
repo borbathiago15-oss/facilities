@@ -46,7 +46,7 @@ def _png(cor=(200, 30, 30)):
 def operacao(app_module):
     """Um contrato com modelo de passagem e um encarregado ligado a ele."""
     with app_module.app.app_context():
-        cliente = app_module.Client.query.first()
+        cliente = app_module.Client.query.order_by(app_module.Client.id).first()
         outro = (app_module.Client.query
                  .filter(app_module.Client.id != cliente.id).first())
         admin = app_module.User.query.filter_by(

@@ -45,7 +45,7 @@ def _usuario(app_module, email, nome, clientes):
 def contrato(app_module):
     with app_module.app.app_context():
         from app import Client, db
-        cliente = Client.query.first()
+        cliente = Client.query.order_by(Client.id).first()
         _usuario(app_module, 'enc.costura@trino.com', 'Encarregada da costura', [cliente])
         expedicao = DiarioArea(client_id=cliente.id, nome='Expedição costura', ativo=True)
         almox = DiarioArea(client_id=cliente.id, nome='Almoxarifado costura', ativo=True)

@@ -27,7 +27,7 @@ from facilities.passagem.models import (
 def cena(app_module):
     with app_module.app.app_context():
         from app import Client, db
-        cliente = Client.query.first()
+        cliente = Client.query.order_by(Client.id).first()
 
         def _pessoa(email, nome, papel, perms):
             u = app_module.User.query.filter_by(email=email).first()

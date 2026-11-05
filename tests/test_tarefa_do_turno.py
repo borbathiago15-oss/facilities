@@ -32,7 +32,7 @@ def cena(app_module):
     """Um contrato com duas áreas e um encarregado."""
     with app_module.app.app_context():
         from app import Client, db
-        cliente = Client.query.first()
+        cliente = Client.query.order_by(Client.id).first()
         outro = Client.query.filter(Client.id != cliente.id).first()
 
         enc = app_module.User.query.filter_by(

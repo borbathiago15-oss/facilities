@@ -40,7 +40,7 @@ def cena(app_module):
     """Um contrato, dois modelos (duas áreas) e dois encarregados."""
     with app_module.app.app_context():
         from app import Client, db
-        cliente = Client.query.first()
+        cliente = Client.query.order_by(Client.id).first()
         admin = app_module.User.query.filter_by(
             email='admin@grupotrino.com.br').first()
 
