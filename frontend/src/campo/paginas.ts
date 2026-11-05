@@ -4,3 +4,5 @@
 export { PaginaInicioCampo } from './PaginaInicioCampo';
 export { PaginaLerQr } from './PaginaLerQr';
 export { PaginaTurno } from './turno/PaginaTurno';
+// Fase 1d: a equipe do dia, o material e as visitas de supervisão.
+export { PaginaEquipeDoCampo, PaginaMateriaisDoCampo, PaginaVisitaDoCampo, PaginaVisitasDoCampo } from './app/paginas';
