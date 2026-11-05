@@ -59,7 +59,7 @@ MSG_LOGIN_RECUSADO = (f'E-mail ou senha incorretos. Depois de {TENTATIVAS_ANTES_
 
 def exige_segunda_etapa(u):
     """A pessoa é obrigada a usar o código do aplicativo? O cliente sempre
-    (Fase 9B); a gestão e a diretoria, salvo ``MFA_OBRIGATORIO_GESTAO=0``
+    (Fase 9B); a gestão, a diretoria e o supervisor, salvo ``MFA_OBRIGATORIO_GESTAO=0``
     (só os testes desligam)."""
     papel = u._effective_role()
     if papel == 'cliente':

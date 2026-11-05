@@ -60,8 +60,10 @@ NIVEL_NA_CADEIA = {'gerente': 1, 'pleno': 2, 'supervisor': 3,
 
 # Segunda etapa obrigatória (auditoria SEC-001, decisão do dono 19/10/2026):
 # quem enxerga vários locais não entra só com a senha. O cliente já era
-# obrigado (Fase 9B).
-PERFIS_COM_SEGUNDA_ETAPA = PERFIS_DE_GESTAO + ('visualizador',)
+# obrigado (Fase 9B). O supervisor entrou em 05/11/2026 (R2): ele vê os
+# locais da equipe, o painel e o custo, e distribui chamados. Encarregado e
+# técnico seguem sem a obrigação (mesmo com "todos os locais", R1).
+PERFIS_COM_SEGUNDA_ETAPA = PERFIS_DE_GESTAO + ('visualizador', 'supervisor')
 
 # O perfil cliente existe desde a Fase 2; entra no portal só com
 # CLIENTE_EXTERNO_LIBERADO ligado (Fase 9B).

@@ -426,8 +426,6 @@ def test_menu_de_cada_perfil_so_leva_a_tela_que_abre(app_module, cena):
 
 # ── R2: o supervisor usa a segunda etapa (obrigatória, como a gestão) ────
 
-@pytest.mark.xfail(strict=True, reason='BUG R2: core/models.PERFIS_COM_SEGUNDA_ETAPA não '
-                   'inclui o supervisor; ele entra só com a senha')
 def test_r2_supervisor_sem_codigo_so_abre_a_tela_de_seguranca(app_module, cena):
     app_module.app.config['MFA_OBRIGATORIO_GESTAO'] = True   # o conftest desliga ao fim
     c = fabrica.entrar(app_module, 'aud.supervisor@trino.com')
