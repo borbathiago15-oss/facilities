@@ -430,6 +430,68 @@ def aceitar(token, senha, confirma, agora=None):
     return u
 
 
+# ── "Configurar a passagem": a gestão autoriza o encarregado (R10) ─────────
+#
+# Decisão do dono (05/11/2026): configurar o modelo da passagem de turno é da
+# gestão; o encarregado só configura se a gestão dele autorizar, pessoa a
+# pessoa. O gerente e o coordenador concedem e retiram a autorização dos
+# encarregados da carteira deles (o administrador continua podendo, em
+# "Pessoas e acessos"). Grava a MESMA permissão fina (``diario_config``).
+
+PERMISSAO_PASSAGEM = 'diario_config'
+
+
+def _dentro_da_carteira(autor, pessoa):
+    from facilities.core.hierarquia import carteira
+    da_pessoa = carteira(pessoa)
+    if not da_pessoa:
+        return False          # sem local nenhum (ou com "todos"): não é da equipe de ninguém
+    do_autor = carteira(autor)
+    return do_autor is None or da_pessoa <= do_autor
+
+
+def pode_autorizar_passagem(autor, pessoa):
+    """A gestão autoriza o encarregado ativo cujos locais estão TODOS na
+    carteira dela (quem também atende o local de outro coordenador fica com
+    a gestão de cima ou com o administrador)."""
+    return (pode_montar(autor) and pessoa is not None and pessoa.role == 'encarregado'
+            and pessoa.is_active and not pessoa.is_deleted
+            and _dentro_da_carteira(autor, pessoa))
+
+
+def encarregados_autorizaveis(autor):
+    """Os encarregados que este gestor pode autorizar, em ordem de nome."""
+    if not pode_montar(autor):
+        return []
+    pessoas = (User.query.filter(User.role == 'encarregado', User.is_active.is_(True),
+                                 User.is_deleted.is_(False)).order_by(User.name).all())
+    return [p for p in pessoas if pode_autorizar_passagem(autor, p)]
+
+
+def autorizar_passagem(autor, pessoa, autorizar):
+    """Concede (``autorizar=True``) ou retira a permissão. → a frase da tela."""
+    if not pode_autorizar_passagem(autor, pessoa):
+        raise CadastroInvalido('Você só autoriza encarregados ativos dos seus locais.')
+    atuais = [p for p in pessoa.permissions if p != PERMISSAO_PASSAGEM]
+    if autorizar:
+        atuais.append(PERMISSAO_PASSAGEM)
+    ja = (PERMISSAO_PASSAGEM in pessoa.permissions) == bool(autorizar)
+    pessoa.permissions_json = json.dumps(atuais)
+    if ja:
+        return (f'{pessoa.name} já podia configurar a passagem.' if autorizar
+                else f'{pessoa.name} já não configurava a passagem.')
+    db.session.add(Notification(
+        user_id=pessoa.id, notification_type='permissao',
+        title=('Você pode configurar a passagem de turno' if autorizar
+               else 'Você não configura mais a passagem de turno'),
+        message=(f'{autor.name} {"autorizou" if autorizar else "retirou a autorização de"} '
+                 f'configurar o modelo da passagem (perguntas, turnos, áreas e tipos de '
+                 f'ocorrência) dos seus locais.'),
+        link='/passagem-de-turno/turno'))
+    return (f'{pessoa.name} agora pode configurar a passagem de turno dos locais dele.'
+            if autorizar else f'{pessoa.name} não configura mais a passagem de turno.')
+
+
 # ── Texto do convite (WhatsApp e e-mail) ──────────────────────────────────
 
 def texto_do_convite(convite, link):

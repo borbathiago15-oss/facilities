@@ -466,6 +466,29 @@ export function Convites({ dados }: { dados: DadosDosConvites }) {
           </div>
         )) : <div className="fc-vazio">Nenhum convite ainda. Os convites saem do passo "Equipe" do novo contrato.</div>}
       </div>
+
+      <h2 className="h6 fw-bold mt-4" id="configurar-passagem">Quem pode configurar a passagem de turno</h2>
+      <p className="fc-sub">Configurar a passagem é mudar as perguntas, os turnos, as áreas e os tipos de ocorrência do modelo. A gestão já pode. Um encarregado só pode se você autorizar, pessoa a pessoa. Aparecem aqui os encarregados dos seus locais.</p>
+      <div className="fc-cartao p-0">
+        {dados.encarregados.length ? dados.encarregados.map((u) => (
+          <div className="border-top px-3 py-2 d-flex flex-wrap gap-2 align-items-center" key={u.id}>
+            <div>
+              <strong>{u.nome}</strong>
+              <div className="small text-muted">{u.locais}</div>
+            </div>
+            <span className={`badge ${u.autorizado ? 'text-bg-success' : 'text-bg-secondary'} ms-auto`}>{u.autorizado ? 'pode configurar' : 'não configura'}</span>
+            {u.autorizado ? (
+              <form method="post" className="m-0" onSubmit={submeter(`${API}/convites/pessoas/${u.id}/retirar-passagem`)}>
+                <button className="btn btn-outline-danger btn-sm" type="submit" disabled={gerando || ocupado}>Retirar a autorização</button>
+              </form>
+            ) : (
+              <form method="post" className="m-0" onSubmit={submeter(`${API}/convites/pessoas/${u.id}/autorizar-passagem`)}>
+                <button className="btn btn-outline-primary btn-sm fw-bold" type="submit" disabled={gerando || ocupado}>Autorizar a configurar</button>
+              </form>
+            )}
+          </div>
+        )) : <div className="fc-vazio">Nenhum encarregado nos seus locais ainda.</div>}
+      </div>
     </div>
   );
 }

@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Estados } from './Cadastros';
 import { Local } from './Local';
-import { Equipe } from './NovoContrato';
+import { Convites, Equipe } from './NovoContrato';
 import type { DadosDaEquipe, DadosDoLocal } from './tipos';
 
 let chamadas: { url: string; init?: RequestInit }[] = [];
@@ -140,5 +140,27 @@ describe('o convite', () => {
     expect(screen.getByLabelText('Ou copie o link')).toHaveValue('http://x/convite/abc');
     expect(screen.getByText(/O e-mail não saiu agora/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Convidar outra pessoa/ })).toHaveAttribute('href', '/novo-contrato/9/equipe');
+  });
+});
+
+describe('quem configura a passagem (R10)', () => {
+  it('a gestão autoriza e retira, pessoa a pessoa, pelo mesmo caminho da tela antiga', async () => {
+    resposta = { status: 200, corpo: { recados: [{ tipo: 'success', texto: 'Eva agora pode configurar a passagem de turno dos locais dele.' }], destino: '/novo/convites' } };
+    abrir(<Convites dados={{ convites: [], encarregados: [
+      { id: 7, nome: 'Eva', locais: 'CD 9', autorizado: false },
+      { id: 8, nome: 'Rui', locais: 'CD 9, CD 10', autorizado: true },
+    ] }} />, '/convites');
+    expect(screen.getByText('não configura')).toBeInTheDocument();
+    expect(screen.getByText('pode configurar')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Autorizar a configurar' }));
+    await waitFor(() => expect(chamadas).toHaveLength(1));
+    expect(chamadas[0].url).toBe('/api/v1/cadastros/convites/pessoas/7/autorizar-passagem');
+    await waitFor(() => expect(screen.getByTestId('onde')).toHaveTextContent('/convites'));
+  });
+
+  it('sem encarregado nos locais, diz isso', () => {
+    abrir(<Convites dados={{ convites: [], encarregados: [] }} />);
+    expect(screen.getByText('Nenhum encarregado nos seus locais ainda.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Retirar a autorização' })).not.toBeInTheDocument();
   });
 });

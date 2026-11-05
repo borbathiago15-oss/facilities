@@ -296,3 +296,61 @@ def test_r6_lista_de_clientes_do_coordenador_e_so_a_da_carteira(app_module, cena
     c = fabrica.entrar(app_module, 'aud.pleno@trino.com')
     assert c.get(f"/novo-contrato/cliente/{cena['hn']}/local").status_code == 403
     assert c.get(f"/novo-contrato/cliente/{cena['cliente']}/local").status_code == 200
+
+
+# ── R10: a gestão autoriza (e retira) o encarregado a configurar a passagem ─
+
+def _pode_configurar(app_module, uid):
+    from app import User, db
+    with app_module.app.app_context():
+        return db.session.get(User, uid).pode('diario_config')
+
+
+@pytest.mark.parametrize('quem', ['aud.pleno@trino.com', 'aud.gerente@trino.com'])
+def test_r10_gestao_autoriza_e_retira_nas_duas_telas(app_module, cena, quem):
+    c = fabrica.entrar(app_module, quem)
+    d = c.get('/api/v1/cadastros/convites').get_json()
+    assert {'id': cena['enc'], 'nome': 'Aud.Encarregado', 'locais': 'Shopping Centro',
+            'autorizado': False} in d['encarregados']
+    assert 'Quem pode configurar a passagem' in c.get('/convites').get_data(as_text=True)
+    r = c.post(f"/convites/pessoas/{cena['enc']}/autorizar-passagem")
+    assert r.status_code == 302 and _pode_configurar(app_module, cena['enc'])
+    assert any('configurar a passagem' in t for t in _avisos(app_module, cena['enc']))
+    # O encarregado entra na configuração do modelo.
+    enc = fabrica.entrar(app_module, 'aud.encarregado@trino.com')
+    assert enc.post('/passagem-de-turno/api/configuracoes',
+                    json={'client_id': cena['local'], 'nome': 'Modelo'}).status_code != 403
+    r = c.post(f"/api/v1/cadastros/convites/pessoas/{cena['enc']}/retirar-passagem")
+    assert r.status_code == 200 and not _pode_configurar(app_module, cena['enc'])
+    assert enc.post('/passagem-de-turno/api/configuracoes',
+                    json={'client_id': cena['local'], 'nome': 'Modelo'}).status_code == 403
+
+
+def test_r10_quem_nao_e_da_carteira_ou_nao_e_encarregado_nao_e_autorizado(app_module, cena):
+    with app_module.app.app_context():
+        fora = fabrica.pessoa(app_module, 'l3.enc.hn@trino.com', 'encarregado',
+                              locais=['Hospital Norte'])
+        fabrica.pessoa(app_module, 'l3.ple.hn@trino.com', 'pleno', locais=['Hospital Norte'])
+    c = fabrica.entrar(app_module, 'aud.pleno@trino.com')
+    ids = {u['id'] for u in c.get('/api/v1/cadastros/convites').get_json()['encarregados']}
+    assert fora not in ids and cena['tec'] not in ids and cena['sup'] not in ids
+    for uid in (fora, cena['tec'], cena['sup']):
+        assert c.post(f'/api/v1/cadastros/convites/pessoas/{uid}/autorizar-passagem'
+                      ).status_code == 404
+        assert c.post(f'/convites/pessoas/{uid}/autorizar-passagem').status_code == 404
+        assert not _pode_configurar(app_module, uid)
+    # O coordenador do outro local não autoriza o encarregado de A.
+    outro = fabrica.entrar(app_module, 'l3.ple.hn@trino.com')
+    assert outro.post(f"/convites/pessoas/{cena['enc']}/autorizar-passagem").status_code == 404
+    assert not _pode_configurar(app_module, cena['enc'])
+
+
+@pytest.mark.parametrize('papel', ['supervisor', 'encarregado', 'tecnico', 'visualizador'])
+def test_r10_quem_nao_e_gestao_nao_autoriza_ninguem(app_module, cena, papel):
+    with app_module.app.app_context():
+        fabrica.pessoa(app_module, f'l3.{papel}.r10@trino.com', papel, locais=['Shopping Centro'])
+    c = fabrica.entrar(app_module, f'l3.{papel}.r10@trino.com')
+    for url in (f"/convites/pessoas/{cena['enc']}/autorizar-passagem",
+                f"/api/v1/cadastros/convites/pessoas/{cena['enc']}/autorizar-passagem"):
+        assert c.post(url).status_code == 403
+    assert not _pode_configurar(app_module, cena['enc'])

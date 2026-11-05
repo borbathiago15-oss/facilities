@@ -258,8 +258,6 @@ def test_r9_agendador_pela_internet_nao_existe(app_module, cena, monkeypatch):
 
 # ── R10: o coordenador autoriza o encarregado a configurar a passagem ────
 
-@pytest.mark.xfail(strict=True, reason='BUG R10: só o administrador concede diario_config '
-                   '(core/admin._aplicar_formulario); o coordenador não tem como autorizar')
 def test_r10_coordenador_autoriza_encarregado_a_configurar(app_module, cena):
     from facilities.core.models import User
     rotas_que_concedem = [r for r in app_module.app.url_map.iter_rules()

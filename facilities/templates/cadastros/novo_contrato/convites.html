@@ -31,4 +31,31 @@
   <div class="fc-vazio">Nenhum convite ainda. Os convites saem do passo "Equipe" do novo contrato.</div>
   {% endfor %}
 </div>
+
+<h2 class="h6 fw-bold mt-4" id="configurar-passagem">Quem pode configurar a passagem de turno</h2>
+<p class="fc-sub">Configurar a passagem é mudar as perguntas, os turnos, as áreas e os tipos de ocorrência do modelo. A gestão já pode. Um encarregado só pode se você autorizar, pessoa a pessoa. Aparecem aqui os encarregados dos seus locais.</p>
+<div class="fc-cartao p-0">
+  {% for u in encarregados %}{% set pode = permissao_passagem in u.permissions %}
+  <div class="border-top px-3 py-2 d-flex flex-wrap gap-2 align-items-center">
+    <div>
+      <strong>{{ u.name }}</strong>
+      <div class="small text-muted">{{ u.clients|map(attribute='name')|sort|join(', ') }}</div>
+    </div>
+    <span class="badge {% if pode %}text-bg-success{% else %}text-bg-secondary{% endif %} ms-auto">{% if pode %}pode configurar{% else %}não configura{% endif %}</span>
+    {% if pode %}
+    <form method="post" action="{{ url_for('montagem.retirar_passagem', uid=u.id) }}" class="m-0">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-outline-danger btn-sm" type="submit">Retirar a autorização</button>
+    </form>
+    {% else %}
+    <form method="post" action="{{ url_for('montagem.autorizar_passagem', uid=u.id) }}" class="m-0">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-outline-primary btn-sm fw-bold" type="submit">Autorizar a configurar</button>
+    </form>
+    {% endif %}
+  </div>
+  {% else %}
+  <div class="fc-vazio">Nenhum encarregado nos seus locais ainda.</div>
+  {% endfor %}
+</div>
 {% endblock %}

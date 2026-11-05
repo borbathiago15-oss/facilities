@@ -163,4 +163,6 @@ export type DadosDosConvites = {
     id: number; nome: string; email: string; perfil: string; situacao: string; onde: string;
     criado_por: string; criado_em: string;
   }[];
+  /** Quem pode configurar a passagem (R10): os encarregados da carteira. */
+  encarregados: { id: number; nome: string; locais: string; autorizado: boolean }[];
 };
