@@ -577,7 +577,11 @@ def test_registrar_a_visita_como_na_tela_antiga(app_module, cena):
             estado = _estado_da_visita(app_module, vid)
             resultados.append(estado[:2] + estado[2:3] + estado[3:])
         (destino, recados), e_antiga, (r, j), e_nova = resultados
-        assert j['recados'] == recados, dados
+        # O número do chamado aberto muda (cada envio abre o seu; no Postgres a
+        # sequência não reaproveita o número do apagado): o resto é igual.
+        def sem_numero(xs):
+            return [{**x, 'texto': re.sub(r'OS-\d+', 'OS-N', x['texto'])} for x in xs]
+        assert sem_numero(j['recados']) == sem_numero(recados), dados
         assert j['destino'] == f'/novo/app/visitas/{vid}' == '/novo' + destino
         assert e_antiga == e_nova, dados
         assert r.status_code == (400 if recados[0]['tipo'] == 'danger' else 200)
