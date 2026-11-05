@@ -5,15 +5,16 @@
 HTTP (push e S3): responde 201/200 a qualquer pedido depois de ``--atraso``
 segundos (o serviço de push lento ou o R2 engasgado). SMTP: aceita a conexão
 e não diz nada (o servidor de e-mail pendurado). Conta os pedidos em
-``/tmp/claude-0/f3/servico_lento.log``. Nunca fala com a internet.
+``$CARGA_PASTA/servico_lento.log``. Nunca fala com a internet.
 """
 import argparse
+import os
 import socket
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-LOG = '/tmp/claude-0/f3/servico_lento.log'
+LOG = os.path.join(os.environ.get('CARGA_PASTA', '/tmp/claude-0/f3'), 'servico_lento.log')
 
 
 def main():

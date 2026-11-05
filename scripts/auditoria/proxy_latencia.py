@@ -5,7 +5,7 @@
 ``--ms``: atraso em CADA sentido (5 ms ida + 5 ms volta = ~10 ms de ida e
 volta, como um Postgres gerenciado em outra zona). ``--buraco-negro``: aceita
 a conexão TCP e nunca responde nem repassa nada (banco "pendurado").
-O arquivo ``/tmp/claude-0/f3/buraco`` existindo liga o buraco negro em tempo
+O arquivo ``$CARGA_PASTA/buraco`` existindo liga o buraco negro em tempo
 de execução (conexões novas E as já abertas param de andar).
 """
 import argparse
@@ -13,7 +13,7 @@ import asyncio
 import os
 import time
 
-BURACO = '/tmp/claude-0/f3/buraco'
+BURACO = os.path.join(os.environ.get('CARGA_PASTA', '/tmp/claude-0/f3'), 'buraco')
 
 
 def buraco_ligado(fixo):

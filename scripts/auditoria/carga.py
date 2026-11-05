@@ -32,9 +32,11 @@ import httpx
 
 MISTURA = {'encarregado': 0.66, 'tecnico': 0.24, 'supervisor': 0.06, 'gestao': 0.04}
 CSRF_FORM = re.compile(r'name="csrf_token"[^>]*value="([^"]+)"')
-FOTO_ARQ = os.environ.get('CARGA_FOTO', '/tmp/claude-0/f3/foto.jpg')
+# Pasta de trabalho da carga (contas, cookies, foto): fora do repositório.
+PASTA = os.environ.get('CARGA_PASTA', '/tmp/claude-0/f3')
+FOTO_ARQ = os.environ.get('CARGA_FOTO', os.path.join(PASTA, 'foto.jpg'))
 FOTO = open(FOTO_ARQ, 'rb').read() if os.path.exists(FOTO_ARQ) else b''
-COOKIES = '/tmp/claude-0/f3/cookies.json'
+COOKIES = os.path.join(PASTA, 'cookies.json')
 
 
 class Medidas:
@@ -391,7 +393,7 @@ if __name__ == '__main__':
     ap.add_argument('--duracao', type=float, default=90)
     ap.add_argument('--think', type=float, default=15)
     ap.add_argument('--timeout', type=float, default=60)
-    ap.add_argument('--contas', default='/tmp/claude-0/f3/contas.json')
+    ap.add_argument('--contas', default=os.path.join(PASTA, 'contas.json'))
     ap.add_argument('--saida')
     ap.add_argument('--pg', default='dbname=f3_carga user=fac password=fac host=127.0.0.1 port=5432')
     ap.add_argument('--rotulo', default='')
