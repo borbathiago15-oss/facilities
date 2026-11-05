@@ -32,11 +32,33 @@ continua com a sua própria Passagem; os dois sistemas são independentes.
 | Núcleo | pessoas, perfis e cadeia (superior direto), carteira que sobe pela cadeia, segunda etapa do login, avisos, troca obrigatória de senha, bloqueio por tentativas |
 
 Perfis (a cadeia, de cima para baixo): **Gerente** (os clientes dele) ›
-**Coordenador** (age como gestor nos seus locais) › **Supervisor**
-(acompanha e faz checklist) › **Encarregado / ASG** e **Técnico de
-manutenção**. Fora da cadeia: **Administrador** (tudo) e **Diretoria** (lê
-tudo). **Cliente**: criado, mas sem login até a liberação do cliente externo.
-Quem está acima vê tudo o que os de baixo veem.
+**Coordenador** (age como gestor nos seus locais; monta locais só nos
+clientes da carteira dele) › **Supervisor** (acompanha, faz checklist,
+distribui chamados — atribui, muda a prioridade, cancela, pode ser o
+responsável — e responde cobrança do cliente) › **Encarregado / ASG** e
+**Técnico de manutenção**. Fora da cadeia: **Administrador** (tudo) e
+**Diretoria** (lê tudo, sempre todos os locais). **Cliente**: criado, mas
+sem login até a liberação do cliente externo. Quem está acima vê tudo o que
+os de baixo veem.
+
+Regras de permissão do dono (05/11/2026, leva L3):
+
+* "Acesso a todos os locais" abre o grupo inteiro só para gerente e
+  coordenador. No supervisor, encarregado e técnico vale os locais da gestão
+  logo acima na cadeia (sem gestão acima, nada a mais).
+* Segunda etapa do login obrigatória: administrador, gerente, coordenador,
+  diretoria, supervisor e cliente (`docs/SEGURANCA_DADOS.md`).
+* Quem cuida do local — o gerente pelo cliente, o coordenador e o supervisor
+  pela cadeia — recebe os avisos dele (chamado novo, insumo, cobrança,
+  visita, prazo) e aparece para receber chamado; o supervisor também recebe
+  "Novo chamado". Sem ninguém para avisar, a tela diz isso.
+* "Configurar a passagem" é da gestão; o encarregado só configura se o
+  gerente ou o coordenador dele autorizar, pessoa a pessoa, em Convites ›
+  "Quem pode configurar a passagem de turno" (o administrador também, em
+  Pessoas e acessos).
+* Desativar quem é responsável não transfere nada sozinho: a ordem
+  preventiva nasce sem responsável e os avisos de prazo e de reabertura vão
+  à gestão do local até ela escolher outra pessoa.
 
 ## Rodar localmente
 

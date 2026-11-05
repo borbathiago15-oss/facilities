@@ -57,9 +57,13 @@ tests/                 pytest (SQLite por padrão; Postgres com TEST_DATABASE_UR
   contratos dele sem precisar de permissão extra) · `encarregado` · `tecnico`
   (atende chamados e faz passagem) · `visualizador` Diretoria (só lê). O
   perfil decide os módulos — não há caixinha de módulo no cadastro.
-- **Carteira**: administrador e quem tem "todos os contratos" veem tudo; os
-  demais, só os contratos vinculados (vazio = nada). Regra única em
-  `facilities/core/acesso.py`.
+- **Carteira**: administrador, diretoria e a gestão com "todos os contratos"
+  veem tudo; supervisor, encarregado e técnico com "todos" veem os locais da
+  gestão logo acima (R1, 05/11/2026); os demais, os locais vinculados, os
+  dos clientes do gerente e os de toda a equipe abaixo (vazio = nada). Regra
+  única em `facilities/core/hierarquia.carteira`; a conta de baixo para
+  cima (`quem_ve_o_local`), usada nos avisos e em quem recebe chamado, dá o
+  mesmo resultado (`tests/test_permissoes_l3.py`).
 - **Ocorrência → chamado** substitui o "abrir PDCA" do Trino.
 - **Chamados**: prazo pela prioridade (urgente 4h, alta 24h, média 72h, baixa
   7 dias), gravado na abertura e recalculado da abertura quando a prioridade

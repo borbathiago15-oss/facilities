@@ -1,10 +1,12 @@
 """Auditoria da Fase 1 (permissões: perfil x rota), 05/11/2026.
 
-Cada teste com ``xfail(strict=True)`` documenta um DEFEITO contra a régua
-confirmada pelo dono (R1, R3, R4, R5, R6, R9, R10 e as regras gerais). A
-suíte fica verde enquanto o defeito existir; quando for corrigido, o xfail
-vira "XPASS" e falha: aí é só tirar a marca. Os testes sem marca guardam o
-que a auditoria conferiu e está CERTO (R7, R8 e a carteira entre locais).
+Cada teste nasceu com ``xfail(strict=True)`` documentando um DEFEITO contra
+a régua confirmada pelo dono (R1 a R10 e as regras gerais). A leva L3
+(05/11/2026) corrigiu todos e tirou as marcas: agora cada um guarda a
+regra. Os que nunca tiveram marca guardam o que a auditoria conferiu e já
+estava CERTO (R7, R8 e a carteira entre locais). As regras novas da leva
+(supervisor avisado e respondendo cobrança, concessão pela gestão, D3, D7)
+estão em ``test_permissoes_l3.py``.
 
 A cena: o local A (Shopping Centro) é do cliente "Grupo GL", cujo gerente
 responde pelo cliente SEM vínculo direto ao local. Abaixo dele, na cadeia:
