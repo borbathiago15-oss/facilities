@@ -313,7 +313,8 @@ def _valor_do_parametro(nome, ids, entidade=None, endpoint=''):
         # Também nas telas novas (Fase 4a: /novo/preventiva/... e /api/v1/preventiva/...).
         return ids['plano']
     if endpoint.startswith(('equipes.', 'telas.equipes_', 'api_v1.api_equipes_')):
-        # Também nas telas novas (Fase 4b: /novo/equipes/... e /api/v1/equipes/...).
+        # Também nas telas novas (Fase 4b: /novo/equipes/... e /api/v1/equipes/...;
+        # Fase 1d: /novo/app/equipe e /api/v1/campo/equipe/... — api_equipes_app_*).
         por_equipe = {'cid': ids['local'], 'fid': ids['funcionario'], 'pid': ids['posto'],
                       'eid': ids['escala_trabalho'], 'prid': ids['falta']}
         if nome in por_equipe:
@@ -327,7 +328,8 @@ def _valor_do_parametro(nome, ids, entidade=None, endpoint=''):
         if nome in por_material:
             return por_material[nome]
     if endpoint.startswith(('visitas.', 'telas.visitas_', 'api_v1.api_visitas_')):
-        # Também nas telas novas (Fase 4b: /novo/visitas/... e /api/v1/visitas/...).
+        # Também nas telas novas (Fase 4b: /novo/visitas/... e /api/v1/visitas/...;
+        # Fase 1d: /novo/app/visitas/<id> e /api/v1/campo/visitas/<id> — visitas_app_*).
         por_visita = {'cid': ids['local'], 'pid': ids['programada'], 'vid': ids['visita'],
                       'vfid': ids['foto_visita']}
         if nome in por_visita:
@@ -524,6 +526,9 @@ def test_a_marca_aparece_para_quem_e_de_a(app_module, local_a):
     assert MARCA in c.get(f'/api/v1/visitas/locais/{a}').get_data(as_text=True)
     assert MARCA in c.get(f'/api/v1/materiais/locais/{a}').get_data(as_text=True)
     assert MARCA in c.get('/api/v1/materiais/pedidos').get_data(as_text=True)
+    # Fase 1d: o aplicativo de campo novo — a visita feita de A e a equipe do dia.
+    assert MARCA in c.get(f"/api/v1/campo/visitas/{local_a['visita']}").get_data(as_text=True)
+    assert MARCA in c.get('/api/v1/campo/equipe').get_data(as_text=True)
     # Fase 4c: o relatório do cliente de A.
     mes = local_a['mes_relatorio']
     assert MARCA in c.get(f'/api/v1/relatorios/cliente/{a}/{mes}').get_data(as_text=True)

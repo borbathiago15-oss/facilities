@@ -440,6 +440,16 @@ CONHECIDOS = {
     ('visitas.foto', 'id'): 'E7',
     ('visitas.local', 'id'): 'E7',
     ('visitas.ver', 'id'): 'E7',
+    # Fase 1d: as telas novas do aplicativo de campo chamam as MESMAS funções
+    # das antigas (equipes.app_cobertura, materiais.app_*, visitas.ver/fazer).
+    ('api_v1.api_equipes_app_cobertura', 'id'): 'E7',
+    ('api_v1.api_materiais_app_consumo', 'numero'): 'E3',
+    ('api_v1.api_materiais_app_consumo', 'texto'): 'E5',
+    ('api_v1.api_materiais_app_pedido', 'numero'): 'E3',
+    ('api_v1.api_materiais_app_pedido', 'texto'): 'E5',
+    ('api_v1.api_visitas_app_fazer', 'id'): 'E7',
+    ('api_v1.api_visitas_app_ver', 'id'): 'E7',
+    ('telas.visitas_app_ver', 'id'): 'E7',
 }
 
 # ── O vocabulário: todos os nomes de campo que o código lê ────────────────
