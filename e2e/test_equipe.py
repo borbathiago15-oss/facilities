@@ -3,8 +3,11 @@
 * Equipe de hoje: marca a falta da Ana, registra que a Mariana cobriu por
   atestado — as tarefas da rota do posto deixam de ser da Ana;
 * Visita de supervisão: abre a visita do dia, responde, anexa uma foto e registra.
+
+Rodam na tela antiga (``/app``) e na nova, em React (``/novo/app``, Fase 1d):
+a fixture ``campo``.
 """
-from conftest import abrir_contexto, entrar
+from conftest import abrir_contexto, entrar, tela_pronta
 
 
 def _sem_rolagem_lateral(pg):
@@ -14,21 +17,25 @@ def _sem_rolagem_lateral(pg):
     assert pg.evaluate('document.documentElement.scrollWidth') <= pg.viewport_size['width']
 
 
-def test_sueli_lanca_a_falta_e_a_cobertura(servidor, navegador, perfil):
+def test_sueli_lanca_a_falta_e_a_cobertura(servidor, navegador, perfil, campo):
     b, ctx = abrir_contexto(navegador, perfil)
     try:
         pg = ctx.new_page()
         entrar(pg, servidor['base'], 'sueli@e2e.test')
-        pg.goto(servidor['base'] + '/app/')
+        pg.goto(servidor['base'] + campo + '/')
         pg.get_by_role('link', name='Equipe de hoje').click()
+        pg.wait_for_url(f'**{campo}/equipe')
+        tela_pronta(pg, 'campo-equipe')
         pg.wait_for_selector('text=Ana Souza')
         pg.get_by_role('button', name='Faltou').click()
         pg.wait_for_selector('text=Alguém cobriu esta falta?')
+        pg.wait_for_selector('text=Ana Souza: faltou.')
         pg.get_by_text('Alguém cobriu esta falta?').click()
         pg.get_by_label('Quem cobriu').select_option(label='Mariana Lima')
         pg.get_by_label('Motivo').fill('atestado médico')
         pg.get_by_role('button', name='Registrar cobertura').click()
         pg.wait_for_selector('text=Cobertura registrada: Mariana Lima')
+        assert campo + '/equipe' in pg.url
         assert servidor['sql']("SELECT situacao FROM presencas") == [('faltou',)]
         assert servidor['sql']("SELECT motivo FROM coberturas") == [('atestado médico',)]
         # Mariana não usa o aplicativo: as tarefas da rota ficam sem escalado
@@ -43,20 +50,25 @@ def test_sueli_lanca_a_falta_e_a_cobertura(servidor, navegador, perfil):
         b.close()
 
 
-def test_sueli_faz_a_visita_de_supervisao(servidor, navegador, perfil):
+def test_sueli_faz_a_visita_de_supervisao(servidor, navegador, perfil, campo):
     b, ctx = abrir_contexto(navegador, perfil)
     try:
         pg = ctx.new_page()
         entrar(pg, servidor['base'], 'sueli@e2e.test')
-        pg.goto(servidor['base'] + '/app/')
+        pg.goto(servidor['base'] + campo + '/')
         pg.get_by_role('link', name='Visitas de supervisão').click()
+        pg.wait_for_url(f'**{campo}/visitas')
+        tela_pronta(pg, 'campo-visitas')
         pg.get_by_role('link', name='Visita semanal').click()
+        pg.wait_for_url(f'**{campo}/visitas/*')
+        tela_pronta(pg, 'campo-visita')
         pg.locator('label.fc-opcao', has_text='Sim').click()
         # Fase 10: uma foto livre da visita (reduzida no aparelho antes de subir).
         import os
         foto = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'facilities',
                             'static', 'pwa', 'icone-192.png')
         pg.set_input_files('#f_livre', foto)
+        pg.wait_for_selector('[data-resumo-de="f_livre"]:has-text("foto")')
         pg.get_by_role('button', name='Registrar a visita').click()
         pg.wait_for_selector('text=Tudo conforme')
         assert servidor['sql']("SELECT status, n_nao_conformes FROM visitas") == [('feita', 0)]
