@@ -349,7 +349,9 @@ def acao_autorizar_passagem(uid, autorizar):
     carteira de quem está logado. A mesma regra nas duas telas."""
     from facilities.core.models import User
     _exigir_montagem()
-    pessoa = db.session.get(User, uid)
+    # Id que não cabe na coluna (``/convites/pessoas/99999999999999999999``)
+    # é 404, não 500.
+    pessoa = db.session.get(User, uid) if 0 < uid < 2 ** 31 else None
     if pessoa is None or not montagem.pode_autorizar_passagem(current_user, pessoa):
         abort(404)
     try:
