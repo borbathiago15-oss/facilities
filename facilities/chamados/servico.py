@@ -349,6 +349,8 @@ def abrir(user, client_id, titulo, descricao='', local='', categoria='outro',
         from facilities.core import push
         push.avisar(avisados, f'Urgente: {ch.numero}', f'{contrato.name} · {ch.titulo}',
                     f'/chamados/{ch.id}', marca=f'novo-{ch.id}')
+    # Para a tela dizer a verdade (D3): sem ninguém avisado, ela não promete.
+    ch.avisados_na_abertura = avisados
     return ch
 
 

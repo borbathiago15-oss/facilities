@@ -188,8 +188,16 @@ def acao_criar(f, arquivos):
     db.session.commit()
     if erro:
         flash(f'Chamado {ch.numero} aberto, mas {erro}', 'warning')
-    else:
+    elif not criado:
+        # O mesmo envio chegando de novo: o primeiro já avisou (ou não).
+        flash(f'Chamado {ch.numero} aberto.', 'success')
+    elif getattr(ch, 'avisados_na_abertura', None):
         flash(f'Chamado {ch.numero} aberto. Os gestores do contrato foram avisados.', 'success')
+    else:
+        # D3: a tela não promete o que não aconteceu. O chamado fica salvo.
+        flash(f'Chamado {ch.numero} aberto, mas ninguém foi avisado: nenhum gestor está '
+              f'ligado a este local para ser avisado. Avise a gestão por telefone ou '
+              f'mensagem e peça ao administrador para ligar um gestor ao local.', 'warning')
     return url_for('chamados.ver', chamado_id=ch.id)
 
 

@@ -167,3 +167,36 @@ def test_b_supervisor_de_outro_local_e_encarregado_nao_respondem(app_module, cen
         assert r.status_code in (400, 403), email
     with app_module.app.app_context():
         assert db.session.get(Cobranca, cid).status == 'aberta'
+
+
+# ── D3: sem ninguém para avisar, a tela não promete ─────────────────────────
+
+def test_d3_local_sem_gestao_salva_o_chamado_e_diz_que_ninguem_foi_avisado(app_module, cena):
+    """O Condomínio Sul não tem cliente, gerente nem cadeia: só o encarregado."""
+    from app import db
+    from facilities.chamados.models import Chamado
+    with app_module.app.app_context():
+        fabrica.pessoa(app_module, 'l3.enc.sul@trino.com', 'encarregado',
+                       locais=['Condomínio Sul'])
+        sul = fabrica.local('Condomínio Sul').id
+    c = fabrica.entrar(app_module, 'l3.enc.sul@trino.com')
+    r = c.post('/chamados/', data={'client_id': sul, 'titulo': 'Portão travado',
+                                   'prioridade': 'urgente', 'categoria': 'outro'})
+    assert r.status_code == 302
+    with c.session_transaction() as s:
+        recados = ' '.join(t for _, t in s.get('_flashes', []))
+    assert 'foram avisados' not in recados and 'ninguém foi avisado' in recados
+    # A tela nova recebe o mesmo recado.
+    r = c.post('/api/v1/chamados/', json={'client_id': sul, 'titulo': 'Luz do hall',
+                                          'prioridade': 'media', 'categoria': 'eletrica'})
+    assert r.status_code == 200
+    assert 'ninguém foi avisado' in r.get_json()['recados'][0]['texto']
+    with app_module.app.app_context():
+        assert Chamado.query.filter_by(client_id=sul, titulo='Portão travado').count() == 1
+
+
+def test_d3_com_gestao_avisada_o_recado_segue_o_mesmo(app_module, cena):
+    c = fabrica.entrar(app_module, 'aud.encarregado@trino.com')
+    r = c.post('/api/v1/chamados/', json={'client_id': cena['local'], 'titulo': 'Torneira',
+                                          'prioridade': 'media', 'categoria': 'hidraulica'})
+    assert 'Os gestores do contrato foram avisados.' in r.get_json()['recados'][0]['texto']
