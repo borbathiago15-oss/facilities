@@ -4,7 +4,7 @@
 * o encarregado abre "Meu turno" (com os dados para funcionar sem sinal),
   lê o QR (selo do servidor) e registra a execução com foto;
 * quem não é da gestão não monta; quem não é do local não vê;
-* o agendador por HTTP exige o token.
+* o agendador por HTTP não existe (R9): roda só pelo comando.
 """
 import io
 import json
@@ -132,15 +132,16 @@ def test_qr_leva_o_posto_ao_turno(app_module, montado):
     assert r.status_code == 302 and r.headers['Location'].endswith(f"/app/turno?ponto={montado['qr']}")
 
 
-def test_agendador_http_exige_token(app_module, monkeypatch):
+def test_agendador_http_nao_existe_nem_com_o_token(app_module, monkeypatch):
+    """R9 (05/11/2026): a rota foi desligada. Antes este teste garantia que
+    ela exigia o token; agora nem o token certo a liga."""
     c = app_module.app.test_client()
     monkeypatch.delenv('AGENDADOR_TOKEN', raising=False)
     assert c.post('/rotas/agendador').status_code == 404
     monkeypatch.setenv('AGENDADOR_TOKEN', 'segredo-do-relogio')
-    assert c.post('/rotas/agendador').status_code == 403
-    assert c.post('/rotas/agendador', headers={'Authorization': 'Bearer errado'}).status_code == 403
+    assert c.post('/rotas/agendador').status_code == 404
     r = c.post('/rotas/agendador', headers={'Authorization': 'Bearer segredo-do-relogio'})
-    assert r.status_code == 200 and r.get_json()['ok'] is True
+    assert r.status_code == 404
 
 
 def test_comando_do_agendador(app_module):

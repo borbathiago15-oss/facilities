@@ -104,10 +104,11 @@ Passo a passo do Railway (a hospedagem escolhida): `docs/DEPLOY_RAILWAY.md`.
 
 - **Agendador das rotas**: gera as tarefas do dia, avisa a hora de cada uma,
   pede e fecha as confirmações de presença e marca as perdidas. Precisa
-  rodar **a cada 5 minutos**, por um destes caminhos:
-  `flask --app facilities agendador rodar` (cron do servidor) ou
-  `POST /rotas/agendador` com `Authorization: Bearer $AGENDADOR_TOKEN`
-  (relógio externo da hospedagem; sem `AGENDADOR_TOKEN` a rota não existe).
+  rodar **a cada 5 minutos** pelo comando
+  `flask --app facilities agendador rodar` (o Cron do Railway, ou o cron do
+  servidor). Não há mais agendador por endereço da internet: o antigo
+  `POST /rotas/agendador` foi desligado (05/11/2026) e `AGENDADOR_TOKEN`
+  não liga nada.
   Pode rodar quantas vezes quiser: não duplica nada. Sem agendador, as
   tarefas do dia ainda aparecem (a tela gera as de hoje), mas sem avisos.
 - **Avisos no celular (Web Push)**: `flask --app facilities push chaves` gera

@@ -271,8 +271,6 @@ def test_r6_coordenador_nao_monta_local_em_outro_cliente_do_gerente(app_module, 
 
 # ── R9: o agendador pela internet fica desligado ─────────────────────────
 
-@pytest.mark.xfail(strict=True, reason='BUG R9: POST /rotas/agendador ainda existe e liga '
-                   'com a variável AGENDADOR_TOKEN (rotas/telas.py agendador_http)')
 def test_r9_agendador_pela_internet_nao_existe(app_module, cena, monkeypatch):
     monkeypatch.setitem(os.environ, 'AGENDADOR_TOKEN', 'token-da-auditoria')
     c = app_module.app.test_client()

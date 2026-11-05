@@ -57,12 +57,12 @@ MIGRADOS_EXATOS = ('/painel', '/')
 # de insumo (``/materiais/pedidos/<id>/foto``) e o PDF e o Excel do
 # relatório do cliente (``/relatorios/cliente/<id>/<mês>/arquivo.pdf``).
 FORA = ('/etiquetas.pdf', '/logo.png', '/foto', '/arquivo.pdf', '/arquivo.xlsx')
-# Da rotina dos locais, os arquivos (POP/FIT, fotos, referências) e o
-# agendador continuam no servidor; dos chamados, as fotos e os PDFs; do
+# Da rotina dos locais, os arquivos (POP/FIT, fotos, referências) continuam
+# no servidor; dos chamados, as fotos e os PDFs; do
 # portal do cliente, as fotos e os POP/FIT (o PDF e o Excel do relatório já
 # saem pelo ``FORA``).
 FORA_DAS_ROTAS = ('/rotas/documentos/', '/rotas/fotos/', '/rotas/referencias/',
-                  '/rotas/ocorrencias/', '/rotas/agendador', '/chamados/anexos/',
+                  '/rotas/ocorrencias/', '/chamados/anexos/',
                   '/cliente/fotos/', '/cliente/documentos/')
 
 
