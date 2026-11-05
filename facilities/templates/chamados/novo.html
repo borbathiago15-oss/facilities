@@ -7,7 +7,7 @@
 {% block content %}
 <div class="fc-cartao" style="max-width:720px">
   <h1 class="fc-titulo">Abrir chamado</h1>
-  <p class="fc-sub">Diga o que está errado e onde. Os gestores do contrato são avisados e atribuem a um técnico.</p>
+  <p class="fc-sub">Diga o que está errado e onde. A gestão e a supervisão do local são avisadas e escolhem quem vai atender.</p>
   <form method="post" action="{{ url_for('chamados.criar') }}" enctype="multipart/form-data">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="row g-3">

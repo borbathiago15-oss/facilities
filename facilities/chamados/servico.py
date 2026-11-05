@@ -8,9 +8,12 @@ Quem pode o quê (sempre dentro da carteira de contratos da pessoa):
 
 * abrir, comentar e anexar — quem age no módulo (encarregado, técnico,
   gestor, administrador);
-* atribuir, mudar prioridade e cancelar — gestor e administrador;
-* iniciar, pôr em espera, retomar e resolver — o técnico responsável, o
-  gestor e o administrador;
+* atribuir, mudar prioridade e cancelar — supervisor, gestor e
+  administrador (R3, 05/11/2026: o supervisor distribui);
+* iniciar, pôr em espera, retomar e resolver — o responsável, o
+  supervisor, o gestor e o administrador;
+* ser o responsável — técnico, supervisor, coordenador e gerente que
+  cuidam do local (``tecnicos_do_contrato``);
 * confirmar ("ficou bom") ou reabrir ("não ficou") — quem pediu, o gestor e
   o administrador;
 * a diretoria lê tudo e não altera nada.
@@ -89,6 +92,12 @@ def e_gestor(user):
     return user.e_gestao()
 
 
+def distribui(user):
+    """Quem distribui o chamado (atribui, muda prioridade, cancela e atende
+    qualquer um): a gestão e o supervisor (R3)."""
+    return user.e_gestao() or user.e_supervisor()
+
+
 def pode_ver(user, ch):
     return user.can_view(MODULO_CHAMADOS) and _na_carteira(user, ch.client_id)
 
@@ -98,11 +107,11 @@ def pode_agir(user, ch):
 
 
 def pode_gerir(user, ch):
-    return pode_agir(user, ch) and e_gestor(user)
+    return pode_agir(user, ch) and distribui(user)
 
 
 def pode_atender(user, ch):
-    return pode_agir(user, ch) and (e_gestor(user) or ch.responsavel_id == user.id)
+    return pode_agir(user, ch) and (distribui(user) or ch.responsavel_id == user.id)
 
 
 def pode_confirmar(user, ch):
@@ -136,8 +145,8 @@ def _ativos(q):
     return q.filter(User.is_active.is_(True), User.is_deleted.is_(False))
 
 
-# Quem pode ser o responsável por um chamado.
-PERFIS_QUE_RECEBEM = ('tecnico', 'pleno', 'gerente')
+# Quem pode ser o responsável por um chamado (R3: o supervisor também).
+PERFIS_QUE_RECEBEM = ('tecnico', 'supervisor', 'pleno', 'gerente')
 # Quem é a gestão do local nos avisos (chamado novo, insumo, cobrança...).
 PERFIS_GESTORES = ('pleno', 'gerente')
 
@@ -155,9 +164,9 @@ def pessoas_do_contrato(client_id, papeis):
 
 
 def tecnicos_do_contrato(client_id):
-    """Quem pode receber um chamado: técnicos e a gestão do local — e o
-    gestor regional com "todos os locais" (vê e recebe chamado de qualquer
-    local, mas não é avisado de todos: ``gestores_do_contrato``)."""
+    """Quem pode receber um chamado: técnicos, supervisores e a gestão do
+    local — e o gestor regional com "todos os locais" (vê e recebe chamado
+    de qualquer local, mas não é avisado de todos: ``gestores_do_contrato``)."""
     cuidam = pessoas_do_contrato(client_id, PERFIS_QUE_RECEBEM)
     ids = {u.id for u in cuidam}
     regionais = [u for u in _ativos(User.query.filter(
@@ -188,6 +197,14 @@ def gestores_do_contrato(client_id):
             and e_gestor(resp) and _na_carteira(resp, client_id)):
         ids.add(resp.id)
     return ids
+
+
+def avisados_de_chamado_novo(client_id):
+    """Quem recebe "Novo chamado": a gestão do local e os supervisores que
+    cuidam dele (regra A, 05/11/2026: o supervisor distribui, então precisa
+    saber que chegou chamado)."""
+    return gestores_do_contrato(client_id) | {
+        u.id for u in pessoas_do_contrato(client_id, ('supervisor',))}
 
 
 def _avisar(user_ids, ch, titulo, mensagem, exceto=None):
@@ -323,7 +340,7 @@ def abrir(user, client_id, titulo, descricao='', local='', categoria='outro',
     db.session.add(ch)
     db.session.flush()
     _evento(ch, 'aberto', user, f'Prioridade {PRIORIDADES[prioridade].lower()}.')
-    avisados = _avisar(gestores_do_contrato(client_id), ch, f'Novo chamado: {ch.titulo}',
+    avisados = _avisar(avisados_de_chamado_novo(client_id), ch, f'Novo chamado: {ch.titulo}',
                        f'{contrato.name} · prioridade {PRIORIDADES[prioridade].lower()}'
                        f'{" · " + ch.local if ch.local else ""}. Atribua a um técnico.',
                        exceto=user.id)

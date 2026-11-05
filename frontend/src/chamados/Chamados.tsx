@@ -137,7 +137,7 @@ export function Novo({ dados }: { dados: DadosDoNovo }) {
       <RecadosDoEnvio />{aviso}
       <div className="fc-cartao" style={{ maxWidth: '720px' }}>
         <h1 className="fc-titulo">Abrir chamado</h1>
-        <p className="fc-sub">Diga o que está errado e onde. Os gestores do contrato são avisados e atribuem a um técnico.</p>
+        <p className="fc-sub">Diga o que está errado e onde. A gestão e a supervisão do local são avisadas e escolhem quem vai atender.</p>
         <form method="post" encType="multipart/form-data" onSubmit={submeter(`${API}/`)}>
           <div className="row g-3">
             <div className="col-md-6">

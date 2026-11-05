@@ -103,3 +103,23 @@ def test_r5_editar_a_diretoria_mantem_todos_os_locais(app_module, cena):
     with app_module.app.app_context():
         from app import User, db
         assert db.session.get(User, uid).all_clients is True
+
+
+# ── R3 e regra A: o supervisor distribui e é avisado do chamado novo ────────
+
+def test_a_supervisor_recebe_o_aviso_de_chamado_novo_do_local_dele(app_module, cena):
+    with app_module.app.app_context():
+        fora = fabrica.pessoa(app_module, 'l3.sup.fora@trino.com', 'supervisor',
+                              locais=['Hospital Norte'])
+    _abrir_chamado(app_module, 'aud.encarregado@trino.com', cena['local'])
+    assert any('Novo chamado' in t for t in _avisos(app_module, cena['sup']))
+    assert not _avisos(app_module, fora)
+
+
+def test_r3_o_supervisor_ve_os_controles_de_distribuir_nas_duas_telas(app_module, cena):
+    cid = _abrir_chamado(app_module, 'aud.encarregado@trino.com', cena['local'])
+    c = fabrica.entrar(app_module, 'aud.supervisor@trino.com')
+    d = c.get(f'/api/v1/chamados/{cid}').get_json()
+    assert {'atribuir', 'prioridade', 'cancelar', 'iniciar'} <= set(d['acoes'])
+    html = c.get(f'/chamados/{cid}').get_data(as_text=True)
+    assert 'name="acao" value="atribuir"' in html and 'Aud.Supervisor' in html.replace(' ', '')

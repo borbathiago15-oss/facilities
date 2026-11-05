@@ -134,8 +134,6 @@ def _acao(app_module, email, chamado_id, **corpo):
     return c.post(f'/api/v1/chamados/{chamado_id}/acao', json=corpo)
 
 
-@pytest.mark.xfail(strict=True, reason='BUG R3: chamados.servico.pode_gerir exige e_gestao(); '
-                   'o supervisor não atribui o técnico')
 def test_r3_supervisor_atribui_o_tecnico(app_module, cena):
     cid = _abrir_chamado(app_module, 'aud.encarregado@trino.com', cena['local'])
     r = _acao(app_module, 'aud.supervisor@trino.com', cid, acao='atribuir',
@@ -143,7 +141,6 @@ def test_r3_supervisor_atribui_o_tecnico(app_module, cena):
     assert r.status_code == 200, r.get_data(as_text=True)
 
 
-@pytest.mark.xfail(strict=True, reason='BUG R3: pode_gerir barra o supervisor na prioridade')
 def test_r3_supervisor_muda_a_prioridade(app_module, cena):
     cid = _abrir_chamado(app_module, 'aud.encarregado@trino.com', cena['local'])
     r = _acao(app_module, 'aud.supervisor@trino.com', cid, acao='prioridade',
@@ -151,7 +148,6 @@ def test_r3_supervisor_muda_a_prioridade(app_module, cena):
     assert r.status_code == 200, r.get_data(as_text=True)
 
 
-@pytest.mark.xfail(strict=True, reason='BUG R3: pode_gerir barra o supervisor no cancelamento')
 def test_r3_supervisor_cancela(app_module, cena):
     cid = _abrir_chamado(app_module, 'aud.encarregado@trino.com', cena['local'])
     r = _acao(app_module, 'aud.supervisor@trino.com', cid, acao='cancelar',
@@ -159,16 +155,12 @@ def test_r3_supervisor_cancela(app_module, cena):
     assert r.status_code == 200, r.get_data(as_text=True)
 
 
-@pytest.mark.xfail(strict=True, reason='BUG R3: tecnicos_do_contrato só aceita técnico, '
-                   'coordenador e gerente; o supervisor não pode ser o responsável')
 def test_r3_supervisor_pode_ser_o_responsavel(app_module, cena):
     with app_module.app.app_context():
         from facilities.chamados.servico import tecnicos_do_contrato
         assert cena['sup'] in {u.id for u in tecnicos_do_contrato(cena['local'])}
 
 
-@pytest.mark.xfail(strict=True, reason='BUG R3: pode_atender exige gestão ou ser o '
-                   'responsável; o supervisor não inicia o atendimento')
 def test_r3_supervisor_assume_e_atende(app_module, cena):
     cid = _abrir_chamado(app_module, 'aud.encarregado@trino.com', cena['local'])
     r = _acao(app_module, 'aud.supervisor@trino.com', cid, acao='iniciar')
