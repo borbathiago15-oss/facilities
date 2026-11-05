@@ -3,8 +3,9 @@
 Decisões do dono (22/10/2026):
 
 * O GERENTE cria cliente (e vira o gerente responsável por ele) e locais nos
-  clientes dele. O COORDENADOR cria locais só nos clientes do gerente dele
-  (o primeiro gerente acima na cadeia). O administrador faz tudo.
+  clientes dele. O COORDENADOR cria locais só nos clientes da carteira DELE
+  (os clientes dos locais que ele vê — R6, 05/11/2026; antes eram todos os
+  clientes do gerente acima). O administrador faz tudo.
 * Convites seguem a hierarquia: o gerente convida coordenador, supervisor,
   encarregado/ASG, técnico e cliente; o coordenador convida supervisor,
   encarregado/ASG e técnico. Ninguém convida administrador nem diretoria
@@ -77,8 +78,13 @@ def clientes_da_montagem(user):
     elif papel == 'gerente':
         q = q.filter(Contratante.gerente_id == user.id)
     elif papel == 'pleno':
-        g = gerente_acima(user)
-        q = q.filter(Contratante.gerente_id == (g.id if g else -1))
+        # R6: só os clientes dos locais da carteira dele.
+        from facilities.core.hierarquia import carteira
+        ids = carteira(user)
+        if ids is not None:
+            dele = {cid for (cid,) in db.session.query(Client.contratante_id).filter(
+                Client.id.in_(ids or [-1]), Client.contratante_id.isnot(None))}
+            q = q.filter(Contratante.id.in_(dele or [-1]))
     else:
         return []
     return q.order_by(Contratante.nome).all()

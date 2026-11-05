@@ -281,3 +281,18 @@ def test_d7_desativar_avisa_o_administrador_do_que_ficou(app_module, cena):
     with adm.session_transaction() as s:
         recados = ' '.join(t for _, t in s.get('_flashes', []))
     assert '1 plano(s) preventivo(s)' in recados and 'gestão de cada local' in recados
+
+
+# ── R6: o coordenador monta só na carteira dele ─────────────────────────────
+
+def test_r6_lista_de_clientes_do_coordenador_e_so_a_da_carteira(app_module, cena):
+    from app import User, db
+    from facilities.cadastros import montagem
+    with app_module.app.app_context():
+        ple = db.session.get(User, cena['ple'])
+        assert [c.id for c in montagem.clientes_da_montagem(ple)] == [cena['cliente']]
+        ger = db.session.get(User, cena['ger'])
+        assert {c.id for c in montagem.clientes_da_montagem(ger)} == {cena['cliente'], cena['hn']}
+    c = fabrica.entrar(app_module, 'aud.pleno@trino.com')
+    assert c.get(f"/novo-contrato/cliente/{cena['hn']}/local").status_code == 403
+    assert c.get(f"/novo-contrato/cliente/{cena['cliente']}/local").status_code == 200

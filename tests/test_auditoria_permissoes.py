@@ -240,8 +240,6 @@ def test_r5_diretoria_nunca_grava(app_module, cena):
 
 # ── R6: o coordenador monta locais só na carteira dele ───────────────────
 
-@pytest.mark.xfail(strict=True, reason='BUG R6: cadastros/montagem.clientes_da_montagem dá ao '
-                   'coordenador TODOS os clientes do gerente acima dele')
 def test_r6_coordenador_nao_monta_local_em_outro_cliente_do_gerente(app_module, cena):
     c = fabrica.entrar(app_module, 'aud.pleno@trino.com')
     r = c.post(f"/api/v1/cadastros/novo-contrato/cliente/{cena['hn']}/local",
