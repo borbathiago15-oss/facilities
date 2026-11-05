@@ -104,16 +104,23 @@ def acao_editar(pid, dados):
 
 
 # ── Aplicativo ────────────────────────────────────────────────────────────
+# As telas antiga e nova (React, Fase 1d: ``/novo/app/visitas...`` e
+# ``/api/v1/campo/visitas...``) saem das MESMAS funções: ``contexto_app_*``
+# monta a página; ``acao_fazer`` registra a visita e devolve o endereço de
+# volta.
 
 @bp.get('/app/visitas')
 @login_required
 def app_lista():
+    return render_template('visitas/app_lista.html', **contexto_app_lista())
+
+
+def contexto_app_lista():
     if current_user._effective_role() not in servico.PERFIS_QUE_VISITAM:
         raise Forbidden('As visitas de supervisão são feitas pelo supervisor ou pela gestão.')
     locais = clientes_visiveis()
-    return render_template('visitas/app_lista.html',
-                           visitas=servico.abertas([c.id for c in locais], current_user),
-                           hoje=tempo.hoje())
+    return dict(visitas=servico.abertas([c.id for c in locais], current_user),
+                hoje=tempo.hoje())
 
 
 def _visita(vid):
@@ -128,38 +135,46 @@ def _visita(vid):
 @bp.get('/app/visitas/<int:vid>')
 @login_required
 def ver(vid):
+    return render_template('visitas/app_visita.html', **contexto_app_visita(vid))
+
+
+def contexto_app_visita(vid):
     from facilities.rotas.servico import itens_da_versao
     v = _visita(vid)
     versao = v.versao if v.status != PREVISTA else v.programada.modelo.versao_atual
     itens = itens_da_versao(versao) if versao else []
-    return render_template('visitas/app_visita.html', v=v, itens=itens, versao=versao,
-                           textos={i['codigo']: i['texto'] for i in itens},
-                           respostas=servico.respostas_de(v),
-                           pode_fazer=v.status == PREVISTA and servico.pode_fazer(current_user, v),
-                           hoje=tempo.hoje())
+    return dict(v=v, itens=itens, versao=versao,
+                textos={i['codigo']: i['texto'] for i in itens},
+                respostas=servico.respostas_de(v),
+                pode_fazer=v.status == PREVISTA and servico.pode_fazer(current_user, v),
+                hoje=tempo.hoje())
 
 
 @bp.post('/app/visitas/<int:vid>')
 @login_required
 def fazer(vid):
+    return redirect(acao_fazer(vid, request.form, request.files))
+
+
+def acao_fazer(vid, dados, arquivos):
     v = _visita(vid)
-    respostas = {k[2:]: val for k, val in request.form.items() if k.startswith('r_')}
+    respostas = {k[2:]: val for k, val in dados.items() if k.startswith('r_')}
     # Fase 10: f_antes, f_depois, f_livre e f_item:<código> (o que o checklist pede).
-    fotos = {k[2:]: request.files.getlist(k) for k in request.files if k.startswith('f_')}
+    fotos = {k[2:]: arquivos.getlist(k) for k in arquivos if k.startswith('f_')}
     try:
-        servico.registrar(current_user, v, respostas, request.form.get('observacao'),
+        servico.registrar(current_user, v, respostas, dados.get('observacao'),
                           fotos=fotos)
         db.session.commit()
     except RegraDaVisita as erro:
         db.session.rollback()
         flash(erro.mensagem, 'danger')
-        return redirect(url_for('visitas.ver', vid=v.id))
+        return url_for('visitas.ver', vid=v.id)
     if v.chamado_id:
         flash(f'Visita registrada. {v.n_nao_conformes} item(ns) não conforme(s): o chamado '
               f'{v.chamado.numero} foi aberto e a gestão avisada.', 'warning')
     else:
         flash('Visita registrada. Tudo conforme.', 'success')
-    return redirect(url_for('visitas.ver', vid=v.id))
+    return url_for('visitas.ver', vid=v.id)
 
 
 @bp.get('/app/visitas/fotos/<int:vfid>')

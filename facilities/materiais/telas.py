@@ -48,12 +48,6 @@ def _local(cid):
     return loc
 
 
-def _erro(erro, destino):
-    db.session.rollback()
-    flash(erro.mensagem, 'danger')
-    return redirect(destino)
-
-
 def _recusa(erro, destino):
     """A recusa da regra numa ação do site: desfaz, deixa o recado e devolve
     o endereço de volta (a tela antiga redireciona; a nova o recebe)."""
@@ -306,16 +300,25 @@ def _pode_usar_app():
         raise Forbidden('Seu perfil não lança material.')
 
 
+# As telas antiga e nova (React, Fase 1d: ``/novo/app/materiais`` e
+# ``/api/v1/campo/materiais...``) saem das MESMAS funções: ``contexto_app``
+# monta a página; ``acao_app_*`` faz o envio (o mesmo recado do aplicativo,
+# com o nome do local) e devolve o endereço de volta.
+
 @bp.get('/app/materiais')
 @login_required
 def app():
+    return render_template('materiais/app.html', **contexto_app())
+
+
+def contexto_app():
     from facilities.chamados.models import STATUS_EM_ABERTO, Chamado
     from facilities.rotas.models import Rota
     _pode_usar_app()
     locais = clientes_visiveis()
     ids = [c.id for c in locais] or [-1]
-    return render_template(
-        'materiais/app.html', locais=locais,
+    return dict(
+        locais=locais,
         materiais=Material.query.filter_by(is_active=True).order_by(Material.nome).all(),
         chamados=Chamado.query.filter(Chamado.client_id.in_(ids),
                                       Chamado.status.in_(STATUS_EM_ABERTO))
@@ -329,28 +332,36 @@ def app():
 @bp.post('/app/materiais/consumo')
 @login_required
 def app_consumo():
+    return redirect(acao_app_consumo(request.form))
+
+
+def acao_app_consumo(dados):
     _pode_usar_app()
-    loc = _local(servico._id(request.form, 'client_id') or -1)
+    loc = _local(servico._id(dados, 'client_id') or -1)
     try:
-        mov = servico.consumir(current_user, loc, request.form)
+        mov = servico.consumir(current_user, loc, dados)
         db.session.commit()
     except RegraDoMaterial as erro:
-        return _erro(erro, url_for('materiais.app'))
+        return _recusa(erro, url_for('materiais.app'))
     flash(f'Consumo registrado: {fmt_qtd(abs(mov.quantidade))} {mov.material.unidade} de '
           f'{mov.material.nome} ({loc.name}).', 'success')
-    return redirect(url_for('materiais.app'))
+    return url_for('materiais.app')
 
 
 @bp.post('/app/materiais/pedido')
 @login_required
 def app_pedido():
+    return redirect(acao_app_pedido(request.form, request.files))
+
+
+def acao_app_pedido(dados, arquivos):
     _pode_usar_app()
-    loc = _local(servico._id(request.form, 'client_id') or -1)
-    arq = request.files.get('foto')
+    loc = _local(servico._id(dados, 'client_id') or -1)
+    arq = arquivos.get('foto')
     try:
-        servico.pedir(current_user, loc, request.form, arq if arq and arq.filename else None)
+        servico.pedir(current_user, loc, dados, arq if arq and arq.filename else None)
         db.session.commit()
     except RegraDoMaterial as erro:
-        return _erro(erro, url_for('materiais.app'))
+        return _recusa(erro, url_for('materiais.app'))
     flash('Pedido enviado ao gestor do contrato.', 'success')
-    return redirect(url_for('materiais.app'))
+    return url_for('materiais.app')
