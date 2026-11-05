@@ -67,7 +67,7 @@ export function CobrancaDaEquipe({ dados }: { dados: DadosDaCobranca }) {
           </form>
         </div>
       ) : dados.status === 'aberta' ? (
-        <div className="alert alert-info">Quem responde é a coordenação do contrato.</div>
+        <div className="alert alert-info">Quem responde é a coordenação ou a supervisão do local.</div>
       ) : dados.status === 'respondida' ? (
         <div className="alert alert-info">Respondida. Esperando o cliente confirmar ou reabrir.</div>
       ) : null}

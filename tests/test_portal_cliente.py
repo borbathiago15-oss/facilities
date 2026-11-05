@@ -310,10 +310,12 @@ def test_cobranca_do_comeco_ao_fim(app_module, cena, liberado):
     # Aparece em Demandas, com a data escolhida.
     coord = fabrica.entrar(app_module, 'coord.gl@trino.com')
     assert 'Banheiro sujo' in coord.get('/demandas/?tipo=cobranca').get_data(as_text=True)
-    # Supervisor vê, mas não responde; coordenador de outro local nem abre.
-    sup = fabrica.entrar(app_module, 'sup.gl@trino.com')
-    assert sup.get(f'/cobrancas/{cid}').status_code == 200
-    sup.post(f'/cobrancas/{cid}/responder', data={'texto': 'do supervisor'})
+    # O encarregado vê, mas não responde (o supervisor responde desde a regra
+    # B, 05/11/2026: ver test_auditoria_permissoes); coordenador de outro
+    # local nem abre.
+    enc = fabrica.entrar(app_module, 'enc.gl@trino.com')
+    assert enc.get(f'/cobrancas/{cid}').status_code == 200
+    enc.post(f'/cobrancas/{cid}/responder', data={'texto': 'do encarregado'})
     assert fabrica.entrar(app_module, 'coord.hn@trino.com').get(
         f'/cobrancas/{cid}').status_code == 403
     with app_module.app.app_context():

@@ -123,3 +123,47 @@ def test_r3_o_supervisor_ve_os_controles_de_distribuir_nas_duas_telas(app_module
     assert {'atribuir', 'prioridade', 'cancelar', 'iniciar'} <= set(d['acoes'])
     html = c.get(f'/chamados/{cid}').get_data(as_text=True)
     assert 'name="acao" value="atribuir"' in html and 'Aud.Supervisor' in html.replace(' ', '')
+
+
+# ── Regra B: o supervisor responde a cobrança do cliente ────────────────────
+
+def _cobranca(app_module, cena):
+    from datetime import timedelta
+    from app import db
+    from facilities import tempo
+    from facilities.portal import servico as portal
+    with app_module.app.app_context():
+        cli = fabrica.cliente(app_module, 'l3.cliente@gl.com', cena['cliente'])
+        from app import User
+        cob = portal.abrir(db.session.get(User, cli), {
+            'client_id': str(cena['local']), 'titulo': 'Vidros', 'texto': 'Limpar os vidros',
+            'prazo': (tempo.hoje() + timedelta(days=3)).isoformat()})
+        db.session.commit()
+        return cob.id
+
+
+def test_b_supervisor_do_local_responde_a_cobranca_nas_duas_telas(app_module, cena):
+    from app import db
+    from facilities.portal.models import Cobranca
+    cid = _cobranca(app_module, cena)
+    c = fabrica.entrar(app_module, 'aud.supervisor@trino.com')
+    assert c.get(f'/api/v1/cobrancas/{cid}').get_json()['pode_responder'] is True
+    assert 'Resposta para o cliente' in c.get(f'/cobrancas/{cid}').get_data(as_text=True)
+    r = c.post(f'/api/v1/cobrancas/{cid}/responder', data={'texto': 'Vidros limpos às 9h.'})
+    assert r.status_code == 200, r.get_data(as_text=True)
+    with app_module.app.app_context():
+        assert db.session.get(Cobranca, cid).status == 'respondida'
+
+
+def test_b_supervisor_de_outro_local_e_encarregado_nao_respondem(app_module, cena):
+    from app import db
+    from facilities.portal.models import Cobranca
+    cid = _cobranca(app_module, cena)
+    with app_module.app.app_context():
+        fabrica.pessoa(app_module, 'l3.sup.hn@trino.com', 'supervisor', locais=['Hospital Norte'])
+    for email in ('l3.sup.hn@trino.com', 'aud.encarregado@trino.com'):
+        c = fabrica.entrar(app_module, email)
+        r = c.post(f'/api/v1/cobrancas/{cid}/responder', data={'texto': 'x'})
+        assert r.status_code in (400, 403), email
+    with app_module.app.app_context():
+        assert db.session.get(Cobranca, cid).status == 'aberta'

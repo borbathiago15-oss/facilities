@@ -118,8 +118,10 @@ def coordenacao_do_local(client_id):
 
 
 def pode_responder(user, cob):
+    """A gestão e, desde 05/11/2026 (regra B do dono), o supervisor do local
+    respondem a cobrança — sempre dentro da carteira."""
     from facilities.core.acesso import allowed_client_ids_or_none
-    if not user.e_gestao():
+    if not (user.e_gestao() or user.e_supervisor()):
         return False
     ids = allowed_client_ids_or_none(user)
     return ids is None or cob.client_id in ids
@@ -189,7 +191,7 @@ def abrir(user, form, agora=None):
 def responder(user, cob, form, agora=None):
     agora = agora or datetime.utcnow()
     if not pode_responder(user, cob):
-        raise RegraDaCobranca('Quem responde a cobrança é a coordenação do contrato.', 403)
+        raise RegraDaCobranca('Quem responde a cobrança é a coordenação ou a supervisão do local.', 403)
     cob = _travar(cob)
     if cob.status != ABERTA:
         raise RegraDaCobranca('Esta cobrança já foi respondida. Espere o cliente confirmar '
