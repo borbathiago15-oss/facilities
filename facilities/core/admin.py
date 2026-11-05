@@ -211,7 +211,27 @@ def acao_editar_usuario(uid, dados):
         u.session_epoch = (u.session_epoch or 0) + 1   # derruba as sessões abertas
     db.session.commit()
     flash(f'Cadastro de {u.name} atualizado.', 'success')
+    if era_ativo and not u.is_active:
+        pendente = _o_que_fica_com(u)
+        if pendente:
+            flash(f'{u.name} era responsável por {pendente}. Nada foi transferido: os avisos '
+                  f'disso passam para a gestão de cada local até ela escolher outro '
+                  f'responsável.', 'warning')
     return url_for('admin.usuarios')
+
+
+def _o_que_fica_com(u):
+    """D7: o que a pessoa desativada deixa (chamados em aberto e planos
+    preventivos ativos de que é responsável), em texto para o recado."""
+    from facilities.chamados.models import STATUS_EM_ABERTO, Chamado
+    from facilities.preventiva.models import PlanoPreventivo
+    n_ch = Chamado.query.filter(Chamado.responsavel_id == u.id,
+                                Chamado.status.in_(STATUS_EM_ABERTO)).count()
+    n_pl = PlanoPreventivo.query.filter(PlanoPreventivo.responsavel_id == u.id,
+                                        PlanoPreventivo.is_active.is_(True)).count()
+    partes = ([f'{n_ch} chamado(s) em aberto'] if n_ch else []) + \
+        ([f'{n_pl} plano(s) preventivo(s)'] if n_pl else [])
+    return ' e '.join(partes)
 
 
 @bp.post('/usuarios/<int:uid>/nova-senha')

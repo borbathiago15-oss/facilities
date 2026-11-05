@@ -303,9 +303,6 @@ def _desativar(app_module, uid):
         assert not db.session.get(User, uid).is_active
 
 
-@pytest.mark.xfail(strict=True, reason='BUG: desativar o técnico responsável de um plano '
-                   'preventivo não transfere nada; a ordem nova nasce com ele e ninguém '
-                   'ativo é avisado (preventiva/servico._abrir_ordem)')
 def test_desativar_responsavel_do_plano_nao_deixa_a_ordem_sem_ninguem(app_module, cena):
     from app import User, db
     from facilities import tempo
@@ -329,9 +326,6 @@ def test_desativar_responsavel_do_plano_nao_deixa_a_ordem_sem_ninguem(app_module
         assert Notification.query.count() > antes
 
 
-@pytest.mark.xfail(strict=True, reason='BUG: desativar o técnico responsável de um chamado '
-                   'aberto não o transfere; o aviso "vence em breve" vai só a ele '
-                   '(chamados.servico.avisar_prazos) e ninguém ativo recebe')
 def test_desativar_responsavel_do_chamado_nao_deixa_o_prazo_sem_aviso(app_module, cena):
     cid = _abrir_chamado(app_module, 'aud.encarregado@trino.com', cena['local'])
     assert _acao(app_module, 'aud.pleno@trino.com', cid, acao='atribuir',

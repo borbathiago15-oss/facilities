@@ -207,6 +207,26 @@ def avisados_de_chamado_novo(client_id):
         u.id for u in pessoas_do_contrato(client_id, ('supervisor',))}
 
 
+def responsavel_ativo(user_id, client_id):
+    """O responsável ainda pode atender este local? (ativo, não excluído e
+    com o local na carteira) — D7: desativar não transfere nada sozinho."""
+    u = db.session.get(User, user_id) if user_id else None
+    return (u is not None and u.is_active and not u.is_deleted
+            and u.can_view(MODULO_CHAMADOS) and _na_carteira(u, client_id))
+
+
+def quem_atende(ch):
+    """A quem vão os avisos de quem atende (prazo, reabertura): o
+    responsável, se ainda pode atender; senão a gestão do local.
+
+    Desativar o responsável não transfere o chamado (D7): sem esta volta, o
+    "vence em breve" ia só a ele, o ``_avisar`` o filtrava e ninguém sabia.
+    """
+    if responsavel_ativo(ch.responsavel_id, ch.client_id):
+        return {ch.responsavel_id}
+    return gestores_do_contrato(ch.client_id)
+
+
 def _avisar(user_ids, ch, titulo, mensagem, exceto=None):
     """Grava o aviso (sino) para cada pessoa — e devolve quem foi avisado.
 
@@ -635,8 +655,8 @@ def executar(user, ch, acao, form):
         ch.aviso_vencendo_em = None
         ch.aviso_vencido_em = None
         _evento(ch, 'reaberto', user, f'{texto} — novo prazo: {_prazo_txt(ch)}.')
-        _avisar([ch.responsavel_id] if ch.responsavel_id else gestores_do_contrato(ch.client_id),
-                ch, f'Chamado reaberto: {ch.titulo}', texto[:300], exceto=user.id)
+        _avisar(quem_atende(ch), ch, f'Chamado reaberto: {ch.titulo}', texto[:300],
+                exceto=user.id)
 
     elif acao == 'cancelar':
         _exigir(texto, 'Diga por que o chamado está sendo cancelado.', 400)
@@ -708,7 +728,8 @@ def _antecedencia(ch):
 
 
 def avisar_prazos(agora=None):
-    """Vence em breve: avisa quem atende. Venceu: avisa quem atende e a gestão.
+    """Vence em breve: avisa quem atende (``quem_atende``: o responsável, ou a
+    gestão do local se ele foi desativado). Venceu: quem atende e a gestão.
     Cada aviso uma vez só; em "Aguardando" o relógio está parado (D8)."""
     from facilities import tempo
     from facilities.core import push
@@ -719,7 +740,7 @@ def avisar_prazos(agora=None):
                                    Chamado.prazo.isnot(None),
                                    Chamado.aviso_vencido_em.is_(None)).all():
         link = f'/chamados/{ch.id}'
-        quem = {ch.responsavel_id} if ch.responsavel_id else gestores_do_contrato(ch.client_id)
+        quem = quem_atende(ch)
         if agora - ch.prazo > VENCIDO_HA_MUITO:
             ch.aviso_vencido_em = agora
             ch.aviso_vencendo_em = ch.aviso_vencendo_em or agora

@@ -200,3 +200,84 @@ def test_d3_com_gestao_avisada_o_recado_segue_o_mesmo(app_module, cena):
     r = c.post('/api/v1/chamados/', json={'client_id': cena['local'], 'titulo': 'Torneira',
                                           'prioridade': 'media', 'categoria': 'hidraulica'})
     assert 'Os gestores do contrato foram avisados.' in r.get_json()['recados'][0]['texto']
+
+
+# ── D7: desativar quem é responsável não deixa o trabalho sem ninguém ───────
+
+def _plano_do_tecnico(app_module, cena):
+    from app import User, db
+    from facilities import tempo
+    from facilities.preventiva import servico as prev
+    from facilities.rotas import servico as s
+    with app_module.app.app_context():
+        m = s.criar_modelo(cena['local'], {'nome': 'Checklist da bomba'}, None)
+        s.publicar(m, s.normalizar_itens([{'texto': 'Sem ruído?', 'tipo': 'sim_nao'}]), {},
+                   None)
+        plano = prev.salvar_plano(fabrica.local(), None, {
+            'nome': 'Bomba d’água', 'ponto_id': cena['ponto'], 'modelo_id': m.id,
+            'intervalo_dias': '30', 'proxima_em': tempo.hoje().isoformat(),
+            'responsavel_id': str(cena['tec'])}, db.session.get(User, cena['ple']))
+        db.session.commit()
+        return plano.id
+
+
+def test_d7_ordem_preventiva_nao_nasce_com_o_inativo_e_a_gestao_e_avisada(app_module, cena):
+    from app import db
+    from facilities import tempo
+    from facilities.chamados.models import Chamado
+    from facilities.preventiva import servico as prev
+    from tests.test_auditoria_permissoes import _desativar
+    pid = _plano_do_tecnico(app_module, cena)
+    _desativar(app_module, cena['tec'])
+    with app_module.app.app_context():
+        assert prev.gerar_ordens(tempo.hoje()) == 1
+        db.session.commit()
+        ch = Chamado.query.filter(Chamado.titulo == 'Preventiva: Bomba d’água').one()
+        assert ch.responsavel_id is None
+        from facilities.preventiva.models import PlanoPreventivo
+        assert db.session.get(PlanoPreventivo, pid).responsavel_id == cena['tec']
+    avisos = _avisos(app_module, cena['ple']) + _avisos(app_module, cena['ger'])
+    assert any('Preventiva: Bomba' in t for t in avisos)
+
+
+def test_d7_com_o_responsavel_ativo_a_ordem_segue_com_ele(app_module, cena):
+    from app import db
+    from facilities import tempo
+    from facilities.chamados.models import Chamado
+    from facilities.preventiva import servico as prev
+    _plano_do_tecnico(app_module, cena)
+    with app_module.app.app_context():
+        prev.gerar_ordens(tempo.hoje())
+        db.session.commit()
+        ch = Chamado.query.filter(Chamado.titulo == 'Preventiva: Bomba d’água').one()
+        assert ch.responsavel_id == cena['tec']
+    assert not any('Preventiva: Bomba' in t for t in _avisos(app_module, cena['ple']))
+
+
+def test_d7_reabrir_chamado_do_inativo_avisa_a_gestao(app_module, cena):
+    from tests.test_auditoria_permissoes import _acao, _desativar
+    cid = _abrir_chamado(app_module, 'aud.encarregado@trino.com', cena['local'])
+    assert _acao(app_module, 'aud.pleno@trino.com', cid, acao='atribuir',
+                 responsavel_id=cena['tec']).status_code == 200
+    assert _acao(app_module, 'aud.tecnico@trino.com', cid, acao='iniciar').status_code == 200
+    assert _acao(app_module, 'aud.tecnico@trino.com', cid, acao='resolver',
+                 texto='Trocada').status_code == 200
+    _desativar(app_module, cena['tec'])
+    assert _acao(app_module, 'aud.encarregado@trino.com', cid, acao='reabrir',
+                 texto='Voltou a queimar').status_code == 200
+    assert any('Chamado reaberto' in t for t in _avisos(app_module, cena['ple']))
+
+
+def test_d7_desativar_avisa_o_administrador_do_que_ficou(app_module, cena):
+    from tests.conftest import ADMIN_EMAIL, TEST_ADMIN_PASSWORD
+    _plano_do_tecnico(app_module, cena)
+    adm = fabrica.entrar(app_module, ADMIN_EMAIL, TEST_ADMIN_PASSWORD)
+    with app_module.app.app_context():
+        from app import User, db
+        u = db.session.get(User, cena['tec'])
+        dados = {'name': u.name, 'email': u.email, 'role': u.role,
+                 'clients': [str(c) for c in u.client_ids]}
+    adm.post(f"/admin/usuarios/{cena['tec']}", data=dados)
+    with adm.session_transaction() as s:
+        recados = ' '.join(t for _, t in s.get('_flashes', []))
+    assert '1 plano(s) preventivo(s)' in recados and 'gestão de cada local' in recados
