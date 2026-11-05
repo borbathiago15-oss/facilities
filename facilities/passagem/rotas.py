@@ -1521,24 +1521,22 @@ def _time_do_piso(client_id, configuracao_id=None, exceto=None):
     Não há cadastro de "quem trabalha em qual turno" — então vale quem de
     fato lança. Um gestor que nunca lançou passagem não recebe aviso de piso.
 
-    O piso "do contrato" é quem o tem na carteira: vinculado, ou com "todos
-    os contratos" (o volante que cobre qualquer posto) — a mesma régua do
-    ``require_client``, que já o deixa lançar em qualquer contrato.
+    O piso "do contrato" é quem está vinculado a ele, ou tem "todos os
+    locais" E o local na carteira (o volante: desde 05/11/2026, R1, "todos"
+    do piso vale os locais da gestão acima dele, não o grupo inteiro — a
+    mesma régua do ``require_client``, ``hierarquia.carteira``).
 
     "Desta área" é a ÁREA do modelo, não o modelo: no CD com um modelo por
     turno, quem lança o T2 noutro modelo é justamente quem herda o que o T1
     deixou (a mesma régua de ``analitico.area_carrega``).
     """
     from datetime import timedelta
-    from sqlalchemy import or_
+    from facilities.chamados.servico import pessoas_do_contrato
     from facilities.core.models import User
-    ids = set()
-    piso = (User.query
-            .filter(User.role.in_(PERFIS_DO_PISO),
-                    or_(User.clients.any(id=client_id), User.all_clients.is_(True)),
-                    User.is_active.is_(True), User.is_deleted.isnot(True))
-            .all())
-    ids |= {u.id for u in piso}
+    ids = {u.id for u in User.query.filter(
+        User.role.in_(PERFIS_DO_PISO), User.clients.any(id=client_id),
+        User.is_active.is_(True), User.is_deleted.isnot(True))}
+    ids |= {u.id for u in pessoas_do_contrato(client_id, PERFIS_DO_PISO) if u.all_clients}
     desde = datetime.utcnow() - timedelta(days=JANELA_DO_PISO_DIAS)
     q = DiarioTurno.query.with_entities(DiarioTurno.created_by).filter(
         DiarioTurno.client_id == client_id, DiarioTurno.created_at >= desde)
@@ -1616,25 +1614,25 @@ LIMITE_GESTORES_AVISADOS = LIMITE_DO_PISO
 
 def _gestores_do_contrato(client_id):
     """Quem responde pelo contrato: o responsável cadastrado nele; sem
-    responsável, os plenos vinculados. Nunca "todos os Masters" — o Master é
+    responsável, a gestão do local (gerentes e coordenadores que cuidam dele,
+    pelo vínculo, pelo cliente ou pela cadeia — R4, 05/11/2026). Nunca "todos os Masters" — o Master é
     global e receberia a pendência parada de todos os contratos da casa.
 
     O responsável vale se ainda enxerga o contrato pela régua do
     ``require_client`` — o gestor regional com "todos os contratos" é
     responsável de verdade, e antes ficava de fora por não ter o vínculo
-    explícito. Já na falta de responsável entram só os VINCULADOS: o regional
-    receberia o aviso de todos os contratos da casa, a mesma conta que os
-    chamados fazem (``chamados.servico.gestores_do_contrato``)."""
-    from facilities.core.models import Client, User
+    explícito. Já na falta de responsável entra a gestão que CUIDA do local,
+    nunca a que só tem "todos os contratos": o regional receberia o aviso de
+    todos os contratos da casa, a mesma conta que os chamados fazem
+    (``chamados.servico.pessoas_do_contrato``)."""
+    from facilities.chamados.servico import PERFIS_GESTORES, pessoas_do_contrato
+    from facilities.core.models import Client
     cli = Client.query.get(client_id)
     if cli is not None and cli.responsible_user_id and \
             _ve_o_contrato(cli.responsible_user_id, client_id):
         return [cli.responsible_user_id]
-    plenos = (User.query
-              .filter(User.clients.any(id=client_id), User.role.in_(('pleno', 'gerente')),
-                      User.is_active.is_(True), User.is_deleted.isnot(True))
-              .order_by(User.id).limit(LIMITE_GESTORES_AVISADOS).all())
-    return [u.id for u in plenos]
+    plenos = pessoas_do_contrato(client_id, PERFIS_GESTORES)
+    return sorted(u.id for u in plenos)[:LIMITE_GESTORES_AVISADOS]
 
 
 def link_da_pendencia(client_id, pendencia_id):

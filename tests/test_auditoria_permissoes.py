@@ -68,23 +68,17 @@ def _avisos(app_module, uid):
 
 # ── R4: o gerente que responde pelo cliente (sem vínculo direto ao local) ──
 
-@pytest.mark.xfail(strict=True, reason='BUG R4: chamados.servico.gestores_do_contrato conta só '
-                   'quem está vinculado ao local; o gerente pelo cliente não é avisado')
 def test_r4_gerente_pelo_cliente_recebe_aviso_de_chamado_novo(app_module, cena):
     _abrir_chamado(app_module, 'aud.encarregado@trino.com', cena['local'])
     assert any('Novo chamado' in t for t in _avisos(app_module, cena['ger']))
 
 
-@pytest.mark.xfail(strict=True, reason='BUG R4: chamados.servico.tecnicos_do_contrato '
-                   '(pessoas_do_contrato) ignora o gerente pelo cliente')
 def test_r4_gerente_pelo_cliente_esta_na_lista_de_quem_recebe_chamado(app_module, cena):
     with app_module.app.app_context():
         from facilities.chamados.servico import tecnicos_do_contrato
         assert cena['ger'] in {u.id for u in tecnicos_do_contrato(cena['local'])}
 
 
-@pytest.mark.xfail(strict=True, reason='BUG R4: o coordenador que vê o local pela cadeia '
-                   '(sem vínculo direto) também não é avisado do chamado novo')
 def test_r4_coordenador_pela_cadeia_recebe_aviso_de_chamado_novo(app_module, cena):
     with app_module.app.app_context():
         from app import User, db
@@ -94,8 +88,6 @@ def test_r4_coordenador_pela_cadeia_recebe_aviso_de_chamado_novo(app_module, cen
     assert any('Novo chamado' in t for t in _avisos(app_module, cena['ple']))
 
 
-@pytest.mark.xfail(strict=True, reason='BUG: a tela diz "Os gestores do contrato foram '
-                   'avisados" mesmo quando ninguém recebeu o aviso (chamados/rotas.py:192)')
 def test_aviso_de_chamado_nao_promete_o_que_nao_fez(app_module, cena):
     with app_module.app.app_context():
         from app import User, db
@@ -111,8 +103,6 @@ def test_aviso_de_chamado_nao_promete_o_que_nao_fez(app_module, cena):
     assert not (ninguem and 'foram avisados' in recados)
 
 
-@pytest.mark.xfail(strict=True, reason='BUG R4: materiais.servico.e_gestor_do_contrato usa '
-                   'gestores_do_contrato; o gerente pelo cliente vê o pedido e não marca visto')
 def test_r4_gerente_pelo_cliente_marca_pedido_de_insumo_como_visto(app_module, cena):
     from app import User, db
     from facilities.materiais import servico as mat
@@ -127,8 +117,6 @@ def test_r4_gerente_pelo_cliente_marca_pedido_de_insumo_como_visto(app_module, c
     assert r.status_code == 200, r.get_data(as_text=True)
 
 
-@pytest.mark.xfail(strict=True, reason='BUG R4: o pedido de insumo avisa gestores_do_contrato; '
-                   'o gerente pelo cliente não recebe')
 def test_r4_gerente_pelo_cliente_recebe_aviso_de_pedido_de_insumo(app_module, cena):
     from app import User, db
     from facilities.materiais import servico as mat
@@ -189,8 +177,6 @@ def test_r3_supervisor_assume_e_atende(app_module, cena):
 
 # ── R1: "acesso a todos" de quem não é gestão nem diretoria ──────────────
 
-@pytest.mark.xfail(strict=True, reason='BUG R1: core/hierarquia.carteira devolve None (tudo) '
-                   'para qualquer perfil com all_clients')
 @pytest.mark.parametrize('papel', ['supervisor', 'encarregado', 'tecnico'])
 def test_r1_acesso_a_todos_fica_na_cadeia(app_module, cena, papel):
     cid = _abrir_chamado(app_module, 'aud.encarregado@trino.com', cena['local'])
@@ -198,11 +184,18 @@ def test_r1_acesso_a_todos_fica_na_cadeia(app_module, cena, papel):
         fabrica.pessoa(app_module, f'aud.{papel}.todos@trino.com', papel, all_clients=True)
     c = fabrica.entrar(app_module, f'aud.{papel}.todos@trino.com')
     assert c.get(f'/api/v1/chamados/{cid}').status_code == 403
-    assert c.get(f"/api/v1/passagem/turno?client_id={cena['local']}").status_code == 403
+    # A passagem não abre A. Ela não responde 403 de propósito: o local fora
+    # da carteira é ignorado e a tela abre a passagem dos locais da pessoa
+    # (``test_hierarquia_acesso.test_o_de_baixo_nao_ve_o_de_cima``).
+    r = c.get(f"/api/v1/passagem/turno?client_id={cena['local']}")
+    assert r.status_code == 403 or (
+        r.get_json()['client_id'] != cena['local']
+        and cena['local'] not in {x['id'] for x in r.get_json()['clients']})
+    r = c.post('/api/v1/chamados/', json={'client_id': cena['local'], 'titulo': 'Fora da cadeia',
+                                          'prioridade': 'media'})
+    assert r.status_code in (400, 403) and 'não está entre os seus' in r.get_json()['error']
 
 
-@pytest.mark.xfail(strict=True, reason='BUG R1: pessoas_do_contrato soma todo técnico com '
-                   'all_clients à lista de quem pode receber chamado de qualquer local')
 def test_r1_tecnico_com_todos_fora_da_cadeia_nao_recebe_chamado(app_module, cena):
     with app_module.app.app_context():
         tt = fabrica.pessoa(app_module, 'aud.tecnico.volante@trino.com', 'tecnico',
@@ -211,8 +204,6 @@ def test_r1_tecnico_com_todos_fora_da_cadeia_nao_recebe_chamado(app_module, cena
         assert tt not in {u.id for u in tecnicos_do_contrato(cena['local'])}
 
 
-@pytest.mark.xfail(strict=True, reason='BUG R1: passagem/rotas._time_do_piso avisa todo '
-                   'encarregado/técnico com all_clients, de qualquer local')
 def test_r1_piso_com_todos_fora_da_cadeia_nao_recebe_aviso_do_local(app_module, cena):
     with app_module.app.app_context():
         et = fabrica.pessoa(app_module, 'aud.enc.volante@trino.com', 'encarregado',
@@ -223,9 +214,6 @@ def test_r1_piso_com_todos_fora_da_cadeia_nao_recebe_aviso_do_local(app_module, 
 
 # ── R5: a diretoria vê todos os locais, venha de onde vier ───────────────
 
-@pytest.mark.xfail(strict=True, reason='BUG R5: diretoria criada em "Pessoas e acessos" sem a '
-                   'caixinha fica com carteira vazia (core/admin._aplicar_formulario + '
-                   'hierarquia.carteira)')
 def test_r5_diretoria_criada_pelo_administrador_ve_todos_os_locais(app_module, cena):
     cid = _abrir_chamado(app_module, 'aud.encarregado@trino.com', cena['local'])
     adm = fabrica.entrar(app_module, ADMIN_EMAIL, TEST_ADMIN_PASSWORD)

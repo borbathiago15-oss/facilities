@@ -136,30 +136,43 @@ def _ativos(q):
     return q.filter(User.is_active.is_(True), User.is_deleted.is_(False))
 
 
+# Quem pode ser o responsável por um chamado.
+PERFIS_QUE_RECEBEM = ('tecnico', 'pleno', 'gerente')
+# Quem é a gestão do local nos avisos (chamado novo, insumo, cobrança...).
+PERFIS_GESTORES = ('pleno', 'gerente')
+
+
 def pessoas_do_contrato(client_id, papeis):
-    """Quem tem o contrato na carteira (vínculo ou "todos"), nos papéis dados."""
-    vinculados = _ativos(User.query.filter(User.role.in_(papeis),
-                                           User.clients.any(id=client_id)))
-    todos = _ativos(User.query.filter(User.role.in_(papeis),
-                                      User.all_clients.is_(True)))
-    vistos, saida = set(), []
-    for u in list(vinculados) + list(todos):
-        if u.id not in vistos:
-            vistos.add(u.id)
-            saida.append(u)
-    return sorted(saida, key=lambda u: u.name.lower())
+    """Quem cuida do local (``hierarquia.quem_ve_o_local``: vínculo, gerente
+    pelo cliente, a cadeia acima e o volante com "todos" sob a gestão do
+    local), ativo, nos papéis dados — em ordem de nome."""
+    from facilities.core.hierarquia import quem_ve_o_local
+    ids = quem_ve_o_local(client_id)
+    if not ids:
+        return []
+    pessoas = _ativos(User.query.filter(User.role.in_(papeis), User.id.in_(ids))).all()
+    return sorted(pessoas, key=lambda u: u.name.lower())
 
 
 def tecnicos_do_contrato(client_id):
-    """Quem pode receber um chamado: técnicos e gestores do contrato."""
-    return pessoas_do_contrato(client_id, ('tecnico', 'pleno', 'gerente'))
+    """Quem pode receber um chamado: técnicos e a gestão do local — e o
+    gestor regional com "todos os locais" (vê e recebe chamado de qualquer
+    local, mas não é avisado de todos: ``gestores_do_contrato``)."""
+    cuidam = pessoas_do_contrato(client_id, PERFIS_QUE_RECEBEM)
+    ids = {u.id for u in cuidam}
+    regionais = [u for u in _ativos(User.query.filter(
+        User.role.in_([p for p in PERFIS_QUE_RECEBEM if p in PERFIS_GESTORES]),
+        User.all_clients.is_(True))) if u.id not in ids]
+    return sorted(cuidam + regionais, key=lambda u: u.name.lower())
 
 
 def gestores_do_contrato(client_id):
-    """O gestor responsável e os gestores VINCULADOS ao contrato — nunca
-    "todos os administradores", nem o gestor que só tem "todos os contratos"
-    (o regional, a diretoria): aviso que chega a quem não cuida do contrato
-    ensina a ignorar aviso. É a mesma conta da Passagem de Turno.
+    """A gestão do local: o gestor responsável cadastrado e os gerentes e
+    coordenadores que cuidam dele (R4: o gerente pelo cliente e o
+    coordenador pela cadeia contam, não só quem tem o vínculo direto) —
+    nunca "todos os administradores", nem o gestor que só tem "todos os
+    contratos" (o regional, a diretoria): aviso que chega a quem não cuida
+    do contrato ensina a ignorar aviso. É a mesma conta da Passagem de Turno.
 
     O responsável cadastrado no contrato só entra se AINDA é gestor (ou
     administrador), está ativo e tem o contrato na carteira: a tela de
@@ -167,8 +180,7 @@ def gestores_do_contrato(client_id):
     ou perdeu o contrato receberia título e local de um chamado que não
     consegue abrir (o link dá 403).
     """
-    ids = {u.id for u in _ativos(User.query.filter(User.role.in_(('pleno', 'gerente')),
-                                                   User.clients.any(id=client_id)))}
+    ids = {u.id for u in pessoas_do_contrato(client_id, PERFIS_GESTORES)}
     c = db.session.get(Client, client_id)
     resp = db.session.get(User, c.responsible_user_id) \
         if c is not None and c.responsible_user_id else None

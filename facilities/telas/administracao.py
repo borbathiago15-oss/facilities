@@ -29,7 +29,7 @@ from flask_login import current_user, login_required
 
 from facilities.core import admin as adm
 from facilities.core.acesso import admin_required
-from facilities.core.hierarquia import cadeia_acima
+from facilities.core.hierarquia import alcance, cadeia_acima
 from facilities.telas import _casca, api, bp
 from facilities.telas.cadastros import _dados, _feito, _recados, _sem_cache, nova
 from facilities.telas.conta import _derrubada
@@ -55,8 +55,7 @@ def _pessoa(u):
         # A própria conta: sem "Gerar senha temporária" (a ação recusa), o
         # caminho é "Trocar senha".
         'propria': u.id == current_user.id,
-        'alcance': ('todos os locais' if u.role == 'master' or u.all_clients
-                    else f'{len(u.clients)} local(is) direto(s)'),
+        'alcance': alcance(u),
         'cadeia': [{'nome': p.name, 'perfil': p.perfil_rotulo}
                    for p in reversed(cadeia_acima(u))],
     }

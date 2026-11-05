@@ -54,12 +54,12 @@ def pessoas(app_module):
     "todos os contratos" esquecido ativo entraria no piso dos outros testes."""
     criadas = []
 
-    def criar(nome, role, client_ids=(), todos=False, ativo=True):
+    def criar(nome, role, client_ids=(), todos=False, ativo=True, superior=None):
         with app_module.app.app_context():
             from app import Client, db
             u = app_module.User(name=nome, email=f'{uuid.uuid4().hex[:10]}@avisos.test',
                                 role=role, must_change_password=False,
-                                all_clients=todos, is_active=ativo)
+                                all_clients=todos, is_active=ativo, superior_id=superior)
             u.set_password('senha12345')
             u.clients = [db.session.get(Client, cid) for cid in client_ids]
             db.session.add(u)
@@ -147,10 +147,16 @@ def test_contrato_atendido_so_por_tecnicos_tem_piso(app_module, cena, pessoas):
 
 def test_o_volante_com_todos_os_contratos_e_piso_de_qualquer_contrato(
         app_module, mestre, cena, pessoas):
-    volante = pessoas('Encarregado volante', 'encarregado', todos=True)
+    # R1 (05/11/2026): "todos" do piso vale os locais da gestão acima dele.
+    # Antes o volante sem chefe era piso de todo contrato da casa; agora
+    # precisa de uma gestão que cuide de A e B.
+    solto = pessoas('Encarregado sem chefe', 'encarregado', todos=True)
+    chefe = pessoas('Coordenadora de A e B', 'pleno', [cena['A'], cena['B']])
+    volante = pessoas('Encarregado volante', 'encarregado', todos=True, superior=chefe)
     with app_module.app.app_context():
         assert volante in rotas._time_do_piso(cena['A'])
         assert volante in rotas._time_do_piso(cena['B'])
+        assert solto not in rotas._time_do_piso(cena['A'])
     assert _tarefa(mestre, cena).status_code == 201
     assert len(_avisos(app_module, volante)) == 1
 
@@ -269,7 +275,9 @@ def test_responsavel_que_nao_existe_ou_desativado_e_recusado(app_module, mestre,
 
 def test_responsavel_do_contrato_e_aceito_e_avisado(app_module, mestre, cena, pessoas):
     tec = pessoas('Técnico de A', 'tecnico', [cena['A']])
-    volante = pessoas('Técnico volante', 'tecnico', todos=True)
+    # R1: o volante cobre os locais da gestão acima dele (aqui, A).
+    chefe = pessoas('Coordenadora de A', 'pleno', [cena['A']])
+    volante = pessoas('Técnico volante', 'tecnico', todos=True, superior=chefe)
     for responsavel in (tec, volante):
         r = _pendencia(mestre, cena, responsavel)
         assert r.status_code == 201

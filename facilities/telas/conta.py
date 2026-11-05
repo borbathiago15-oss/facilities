@@ -80,7 +80,8 @@ def api_inicio():
         'primeiro_nome': (u.name or '').split(' ')[0],
         'data': tempo.agora().strftime('%d/%m/%Y'),
         'perfil': u.perfil_rotulo,
-        'locais_na_carteira': (len(u.clients) if papel != 'master' and not u.all_clients
+        'locais_na_carteira': (len(u.clients) if papel not in ('master', 'visualizador')
+                               and not u.all_clients
                                else None),
         'abrir_chamado': (nova(url_for('chamados.novo')) if u.can_access(MODULO_CHAMADOS)
                           else None),

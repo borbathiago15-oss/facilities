@@ -95,13 +95,13 @@ def _pagina_com_senha(texto, senha):
 
 def contexto_usuarios():
     from facilities.cadastros.models import Contratante
-    from facilities.core.hierarquia import superiores_possiveis
+    from facilities.core.hierarquia import alcance, superiores_possiveis
     from sqlalchemy.orm import selectinload
     pessoas = (User.query.filter(User.is_deleted.is_(False))
                .options(selectinload(User.clients))
                .order_by(User.is_active.desc(), User.name).all())
     contratos = Client.query.filter(Client.is_deleted.is_(False)).order_by(Client.name).all()
-    return dict(pessoas=pessoas, contratos=contratos, perfis=PERFIS,
+    return dict(pessoas=pessoas, contratos=contratos, perfis=PERFIS, alcance=alcance,
                 permissoes=User.PERMISSOES_FINAS, superiores=superiores_possiveis(),
                 clientes=Contratante.query.order_by(Contratante.nome).all())
 
@@ -111,7 +111,9 @@ def _aplicar_formulario(u, form):
     u.email = (form.get('email') or '').strip().lower()[:150]
     role = form.get('role') or 'encarregado'
     u.role = role if role in PERFIS else 'encarregado'
-    u.all_clients = bool(form.get('all_clients'))
+    # R5: a diretoria vê sempre todos os locais (como pelo convite), com ou
+    # sem a caixinha.
+    u.all_clients = bool(form.get('all_clients')) or u.role == 'visualizador'
     ids = [int(x) for x in form.getlist('clients') if str(x).isdigit()]
     u.clients = Client.query.filter(Client.id.in_(ids or [-1])).all()
     finas = [p for p in form.getlist('permissoes') if p in User.PERMISSOES_FINAS]

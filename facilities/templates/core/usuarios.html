@@ -16,6 +16,7 @@
       <div class="form-check">
         <input class="form-check-input" type="checkbox" name="all_clients" value="1" id="todos{{ u.id if u else 'novo' }}" {% if u and u.all_clients %}checked{% endif %}>
         <label class="form-check-label small" for="todos{{ u.id if u else 'novo' }}">Todos os locais (inclusive os futuros)</label>
+        <div class="form-text">Supervisor, encarregado e técnico: só os locais da gestão acima na cadeia. A diretoria vê sempre todos.</div>
       </div>
     </div>
     {% set sfx = u.id if u else 'novo' %}
@@ -80,7 +81,7 @@
       {% if not u.is_active %}<span class="badge text-bg-secondary">inativo</span>{% endif %}
       <span class="small text-muted">{{ u.email }}</span>
       {% if u.totp_ativo %}<span class="badge text-bg-success" title="Segunda etapa ativada"><i class="bi bi-shield-check"></i> 2 etapas</span>{% endif %}
-      <span class="small text-muted ms-auto">{% if u.role == 'master' or u.all_clients %}todos os locais{% else %}{{ u.clients|length }} local(is) direto(s){% endif %}</span>
+      <span class="small text-muted ms-auto">{{ alcance(u) }}</span>
     </summary>
     {% set acima = cadeia_acima(u) %}
     {% if acima %}<p class="small text-muted mt-2 mb-0">Cadeia: {% for p in acima|reverse %}{{ p.name }} ({{ p.perfil_rotulo }}) › {% endfor %}{{ u.name }}</p>{% endif %}

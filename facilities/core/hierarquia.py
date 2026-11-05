@@ -13,8 +13,15 @@ Regras (decisões D44, D46, P9 a P12, P15):
   + para o gerente, todos os locais dos clientes pelos quais responde
   + a carteira de cada pessoa ATIVA abaixo dela, em qualquer profundidade.
   Ou seja: quem está acima vê tudo o que os de baixo veem.
-* Administrador e quem tem "todos os locais" (a diretoria) não têm carteira:
-  veem tudo (``None``).
+* Administrador e diretoria (``visualizador``) não têm carteira: veem tudo
+  (``None``). A diretoria vê tudo SEMPRE, venha do convite ou da tela
+  "Pessoas e acessos", com ou sem a caixinha (R5, 05/11/2026).
+* "Acesso a todos os locais" (``all_clients``) só abre o grupo inteiro para
+  a gestão (gerente e coordenador). Para supervisor, encarregado e técnico
+  (R1, 05/11/2026) a caixinha vale os locais da gestão logo ACIMA dela na
+  cadeia (o primeiro gerente ou coordenador subindo): o técnico volante do
+  coordenador cobre todos os locais do coordenador, não os do grupo. Sem
+  gestão acima, fica só com a carteira dela.
 * O cliente (Fase 9B) vê os locais ativos do SEU cliente (``cliente_id``) —
   nunca "todos os locais", mesmo com a caixinha marcada por engano.
 
@@ -23,7 +30,11 @@ A conta é feita uma vez por requisição para quem está logado (``g``).
 from flask import g, has_request_context
 
 from facilities.extensions import db
-from facilities.core.models import NIVEL_NA_CADEIA, Client, User, user_clients
+from facilities.core.models import (NIVEL_NA_CADEIA, PERFIS_DE_GESTAO, Client, User,
+                                    user_clients)
+
+# Quem tem cadeia de gestão própria: a gestão acima de alguém na cadeia.
+GESTAO_NA_CADEIA = ('gerente', 'pleno')
 
 
 class CadeiaInvalida(ValueError):
@@ -64,22 +75,115 @@ def _locais_diretos(user_ids):
     return ids
 
 
+def _carteira_da_cadeia(user_id):
+    """Os locais da pessoa pela cadeia: os dela + os de quem está abaixo."""
+    return _locais_diretos({user_id} | subordinados(user_id))
+
+
+def _locais_da_gestao_acima(user):
+    """R1: os locais da gestão logo acima da pessoa — o primeiro gerente ou
+    coordenador subindo a cadeia (a leitura mais estreita da regra: o
+    técnico volante do coordenador cobre os locais do coordenador, não os de
+    todo o gerente)."""
+    for p in cadeia_acima(user):
+        if p.role in GESTAO_NA_CADEIA and not p.is_deleted:
+            return _carteira_da_cadeia(p.id)
+    return set()
+
+
 def carteira(user):
     """``None`` = vê tudo; senão o conjunto de ids de locais que a pessoa vê."""
-    if user._effective_role() == 'cliente':
+    papel = user._effective_role()
+    if papel == 'cliente':
         from facilities.portal.servico import locais_do_cliente
         return {c.id for c in locais_do_cliente(user)}
-    if user._effective_role() == 'master' or getattr(user, 'all_clients', False):
+    if papel in ('master', 'visualizador'):
+        return None
+    todos = bool(getattr(user, 'all_clients', False))
+    if todos and papel in PERFIS_DE_GESTAO:
         return None
     if has_request_context():
         cache = g.setdefault('_carteiras', {})
         if user.id in cache:
             return cache[user.id]
-    pessoas = {user.id} | subordinados(user.id)
-    ids = _locais_diretos(pessoas)
+    ids = _carteira_da_cadeia(user.id)
+    if todos:
+        ids |= _locais_da_gestao_acima(user)
     if has_request_context():
         g._carteiras[user.id] = ids
     return ids
+
+
+def quem_ve_o_local(client_id):
+    """Os ids de quem tem o local na carteira — a MESMA conta de ``carteira``,
+    feita de baixo para cima (uma consulta, não uma carteira por pessoa).
+
+    É a régua de "quem cuida do local" para avisos e para quem pode receber
+    um chamado (R4): o gerente pelo cliente, o coordenador e o supervisor
+    pela cadeia, o volante com "todos" pela gestão acima dele (R1). Fica de
+    fora o "vê tudo" sem cadeia — administrador, diretoria e o gestor que só
+    tem a caixinha "todos os locais": aviso de todo local da casa a quem não
+    cuida dele ensina a ignorar aviso. Quem chama filtra ativos e papéis.
+    """
+    from facilities.cadastros.models import Contratante
+    pessoas = {p.id: p for p in db.session.query(
+        User.id, User.superior_id, User.role, User.is_active, User.is_deleted,
+        User.all_clients)}
+    diretos = {uid for (uid,) in db.session.query(user_clients.c.user_id).filter(
+        user_clients.c.client_id == client_id)}
+    gerente_id = (db.session.query(Contratante.gerente_id)
+                  .join(Client, Client.contratante_id == Contratante.id)
+                  .filter(Client.id == client_id).scalar())
+    if gerente_id in pessoas and pessoas[gerente_id].role == 'gerente':
+        diretos.add(gerente_id)
+    veem = set()
+    for uid in diretos:
+        p = pessoas.get(uid)
+        if p is None:
+            continue
+        veem.add(uid)
+        # Só a pessoa ATIVA (e não excluída) leva o local para cima; a subida
+        # atravessa o desativado e para no excluído (``subordinados``).
+        if not p.is_active or p.is_deleted:
+            continue
+        vistos, atual = {uid}, p
+        while atual.superior_id and atual.superior_id not in vistos:
+            sup = pessoas.get(atual.superior_id)
+            if sup is None:
+                break
+            veem.add(sup.id)
+            vistos.add(sup.id)
+            if sup.is_deleted:
+                break
+            atual = sup
+    # R1: o supervisor/encarregado/técnico com "todos" vê o que a gestão
+    # logo acima dele vê (``_locais_da_gestao_acima``).
+    for p in pessoas.values():
+        if not p.all_clients or p.role in PERFIS_DE_GESTAO or p.role in (
+                'visualizador', 'cliente') or p.id in veem:
+            continue
+        vistos, atual = {p.id}, p
+        while atual.superior_id and atual.superior_id not in vistos:
+            sup = pessoas.get(atual.superior_id)
+            if sup is None:
+                break
+            if sup.role in GESTAO_NA_CADEIA and not sup.is_deleted:
+                if sup.id in veem:
+                    veem.add(p.id)
+                break
+            vistos.add(sup.id)
+            atual = sup
+    return veem
+
+
+def alcance(user):
+    """O que a lista de pessoas diz do alcance de cada uma (R1, R5)."""
+    papel = user._effective_role()
+    if papel in ('master', 'visualizador') or (user.all_clients and papel in PERFIS_DE_GESTAO):
+        return 'todos os locais'
+    if user.all_clients and papel != 'cliente':
+        return 'todos os locais da gestão acima'
+    return f'{len(user.clients)} local(is) direto(s)'
 
 
 def validar_superior(user, superior_id):
