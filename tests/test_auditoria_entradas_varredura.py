@@ -744,11 +744,12 @@ def _restaurar(app_module, foto):
             for linha in linhas:
                 db.session.execute(tab.update().where(tab.c.id == linha['id']).values(**linha))
             # O que a varredura criou (pessoas pelo convite aceito, locais
-            # novos) fica, mas desligado e sem vínculo.
+            # novos) fica, mas apagado (``is_deleted``: some das listas),
+            # desligado e sem vínculo.
             antigos = [x['id'] for x in linhas]
             if t in ('clients', 'users'):
                 db.session.execute(tab.update().where(tab.c.id.notin_(antigos))
-                                   .values(is_active=False))
+                                   .values(is_active=False, is_deleted=True))
             if t == 'users':
                 uc = MetaData()
                 uc.reflect(bind=db.engine, only=('user_clients',))
