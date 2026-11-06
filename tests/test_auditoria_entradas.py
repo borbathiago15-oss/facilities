@@ -114,7 +114,7 @@ def test_todo_json_de_quem_esta_logado_fica_debaixo_de_api(app_module, cena):
     GET sem ``/api/`` responde JSON a quem está logado, fora as públicas do
     aplicativo instalável (que não pedem login)."""
     c = fabrica.entrar(app_module, 'aud2.enc@trino.com')
-    publicas = {'/healthz', '/manifest.webmanifest', '/app/versao', '/app/sessao',
+    publicas = {'/healthz', '/readyz', '/manifest.webmanifest', '/app/versao', '/app/sessao',
                 '/app/manifest.webmanifest'}
     achadas = []
     for regra in app_module.app.url_map.iter_rules():
