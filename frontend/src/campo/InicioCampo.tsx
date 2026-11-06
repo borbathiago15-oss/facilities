@@ -75,19 +75,19 @@ export function InicioCampo({ eu, dados }: { eu: Eu; dados: InicioDoCampo }) {
       )}
 
       {d.material && (
-        <a className="btn btn-outline-primary w-100 fc-app-acao mb-2" href={d.material}>
+        <Destino className="btn btn-outline-primary w-100 fc-app-acao mb-2" href={d.material}>
           <i className="bi bi-box-seam" aria-hidden="true"></i> Material: usei / está faltando
-        </a>
+        </Destino>
       )}
       {d.equipe && (
-        <a className="btn btn-outline-primary w-100 fc-app-acao mb-2" href={d.equipe}>
+        <Destino className="btn btn-outline-primary w-100 fc-app-acao mb-2" href={d.equipe}>
           <i className="bi bi-people" aria-hidden="true"></i> Equipe de hoje (presença)
-        </a>
+        </Destino>
       )}
       {d.visitas && (
-        <a className="btn btn-outline-primary w-100 fc-app-acao mb-3" href={d.visitas.url}>
+        <Destino className="btn btn-outline-primary w-100 fc-app-acao mb-3" href={d.visitas.url}>
           <i className="bi bi-clipboard-check" aria-hidden="true"></i> Visitas de supervisão{d.visitas.abertas > 0 && ` (${d.visitas.abertas})`}
-        </a>
+        </Destino>
       )}
 
       {d.ocorrencias.length > 0 && (

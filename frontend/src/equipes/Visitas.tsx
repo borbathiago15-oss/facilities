@@ -2,7 +2,7 @@
 // templates/visitas/local.html, com os mesmos textos, campos e classes). Os
 // envios vão ao mesmo caminho da antiga abaixo de /api/v1 e chamam a mesma
 // ação (visitas.telas.acao_*). A visita em si (o checklist do supervisor)
-// continua no aplicativo antigo (/app/visitas/<id>).
+// é a do aplicativo de campo novo (/novo/app/visitas/<id>, Fase 1d).
 import { Ir, Migalhas, RecadosDoEnvio, useFormulario } from '../cadastros/comum';
 import type { DadosDasVisitas, Programada, VisitaRecente } from './tipos';
 

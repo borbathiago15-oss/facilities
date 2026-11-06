@@ -3,7 +3,7 @@
 // pedidos.html, com os mesmos textos, campos e classes). Os envios vão ao
 // mesmo caminho da antiga abaixo de /api/v1 e chamam a mesma ação
 // (materiais.telas.acao_*). A foto do pedido continua no servidor; o
-// aplicativo de quem usa o material (/app/materiais) continua o antigo.
+// aplicativo de quem usa o material é o do campo (/novo/app/materiais, Fase 1d).
 import { useNavigate } from 'react-router';
 import { Ir, Migalhas, RecadosDoEnvio, useFormulario } from '../cadastros/comum';
 import type { DadosDoCatalogo, DadosDoConsumoDoMes, DadosDoCusto, DadosDoEstoque, DadosDosPedidos, Pedido } from './tipos';

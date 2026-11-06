@@ -113,8 +113,8 @@ def test_a_equipe_e_as_visitas_do_local(servidor, navegador, perfil, equipes):
         assert servidor['sql']('SELECT intervalo_dias, is_active FROM visitas_programadas WHERE id = ?', vid) == [(30, 0)]
         assert pg.locator('.border-top', has_text='Visita mensal da diretoria').locator('text=desativada').count() == 1
         _sem_rolagem(pg, 'as visitas')
-        # A visita em si continua no aplicativo antigo.
-        assert pg.locator('a[href^="/app/visitas/"]').count() >= 1
+        # A visita em si: o aplicativo de campo (o novo, nas telas novas; Fase 1d).
+        assert pg.locator(f'a[href^="{equipes}/app/visitas/"]').count() >= 1
         # O caminho de migalhas leva à rotina do local.
         pg.locator('.breadcrumb').get_by_role('link', name='GL Armazém 1').click()
         pg.wait_for_selector('text=Checklists deste local')
