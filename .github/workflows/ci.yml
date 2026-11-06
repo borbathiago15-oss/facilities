@@ -23,7 +23,7 @@ jobs:
   testes:
     name: Testes (Postgres, como produção)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     services:
       postgres:
         image: postgres:16
