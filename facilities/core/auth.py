@@ -259,8 +259,9 @@ def _avisar_bloqueio(u):
         db.session.commit()
         # No celular o aviso aparece na tela bloqueada: vai sem o e-mail da
         # pessoa. O detalhe fica no sino, atrás do login (auditoria N-08).
-        push.avisar(list(avisados), 'Uma conta foi bloqueada por senha errada',
-                    'Veja qual em Pessoas e acessos.', link=link, marca=f'bloqueio-{u.id}')
+        push.avisar_ao_gravar(list(avisados), 'Uma conta foi bloqueada por senha errada',
+                              'Veja qual em Pessoas e acessos.', link=link,
+                              marca=f'bloqueio-{u.id}')
         db.session.commit()
     except Exception:
         # O aviso nunca impede a resposta do login.

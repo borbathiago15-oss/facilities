@@ -282,6 +282,14 @@ def create_app(config=None):
 
     app.extensions['facilities_storage'] = storage
 
+    # Avisos para fora só depois do commit; foto de gravação desfeita é
+    # apagada (auditoria, Fase 4). Importar registra os ouvintes da sessão.
+    from facilities.core import pos_commit
+
+    @app.teardown_request
+    def _sobras_do_pos_commit(_erro=None):
+        pos_commit.descartar_pendentes(db.session())
+
     _modelos(app)
     _rotas(app)
     _sessao(app)

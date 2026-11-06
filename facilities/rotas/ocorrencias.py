@@ -170,17 +170,17 @@ def abrir(ponto, tipo, texto, foto=None, agora_utc=None, itens=None, autor=None)
     if na_rota:
         quem = avisar_no_sino(na_rota, titulo, onde, link_campo, tipo='ocorrencia',
                               client_id=ponto.client_id)
-        push.avisar(quem, titulo, onde, link_campo, marca=f'ocorrencia-{oc.id}')
+        push.avisar_ao_gravar(quem, titulo, onde, link_campo, marca=f'ocorrencia-{oc.id}')
     so_gestao = acompanham - na_rota
     quem = avisar_no_sino(so_gestao, titulo, onde, link_gestao, tipo='ocorrencia',
                           client_id=ponto.client_id)
-    push.avisar(quem, titulo, onde, link_gestao, marca=f'ocorrencia-{oc.id}')
+    push.avisar_ao_gravar(quem, titulo, onde, link_gestao, marca=f'ocorrencia-{oc.id}')
     return oc
 
 
 def _guardar_foto(oc, foto):
     from facilities.core.anexos import (ANEXO_ASSINATURA, ANEXO_TIPOS, imagem_aceitavel,
-                                        reduzir_imagem, storage)
+                                        reduzir_imagem)
     from facilities.rotas.servico import RegraDaRota
     nome = (foto.filename or '').lower()
     ext = nome.rsplit('.', 1)[-1] if '.' in nome else 'jpg'
@@ -194,9 +194,20 @@ def _guardar_foto(oc, foto):
         raise RegraDaRota('A foto não foi aceita (formato ou tamanho). Envie sem foto ou '
                           'tire outra.')
     dados, ext = reduzir_imagem(dados, ext)
-    oc.foto_key = f'ocorrencias/{uuid.uuid4().hex}.{ext}'
-    oc.foto_mime = ANEXO_TIPOS[ext]
-    storage().save(oc.foto_key, dados, oc.foto_mime)
+    # A foto sobe antes da linha, com a conexão devolvida ao pool; se a
+    # gravação for desfeita, ela é apagada. Armazenamento fora do ar: o aviso
+    # entra SEM a foto (o recado de quem passou não se perde) — auditoria,
+    # Fase 4.
+    from facilities.core import pos_commit
+    from facilities.core.anexos import FalhaNoArmazenamento, subir
+    chave = f'ocorrencias/{uuid.uuid4().hex}.{ext}'
+    pos_commit.soltar_conexao()
+    try:
+        subir(chave, dados, ANEXO_TIPOS[ext])
+    except FalhaNoArmazenamento:
+        oc.foto_nao_guardada = True
+        return
+    oc.foto_key, oc.foto_mime = chave, ANEXO_TIPOS[ext]
 
 
 def rotulos_dos_itens(oc, ponto=None):
@@ -292,7 +303,7 @@ def elogiar(ponto, nota, texto, agora_utc=None, autor=None):
             onde = f'{onde} — "{el.texto}"'[:300]
         quem = avisar_no_sino({el.responsavel_id}, titulo, onde, '/app/', tipo='elogio',
                               client_id=ponto.client_id)
-        push.avisar(quem, titulo, onde, '/app/', marca=f'elogio-{el.id}')
+        push.avisar_ao_gravar(quem, titulo, onde, '/app/', marca=f'elogio-{el.id}')
     return el
 
 

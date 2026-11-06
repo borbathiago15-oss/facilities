@@ -138,14 +138,23 @@ def salvar_logo(contratante, arquivo, autor):
     antes = foto(contratante)
     antiga = contratante.logo_key
     chave = f'logos/cliente-{contratante.id}-{secrets.token_hex(6)}.png'
-    storage().save(chave, saida.getvalue(), 'image/png')
+    # A nova é apagada se a gravação for desfeita; a antiga só sai DEPOIS do
+    # commit — antes saía já, e uma gravação desfeita deixava o cadastro
+    # apontando para um arquivo apagado (auditoria, Fase 4).
+    from facilities.core import pos_commit
+    from facilities.core.anexos import subir
+    subir(chave, saida.getvalue(), 'image/png')
     contratante.logo_key = chave
     registrar('contratante', contratante, 'alterado', antes, autor)
     if antiga:
-        try:
-            storage().delete(antiga)
-        except Exception:   # a logo antiga que sobra no armazenamento não quebra nada
-            pass
+        destino = storage()
+
+        def apagar_a_antiga():
+            try:
+                destino.delete(antiga)
+            except Exception:   # a logo antiga que sobra no armazenamento não quebra nada
+                pass
+        pos_commit.depois_de_gravar(apagar_a_antiga)
     return chave
 
 

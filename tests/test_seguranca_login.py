@@ -218,7 +218,8 @@ def test_errar_a_senha_atual_bloqueia_e_derruba_a_sessao(app_module):
 def test_push_do_bloqueio_nao_leva_o_email(app_module, monkeypatch):
     from facilities.core import push
     mandados = []
-    monkeypatch.setattr(push, 'avisar', lambda ids, titulo, texto, **k: mandados.append((titulo, texto)))
+    monkeypatch.setattr(push, 'avisar_ao_gravar',
+                        lambda ids, titulo, texto, **k: mandados.append((titulo, texto)))
     _pessoa(app_module, 'alvo2@trino.com')
     _pessoa(app_module, 'adm.aviso2@trino.com', 'master')
     c = app_module.app.test_client()

@@ -128,7 +128,6 @@ def _foto():
 
 # ── Push ─────────────────────────────────────────────────────────────────
 
-@pytest.mark.xfail(strict=True, reason='BUG: uma exceção no envio do push sobe pela requisição: 500 e o chamado urgente é desfeito')
 def test_chamado_urgente_fica_gravado_mesmo_se_o_envio_do_push_explodir(app_module, cena):  # noqa: F811
     """Antes: uma exceção no envio (chave VAPID estragada, biblioteca de
     cifra, um bug) subia pela requisição — 500 e o chamado DESFEITO."""
@@ -144,7 +143,6 @@ def test_chamado_urgente_fica_gravado_mesmo_se_o_envio_do_push_explodir(app_modu
         assert Chamado.query.filter_by(titulo='Fio desencapado na copa').count() == 1
 
 
-@pytest.mark.xfail(strict=True, reason='BUG: o push sai no meio da transação: o gestor é avisado de um chamado que depois foi desfeito')
 def test_push_nao_sai_se_a_gravacao_for_desfeita(app_module, cena):  # noqa: F811
     """Antes: o aviso "Urgente: OS-…" saía no meio da transação; se ela era
     desfeita depois, o gestor recebia o aviso de um chamado que não existe."""
@@ -162,7 +160,6 @@ def test_push_nao_sai_se_a_gravacao_for_desfeita(app_module, cena):  # noqa: F81
     assert enviados == []
 
 
-@pytest.mark.xfail(strict=True, reason='BUG: o push sai antes do commit, com o chamado ainda não gravado e a trava do local segura')
 def test_push_so_sai_depois_que_o_chamado_foi_gravado(app_module, cena):  # noqa: F811
     """Na hora do envio, o chamado já tem de estar gravado (visto por OUTRA
     conexão): é o que tira a trava do local e a transação aberta do caminho
@@ -185,7 +182,6 @@ def test_push_so_sai_depois_que_o_chamado_foi_gravado(app_module, cena):  # noqa
     assert visto == [1]
 
 
-@pytest.mark.xfail(strict=True, reason='BUG: o push vai a um aparelho por vez (9 aparelhos × 5 s = 45 s para abrir um urgente)')
 def test_varios_aparelhos_recebem_ao_mesmo_tempo(app_module, cena):  # noqa: F811
     """Antes: um aparelho por vez — 3 gestores × 3 aparelhos com o serviço a
     5 s = 45 s para abrir UM chamado urgente."""
@@ -201,7 +197,6 @@ def test_varios_aparelhos_recebem_ao_mesmo_tempo(app_module, cena):  # noqa: F81
     assert time.monotonic() - t0 < 2.0       # 6 × 0,5 s em fila seriam 3 s
 
 
-@pytest.mark.xfail(strict=True, reason='BUG: push espera 10 s por aparelho (urlopen timeout=10)')
 def test_servico_de_push_pendurado_desiste_em_poucos_segundos(app_module, pendurado,
                                                               monkeypatch):
     """Antes: 10 s de espera por aparelho (``urlopen(timeout=10)``)."""
@@ -239,7 +234,6 @@ def test_quem_abre_urgente_nao_espera_o_servico_de_push(app_module, cena):  # no
 
 
 @SO_POSTGRES
-@pytest.mark.xfail(strict=True, reason='BUG: o push sai com a trava do local segura: outro chamado do mesmo local espera o serviço de push')
 def test_outro_chamado_no_mesmo_local_nao_espera_o_push_lento(app_module, cena):  # noqa: F811
     """Antes: o push saía com a trava do local segura (``_travar_contrato``):
     todo chamado aberto no mesmo local esperava o serviço de push."""
@@ -269,7 +263,6 @@ def test_outro_chamado_no_mesmo_local_nao_espera_o_push_lento(app_module, cena):
     assert espera < 2.0, f'o segundo chamado esperou {espera:.1f} s pelo push do primeiro'
 
 
-@pytest.mark.xfail(strict=True, reason='BUG: exceção no push desfaz a etapa do agendador (o prazo vencido não fica marcado e o aviso é tentado de novo a cada rodada)')
 def test_aviso_do_agendador_que_falha_nao_desfaz_a_rodada(app_module, cena):  # noqa: F811
     """O prazo vencido é marcado (``aviso_vencido_em``) mesmo se o envio do
     push explodir: senão cada rodada tentaria (e falharia) de novo."""
@@ -296,7 +289,6 @@ def test_aviso_do_agendador_que_falha_nao_desfaz_a_rodada(app_module, cena):  # 
 
 # ── Armazenamento das fotos ──────────────────────────────────────────────
 
-@pytest.mark.xfail(strict=True, reason='BUG: boto3 sem tempo limite próprio (60 s + 60 s e novas tentativas)')
 def test_r2_tem_tempo_limite_curto_e_poucas_tentativas():
     """Antes: o padrão do botocore — 60 s para conectar, 60 s para ler e
     novas tentativas: um R2 engasgado segurava a requisição por minutos."""
@@ -308,7 +300,6 @@ def test_r2_tem_tempo_limite_curto_e_poucas_tentativas():
     assert cfg.retries['total_max_attempts'] <= 3     # 1 + 2 novas tentativas
 
 
-@pytest.mark.xfail(strict=True, reason='BUG: armazenamento fora do ar: 500 e o chamado (o texto da pessoa) é desfeito')
 def test_chamado_fica_gravado_sem_a_foto_quando_o_armazenamento_cai(app_module, cena,  # noqa: F811
                                                                     monkeypatch):
     """Antes: a falha do armazenamento virava 500 e o chamado — o texto que a
@@ -326,7 +317,6 @@ def test_chamado_fica_gravado_sem_a_foto_quando_o_armazenamento_cai(app_module, 
     assert 'não foi guardad' in pagina
 
 
-@pytest.mark.xfail(strict=True, reason='BUG: a foto subida fica órfã no armazenamento quando a linha não é gravada')
 def test_foto_enviada_e_apagada_se_a_gravacao_do_chamado_falhar(app_module, cena,  # noqa: F811
                                                                 monkeypatch):
     """A foto foi para o armazenamento e a linha não entrou no banco: o
@@ -356,7 +346,6 @@ def test_foto_enviada_e_apagada_se_a_gravacao_do_chamado_falhar(app_module, cena
 
 
 @SO_POSTGRES
-@pytest.mark.xfail(strict=True, reason='BUG: a foto sobe com o chamado inserido e a trava do local segura')
 def test_outro_chamado_no_mesmo_local_nao_espera_o_armazenamento_lento(app_module, cena,  # noqa: F811
                                                                        monkeypatch):
     """Antes: a foto subia com o chamado já inserido e a trava do local segura."""
@@ -382,7 +371,6 @@ def test_outro_chamado_no_mesmo_local_nao_espera_o_armazenamento_lento(app_modul
     assert espera < 2.0, f'o segundo chamado esperou {espera:.1f} s pela foto do primeiro'
 
 
-@pytest.mark.xfail(strict=True, reason='BUG: armazenamento fora do ar no checklist vira 500 genérico, sem recado')
 def test_checklist_com_armazenamento_fora_pede_para_tentar_de_novo(app_module, monkeypatch):
     """O checklist pode EXIGIR a foto: sem armazenamento, nada é gravado e a
     resposta é 503 com o recado — a fila do aparelho guarda o envio e tenta
@@ -406,7 +394,6 @@ def test_checklist_com_armazenamento_fora_pede_para_tentar_de_novo(app_module, m
 
 # ── E-mail ───────────────────────────────────────────────────────────────
 
-@pytest.mark.xfail(strict=True, reason='BUG: SMTP com 15 s fixos por etapa, sem SMTP_TIMEOUT')
 def test_servidor_de_email_calado_desiste_no_tempo_configurado(app_module, pendurado,
                                                                monkeypatch):
     """Antes: 15 s fixos por etapa da conversa SMTP (conectar, saudação…)."""
@@ -454,3 +441,53 @@ def test_redis_do_limitador_fora_do_ar_nao_impede_o_login(tmp_path):
     saida = subprocess.run([sys.executable, '-c', roteiro], cwd=raiz, env=amb,
                            capture_output=True, text=True, timeout=120).stdout
     assert 'STATUS 302' in saida, saida[-300:]
+
+
+def test_logo_antiga_so_e_apagada_depois_que_a_troca_foi_gravada(app_module):
+    """Antes: a logo antiga era apagada do armazenamento ANTES do commit; com
+    a gravação desfeita, o cadastro continuava apontando para ela — apagada."""
+    import io
+
+    from app import db
+    from facilities.cadastros import montagem, servico as cad
+    from facilities.core.anexos import storage
+
+    class Arq(io.BytesIO):
+        filename = 'logo.png'
+    with app_module.app.app_context():
+        emp = cad.salvar_empresa(None, {'nome': 'Trino Logos'}, None)
+        cli = cad.salvar_contratante(None, {'nome': 'Cliente da Logo', 'empresa_id': emp.id,
+                                            'centro_custo': 'CL'}, None)
+        antiga = montagem.salvar_logo(cli, Arq(_png()), None)
+        db.session.commit()
+        nova = montagem.salvar_logo(cli, Arq(_png()), None)
+        db.session.rollback()                    # a troca não vingou
+        assert storage().exists(antiga), 'a logo que continua no cadastro foi apagada'
+        assert not storage().exists(nova), 'a logo da troca desfeita ficou sobrando'
+        assert cli.logo_key == antiga
+        nova = montagem.salvar_logo(cli, Arq(_png()), None)
+        db.session.commit()                      # agora vingou: a antiga sai
+        assert storage().exists(nova) and not storage().exists(antiga)
+
+
+def test_aviso_de_ponto_de_salvamento_desfeito_nao_sai(app_module, cena):  # noqa: F811
+    """O agendador roda cada etapa num ponto de salvamento: a etapa desfeita
+    não pode mandar os avisos dela; a que vingou manda depois do commit."""
+    from app import db
+    from facilities.core import push
+    _celulares(app_module, cena['gestora'])
+    enviados = []
+    app_module.app.extensions['facilities_push'] = \
+        lambda insc, carga: enviados.append(carga['titulo']) or 201
+    with app_module.app.app_context():
+        try:
+            with db.session.begin_nested():
+                push.avisar_ao_gravar([cena['gestora']], 'etapa que falhou', '')
+                raise RuntimeError('etapa falhou (teste)')
+        except RuntimeError:
+            pass
+        with db.session.begin_nested():
+            push.avisar_ao_gravar([cena['gestora']], 'etapa que vingou', '')
+        assert enviados == []
+        db.session.commit()
+    assert enviados == ['etapa que vingou']

@@ -118,3 +118,44 @@ def reduzir_imagem(dados, ext, lado_max=LADO_MAX_PUBLICO):
 def storage():
     """O armazenamento do app (disco local ou R2), pendurado nas extensões."""
     return current_app.extensions['facilities_storage']
+
+
+# ── Subir ANTES de gravar a linha (auditoria, Fase 4, L2) ─────────────────
+#
+# A foto vai para o armazenamento ANTES da trava de linha e da gravação
+# (ler, reduzir, subir; só então inserir a linha), com a conexão do banco
+# devolvida ao pool enquanto o R2 responde. O arquivo fica preso à
+# transação seguinte (``core.pos_commit``): se ela for desfeita, o arquivo
+# é apagado — nenhuma linha aponta para arquivo que não existe, nenhum
+# arquivo sobra de gravação desfeita.
+
+class FalhaNoArmazenamento(Exception):
+    """O armazenamento não guardou o arquivo (fora do ar, lento demais)."""
+
+
+def _apagar_sem_falhar(destino, chave):
+    try:
+        destino.delete(chave)
+    except Exception:                        # noqa: BLE001 — melhor esforço; fica no log
+        current_app.logger.exception('anexo %s: não deu para apagar o arquivo órfão', chave)
+
+
+def subir(chave, dados, mime):
+    """Grava o arquivo agora e o prende à gravação que vem a seguir. Falha
+    do armazenamento → ``FalhaNoArmazenamento`` (quem chama decide: gravar
+    sem a foto, com aviso, ou pedir para tentar de novo)."""
+    from facilities.core import pos_commit
+    destino = storage()
+    try:
+        destino.save(chave, dados, mime)
+    except Exception as erro:                # noqa: BLE001 — R2/disco: qualquer erro é "não guardou"
+        current_app.logger.warning('anexo %s não foi guardado: %s: %s', chave,
+                                   type(erro).__name__, erro)
+        raise FalhaNoArmazenamento(str(erro)) from erro
+    pos_commit.depois_de_gravar(None, lambda: _apagar_sem_falhar(destino, chave))
+    return chave
+
+
+def descartar(chave):
+    """O arquivo subido não vai ser usado (envio repetido, recusa): apaga já."""
+    _apagar_sem_falhar(storage(), chave)

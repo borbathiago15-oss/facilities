@@ -237,6 +237,9 @@ def pedir(user, local, dados, foto=None, agora_utc=None):
     texto = (dados.get('texto') or '').strip()[:300] or None
     if mat is None and not texto:
         raise RegraDoMaterial('Diga o que está faltando: escolha o material ou escreva.')
+    # A foto sobe ANTES da trava do local (auditoria, Fase 4): o R2 lento não
+    # segura o consumo de material do local inteiro.
+    foto_subida = _subir_foto(*_ler_foto(foto)) if foto is not None else None
     # O mesmo toque em "Pedir" chegando duas vezes (sinal fraco, dois cliques)
     # não abre dois pedidos nem avisa o gestor em dobro: com a linha do local
     # travada, o pedido igual da mesma pessoa nos últimos minutos é devolvido.
@@ -249,27 +252,31 @@ def pedir(user, local, dados, foto=None, agora_utc=None):
                         PedidoInsumo.criado_em >= agora_utc - JANELA_DE_REENVIO)
                 .order_by(PedidoInsumo.id.desc()).first())
     if repetido is not None:
+        if foto_subida and foto_subida[0]:
+            from facilities.core.anexos import descartar
+            descartar(foto_subida[0])
         return repetido
     p = PedidoInsumo(client_id=local.id, material_id=mat.id if mat else None, quantidade=qtd,
                      texto=texto, user_id=user.id, criado_em=agora_utc, status=PEDIDO_ABERTO,
                      prazo=agora_utc + timedelta(hours=prazo_do_pedido_h(local.id)))
     db.session.add(p)
     db.session.flush()
-    if foto is not None:
-        _guardar_foto(p, foto)
+    if foto_subida is not None:
+        p.foto_key, p.foto_mime = foto_subida
+        p.foto_nao_guardada = p.foto_key is None
     quem = gestores_do_contrato(local.id)
     titulo = f'Pedido de insumo · {local.name}'
     quem = avisar(quem, titulo, f'{p.resumo} — pedido por {user.name}.', '/materiais/pedidos',
                   tipo='insumo', client_id=local.id)
-    push.avisar(quem, titulo, p.resumo, '/materiais/pedidos', marca=f'pedido-{p.id}')
+    push.avisar_ao_gravar(quem, titulo, p.resumo, '/materiais/pedidos', marca=f'pedido-{p.id}')
     return p
 
 
-def _guardar_foto(pedido, arquivo):
-    import uuid
+def _ler_foto(arquivo):
+    """Confere e reduz a foto, sem banco nem armazenamento. → (dados, ext)."""
     from werkzeug.utils import secure_filename
-    from facilities.core.anexos import (ANEXO_ASSINATURA, ANEXO_MAX, ANEXO_TIPOS,
-                                        foto_leve, imagem_aceitavel, storage)
+    from facilities.core.anexos import (ANEXO_ASSINATURA, ANEXO_MAX, foto_leve,
+                                        imagem_aceitavel)
     nome = secure_filename(arquivo.filename or '') or 'foto'
     ext = nome.rsplit('.', 1)[-1].lower() if '.' in nome else ''
     dados = arquivo.read(ANEXO_MAX + 1)
@@ -277,9 +284,22 @@ def _guardar_foto(pedido, arquivo):
             or not any(dados.startswith(a) for a in ANEXO_ASSINATURA[ext])
             or not imagem_aceitavel(dados, ext)):
         raise RegraDoMaterial('A foto não é imagem (ou é grande demais). Tire de novo.')
-    chave = f'pedidos_insumo/{pedido.id}/{uuid.uuid4().hex}.{ext}'
-    storage().save(chave, foto_leve(dados, ext), ANEXO_TIPOS[ext])
-    pedido.foto_key, pedido.foto_mime = chave, ANEXO_TIPOS[ext]
+    return foto_leve(dados, ext), ext
+
+
+def _subir_foto(dados, ext):
+    """Sobe com a conexão devolvida ao pool. → (chave, mime); (None, None) se
+    o armazenamento não guardou — o pedido entra sem a foto."""
+    import uuid
+    from facilities.core import pos_commit
+    from facilities.core.anexos import ANEXO_TIPOS, FalhaNoArmazenamento, subir
+    chave = f'pedidos_insumo/novos/{uuid.uuid4().hex}.{ext}'
+    pos_commit.soltar_conexao()
+    try:
+        subir(chave, dados, ANEXO_TIPOS[ext])
+    except FalhaNoArmazenamento:
+        return None, None
+    return chave, ANEXO_TIPOS[ext]
 
 
 def marcar_visto(user, pedido, agora_utc=None):
