@@ -4,8 +4,11 @@ Roda só com ``TEST_DATABASE_URL`` num Postgres (o SQLite serializa as
 escritas e esconde a disputa). Cada cenário solta dois (ou mais) pedidos
 juntos, cada um no seu cliente de teste e na sua sessão, atrás de uma
 barreira, e repete algumas rodadas: a corrida que existe aparece em quase
-todas. O que o código não protege fica ``xfail(strict=True)`` com o defeito
-descrito em ``reason`` — nada do aplicativo foi alterado.
+todas. Os três defeitos que a auditoria achou aqui (passagem encerrada em dobro,
+pendência em dobro no rascunho, cadastro duplo dando 500) ficaram
+``xfail(strict=True)`` até a correção da leva L2: trava do contrato em
+``salvar_turno``, chave única ``uq_diario_turnos_chave`` e o
+``IntegrityError`` tratado no cadastro de pessoas.
 
 Já cobertos em ``test_concorrencia.py`` e ``test_chamados_concorrencia.py``
 (não repetidos aqui): envio_id da execução, dois técnicos na mesma tarefa,
@@ -93,16 +96,6 @@ def _passagem(cena_p, turno, envio, finalizar):
             'finalizar': finalizar}
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    'BUG: "Encerrar turno" que chega duas vezes ao mesmo tempo (a fila sem sinal '
-    'reenviando + o toque na tela) grava DUAS passagens encerradas do mesmo '
-    'contrato/modelo/dia/turno, com pendências e ocorrências em dobro. '
-    'salvar_turno (facilities/passagem/rotas.py, POST /api/turnos) procura o turno '
-    'com SELECT e cria se não achou, sem trava e sem chave única em '
-    'diario_operacional_turnos (client_id, configuracao_id, data_turno, turno). '
-    'A idempotência por envio_id só vale em sequência. Correção: trava do contrato '
-    '(SELECT … FOR NO KEY UPDATE em clients, como chamados._travar_contrato) antes '
-    'da busca, e índice único (com migração e quarentena das duplicatas).'))
 def test_encerrar_a_mesma_passagem_duas_vezes_ao_mesmo_tempo_grava_uma(app_module,
                                                                     cena_passagem):
     from facilities.passagem.models import DiarioPendencia, DiarioTurno
@@ -122,12 +115,6 @@ def test_encerrar_a_mesma_passagem_duas_vezes_ao_mesmo_tempo_grava_uma(app_modul
             assert DiarioPendencia.query.filter(DiarioPendencia.turno_id.in_(ids)).count() == 1
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    'BUG: o mesmo rascunho salvo em dois aparelhos ao mesmo tempo duplica a pendência '
-    '(e a ocorrência). salvar_turno lê as pendências já gravadas do turno (ja_pend) e '
-    'só então insere as que faltam, sem trava no turno: as duas requisições leem a '
-    'lista vazia e as duas inserem. Correção: SELECT … FOR UPDATE no DiarioTurno '
-    'achado (ou a trava do contrato do item anterior) antes de montar ja_pend/ja_ocor.'))
 def test_rascunho_salvo_em_dois_aparelhos_ao_mesmo_tempo_nao_duplica_pendencia(
         app_module, cena_passagem):
     from facilities.passagem.models import DiarioOcorrencia, DiarioPendencia, DiarioTurno
@@ -151,15 +138,6 @@ def test_rascunho_salvo_em_dois_aparelhos_ao_mesmo_tempo_nao_duplica_pendencia(
 
 # ── Cadastro de pessoas ───────────────────────────────────────────────────
 
-@pytest.mark.xfail(strict=True, reason=(
-    'BUG: duas criações da mesma pessoa ao mesmo tempo (duplo clique em "Criar" '
-    'em Pessoas e acessos, ou dois administradores) → a segunda responde 500. '
-    'acao_criar_usuario (facilities/core/admin.py) confere o e-mail com '
-    'User.por_email e faz commit sem tratar o IntegrityError de users.email_index '
-    '(único). O banco não deixa duplicar (nenhum dado perdido), mas a pessoa vê '
-    '"erro interno" e não sabe se a conta foi criada. Correção: capturar '
-    'IntegrityError no commit → rollback e o recado "Já existe uma pessoa com este '
-    'e-mail" (400/409), como já faz o aceite de convite (novo_contrato.aceitar_enviar).'))
 def test_mesma_pessoa_criada_duas_vezes_ao_mesmo_tempo_nao_da_500(app_module):
     from app import User, db
     from tests.test_chamados import _entrar_admin
