@@ -21,7 +21,7 @@ import secrets
 from datetime import timedelta
 
 import click
-from flask import Flask, flash, jsonify, redirect, request, session, url_for
+from flask import Flask, flash, g, jsonify, redirect, request, session, url_for
 from flask_login import current_user, logout_user
 from werkzeug.exceptions import Forbidden
 from sqlalchemy.engine import make_url
@@ -341,6 +341,16 @@ def _rotas(app):
         app.register_blueprint(bp)
 
 
+# As sondas da hospedagem (``/healthz``, ``/readyz``): não carregam a pessoa
+# logada (o ``user_loader`` consulta o banco) — com o banco pendurado o
+# ``/healthz`` também ficava pendurado (auditoria, Fase 3).
+SONDAS = frozenset({'core.healthz', 'core.readyz'})
+
+
+def _eh_sonda():
+    return request.endpoint in SONDAS
+
+
 def _quer_json():
     """As travas de sessão respondem JSON (e não redirecionam) a quem não
     navega: corpo JSON, envio (não-GET) e toda a API das telas novas."""
@@ -375,6 +385,8 @@ def _sessao(app):
         por padrão (rota nova do sistema não se abre ao cliente por descuido).
         Portal desligado derruba a sessão; sem a segunda etapa, só a tela de
         segurança."""
+        if _eh_sonda():
+            return None
         if not current_user.is_authenticated or current_user._effective_role() != 'cliente':
             return None
         from facilities.core.auth import MSG_CLIENTE_SEM_ACESSO
@@ -424,6 +436,8 @@ def _sessao(app):
         vários locais (gestão e diretoria) não usa o sistema só com a senha.
         Até cadastrar o código do aplicativo autenticador, só abre a tela de
         segurança (e trocar a senha, sair). O cliente tem a porta própria."""
+        if _eh_sonda():
+            return None
         if not current_user.is_authenticated or current_user._effective_role() == 'cliente':
             return None
         from facilities.core.auth import exige_segunda_etapa
@@ -440,6 +454,8 @@ def _sessao(app):
 
     @app.before_request
     def _troca_obrigatoria():
+        if _eh_sonda():
+            return None
         if (current_user.is_authenticated and current_user.must_change_password
                 and request.endpoint not in _LIVRES_NA_TROCA):
             if _quer_json():
@@ -453,7 +469,11 @@ def _sessao(app):
         # nem pelo cache o que o anterior abriu (auditoria SEC-014). A cópia
         # do modo sem sinal é do service worker, que se apaga ao sair.
         ep = request.endpoint or ''
-        if (current_user.is_authenticated and ep != 'static'
+        if _eh_sonda() or g.get('erro_de_banco'):
+            # Sem perguntar quem está logado (consulta o banco): sonda e
+            # erro de banco nunca vão para o cache, de ninguém.
+            resp.headers['Cache-Control'] = 'no-store'
+        elif (current_user.is_authenticated and ep != 'static'
                 and not ep.startswith('app_instalavel.') and ep != 'campo.manifesto'):
             resp.headers['Cache-Control'] = 'no-store'
         resp.headers.setdefault('X-Content-Type-Options', 'nosniff')

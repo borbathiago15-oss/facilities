@@ -1,8 +1,9 @@
 """Início, avisos e saúde do serviço."""
-from flask import Blueprint, jsonify, redirect, render_template, request, url_for
+from flask import Blueprint, current_app, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
+from sqlalchemy import text
 
-from facilities.extensions import db
+from facilities.extensions import db, limiter
 from facilities.core.auth import _destino_seguro
 from facilities.core.models import MODULO_CHAMADOS, MODULO_PASSAGEM, Notification
 
@@ -48,8 +49,40 @@ def _avisos_no_topo():
 
 
 @bp.get('/healthz')
+@limiter.exempt
 def healthz():
-    """Liveness: público, sem banco, sempre 200 com o processo de pé."""
+    """Liveness: público, sem banco, sempre 200 com o processo de pé.
+
+    Nem a pessoa logada é carregada (``SONDAS`` na fábrica): com o banco
+    pendurado, quem pergunta "o processo está vivo?" recebe a resposta."""
+    return jsonify({'status': 'ok'}), 200
+
+
+# Teto da consulta do /readyz no Postgres (``SET LOCAL``: só nesta transação,
+# compatível com pooler em modo transação).
+PRONTIDAO_LIMITE = '2s'
+
+
+@bp.get('/readyz')
+@limiter.exempt
+def readyz():
+    """Readiness: o processo fala com o banco? ``SELECT 1`` com 2 s de limite.
+
+    200 pronto; 503 (com ``Retry-After``) quando o banco não responde — a
+    hospedagem tira a instância da rota em vez de mandar gente para a fila.
+    Pega conexão do mesmo pool do site: pool cheio também é "não pronto"
+    (espera no máximo ``pool_timeout``, 5 s)."""
+    try:
+        with db.engine.connect() as con:
+            if con.dialect.name == 'postgresql':
+                con.execute(text(f"SET LOCAL statement_timeout = '{PRONTIDAO_LIMITE}'"))
+            con.execute(text('SELECT 1'))
+            con.rollback()
+    except Exception as e:  # qualquer falha é "não pronto" — o motivo vai pro log
+        current_app.logger.warning('readyz: banco indisponível: %s', type(e).__name__)
+        from facilities.core.erros import ESPERA_SEGUNDOS, MENSAGENS
+        return (jsonify({'status': 'indisponivel', 'error': MENSAGENS[503]}), 503,
+                {'Retry-After': str(ESPERA_SEGUNDOS)})
     return jsonify({'status': 'ok'}), 200
 
 
