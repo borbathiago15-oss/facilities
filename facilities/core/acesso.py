@@ -2,9 +2,11 @@
 
 As regras são as do Trino, de onde a Passagem de Turno veio:
 
-* O administrador (``master``) e quem tem ``all_clients`` veem todos os
-  locais; qualquer outro perfil, só a carteira — carteira vazia não vê
-  NADA (o padrão antigo "sem vínculo vê tudo" vazava a carteira alheia).
+* O administrador (``master``), a diretoria e a gestão com ``all_clients``
+  veem todos os locais; qualquer outro perfil, só a carteira — carteira
+  vazia não vê NADA (o padrão antigo "sem vínculo vê tudo" vazava a carteira
+  alheia). Supervisor, encarregado e técnico com ``all_clients`` veem os
+  locais da gestão acima deles na cadeia (R1, ``hierarquia.carteira``).
 * Desde a Fase 2 a carteira sobe pela cadeia (``core/hierarquia.py``): os
   locais vinculados, mais os dos clientes do gerente, mais os de toda a
   equipe abaixo.

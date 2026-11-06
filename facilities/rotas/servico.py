@@ -587,30 +587,17 @@ def salvar_itens_em_lote(rota, ponto_ids, dados):
 
 def pessoas_escalaveis(local_id):
     """Quem pode ser escalado no local: as pessoas do posto que têm o local na
-    carteira (``hierarquia.carteira``). A carteira de quem é do posto é o que
-    está ligado a ela ou a alguém abaixo dela: em vez de montar a carteira de
-    cada uma, sobe a cadeia a partir de quem está ligado ao local."""
-    from facilities.core.models import user_clients
-    pessoas = (User.query.filter(User.is_active.is_(True), User.is_deleted.is_(False),
-                                 User.role.in_(PERFIS_ESCALAVEIS))
-               .order_by(User.name).all())
-    ligados = {uid for (uid,) in db.session.query(user_clients.c.user_id).filter(
-        user_clients.c.client_id == local_id)}
-    superior = dict(db.session.query(User.id, User.superior_id).filter(
-        User.is_deleted.is_(False)))
-    ativo = dict(db.session.query(User.id, User.is_active).filter(User.is_deleted.is_(False)))
-    com_o_local = set()
-    for uid in ligados:
-        # Quem está acima vê o que a pessoa ATIVA abaixo vê (a busca atravessa
-        # quem está desativado, como ``hierarquia.subordinados``).
-        if not ativo.get(uid):
-            continue
-        atual, vistos = uid, set()
-        while atual is not None and atual not in vistos:
-            com_o_local.add(atual)
-            vistos.add(atual)
-            atual = superior.get(atual)
-    return [p for p in pessoas if p.all_clients or p.id in com_o_local]
+    carteira (``hierarquia.carteira``), contadas de baixo para cima por
+    ``hierarquia.quem_ve_o_local``: quem está ligado ao local, quem está
+    acima dele na cadeia e o volante com "todos os locais" sob a gestão do
+    local (R1, 05/11/2026: "todos" do piso não é o grupo inteiro)."""
+    from facilities.core.hierarquia import quem_ve_o_local
+    veem = quem_ve_o_local(local_id)
+    if not veem:
+        return []
+    return (User.query.filter(User.is_active.is_(True), User.is_deleted.is_(False),
+                              User.role.in_(PERFIS_ESCALAVEIS), User.id.in_(veem))
+            .order_by(User.name).all())
 
 
 def salvar_escala(rota, dados):

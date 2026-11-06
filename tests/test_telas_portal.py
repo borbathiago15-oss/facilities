@@ -591,10 +591,11 @@ def test_responder_como_na_tela_antiga(app_module, mais):
     assert f'{d["local"]} · pedida por {d["autor"]}' in texto
     for e in d['eventos']:
         assert f'{e["quando"]} · {e["autor"]} · <span class="fw-semibold">{e["tipo"]}</span>' in texto
-    # O supervisor vê, mas não responde: a mesma recusa nas duas.
-    sup = fabrica.entrar(app_module, 'sup.gl@trino.com')
-    assert sup.get(api).get_json()['pode_responder'] is False
-    _par(sup, url + '/responder', api + '/responder', {'texto': 'do supervisor'})
+    # O encarregado vê, mas não responde: a mesma recusa nas duas. (Era o
+    # supervisor; desde a regra B, 05/11/2026, ele responde.)
+    enc = fabrica.entrar(app_module, 'enc.gl@trino.com')
+    assert enc.get(api).get_json()['pode_responder'] is False
+    _par(enc, url + '/responder', api + '/responder', {'texto': 'do encarregado'})
     _par(coord, url + '/responder', api + '/responder', {'texto': ''})
     r = coord.post(api + '/responder', data={'texto': 'Encerado às 10h.'})
     assert r.get_json() == {'recados': [{'tipo': 'success', 'texto':

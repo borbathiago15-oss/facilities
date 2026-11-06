@@ -34,6 +34,7 @@ function CamposDaPessoa({ dados, u }: { dados: DadosDasPessoas; u: Pessoa | null
         <div className="form-check">
           <input className="form-check-input" type="checkbox" name="all_clients" value="1" id={`todos${sfx}`} defaultChecked={!!u && u.todos_os_locais} />
           <label className="form-check-label small" htmlFor={`todos${sfx}`}>Todos os locais (inclusive os futuros)</label>
+          <div className="form-text">Supervisor, encarregado e técnico: só os locais da gestão acima na cadeia. A diretoria vê sempre todos.</div>
         </div>
       </div>
       <div className="col-md-6"><label className="form-label small fw-semibold" htmlFor={`sup${sfx}`}>Superior direto</label>

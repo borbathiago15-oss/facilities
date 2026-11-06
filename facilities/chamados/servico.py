@@ -8,9 +8,12 @@ Quem pode o quê (sempre dentro da carteira de contratos da pessoa):
 
 * abrir, comentar e anexar — quem age no módulo (encarregado, técnico,
   gestor, administrador);
-* atribuir, mudar prioridade e cancelar — gestor e administrador;
-* iniciar, pôr em espera, retomar e resolver — o técnico responsável, o
-  gestor e o administrador;
+* atribuir, mudar prioridade e cancelar — supervisor, gestor e
+  administrador (R3, 05/11/2026: o supervisor distribui);
+* iniciar, pôr em espera, retomar e resolver — o responsável, o
+  supervisor, o gestor e o administrador;
+* ser o responsável — técnico, supervisor, coordenador e gerente que
+  cuidam do local (``tecnicos_do_contrato``);
 * confirmar ("ficou bom") ou reabrir ("não ficou") — quem pediu, o gestor e
   o administrador;
 * a diretoria lê tudo e não altera nada.
@@ -89,6 +92,12 @@ def e_gestor(user):
     return user.e_gestao()
 
 
+def distribui(user):
+    """Quem distribui o chamado (atribui, muda prioridade, cancela e atende
+    qualquer um): a gestão e o supervisor (R3)."""
+    return user.e_gestao() or user.e_supervisor()
+
+
 def pode_ver(user, ch):
     return user.can_view(MODULO_CHAMADOS) and _na_carteira(user, ch.client_id)
 
@@ -98,11 +107,11 @@ def pode_agir(user, ch):
 
 
 def pode_gerir(user, ch):
-    return pode_agir(user, ch) and e_gestor(user)
+    return pode_agir(user, ch) and distribui(user)
 
 
 def pode_atender(user, ch):
-    return pode_agir(user, ch) and (e_gestor(user) or ch.responsavel_id == user.id)
+    return pode_agir(user, ch) and (distribui(user) or ch.responsavel_id == user.id)
 
 
 def pode_confirmar(user, ch):
@@ -136,30 +145,43 @@ def _ativos(q):
     return q.filter(User.is_active.is_(True), User.is_deleted.is_(False))
 
 
+# Quem pode ser o responsável por um chamado (R3: o supervisor também).
+PERFIS_QUE_RECEBEM = ('tecnico', 'supervisor', 'pleno', 'gerente')
+# Quem é a gestão do local nos avisos (chamado novo, insumo, cobrança...).
+PERFIS_GESTORES = ('pleno', 'gerente')
+
+
 def pessoas_do_contrato(client_id, papeis):
-    """Quem tem o contrato na carteira (vínculo ou "todos"), nos papéis dados."""
-    vinculados = _ativos(User.query.filter(User.role.in_(papeis),
-                                           User.clients.any(id=client_id)))
-    todos = _ativos(User.query.filter(User.role.in_(papeis),
-                                      User.all_clients.is_(True)))
-    vistos, saida = set(), []
-    for u in list(vinculados) + list(todos):
-        if u.id not in vistos:
-            vistos.add(u.id)
-            saida.append(u)
-    return sorted(saida, key=lambda u: u.name.lower())
+    """Quem cuida do local (``hierarquia.quem_ve_o_local``: vínculo, gerente
+    pelo cliente, a cadeia acima e o volante com "todos" sob a gestão do
+    local), ativo, nos papéis dados — em ordem de nome."""
+    from facilities.core.hierarquia import quem_ve_o_local
+    ids = quem_ve_o_local(client_id)
+    if not ids:
+        return []
+    pessoas = _ativos(User.query.filter(User.role.in_(papeis), User.id.in_(ids))).all()
+    return sorted(pessoas, key=lambda u: u.name.lower())
 
 
 def tecnicos_do_contrato(client_id):
-    """Quem pode receber um chamado: técnicos e gestores do contrato."""
-    return pessoas_do_contrato(client_id, ('tecnico', 'pleno', 'gerente'))
+    """Quem pode receber um chamado: técnicos, supervisores e a gestão do
+    local — e o gestor regional com "todos os locais" (vê e recebe chamado
+    de qualquer local, mas não é avisado de todos: ``gestores_do_contrato``)."""
+    cuidam = pessoas_do_contrato(client_id, PERFIS_QUE_RECEBEM)
+    ids = {u.id for u in cuidam}
+    regionais = [u for u in _ativos(User.query.filter(
+        User.role.in_([p for p in PERFIS_QUE_RECEBEM if p in PERFIS_GESTORES]),
+        User.all_clients.is_(True))) if u.id not in ids]
+    return sorted(cuidam + regionais, key=lambda u: u.name.lower())
 
 
 def gestores_do_contrato(client_id):
-    """O gestor responsável e os gestores VINCULADOS ao contrato — nunca
-    "todos os administradores", nem o gestor que só tem "todos os contratos"
-    (o regional, a diretoria): aviso que chega a quem não cuida do contrato
-    ensina a ignorar aviso. É a mesma conta da Passagem de Turno.
+    """A gestão do local: o gestor responsável cadastrado e os gerentes e
+    coordenadores que cuidam dele (R4: o gerente pelo cliente e o
+    coordenador pela cadeia contam, não só quem tem o vínculo direto) —
+    nunca "todos os administradores", nem o gestor que só tem "todos os
+    contratos" (o regional, a diretoria): aviso que chega a quem não cuida
+    do contrato ensina a ignorar aviso. É a mesma conta da Passagem de Turno.
 
     O responsável cadastrado no contrato só entra se AINDA é gestor (ou
     administrador), está ativo e tem o contrato na carteira: a tela de
@@ -167,8 +189,7 @@ def gestores_do_contrato(client_id):
     ou perdeu o contrato receberia título e local de um chamado que não
     consegue abrir (o link dá 403).
     """
-    ids = {u.id for u in _ativos(User.query.filter(User.role.in_(('pleno', 'gerente')),
-                                                   User.clients.any(id=client_id)))}
+    ids = {u.id for u in pessoas_do_contrato(client_id, PERFIS_GESTORES)}
     c = db.session.get(Client, client_id)
     resp = db.session.get(User, c.responsible_user_id) \
         if c is not None and c.responsible_user_id else None
@@ -176,6 +197,34 @@ def gestores_do_contrato(client_id):
             and e_gestor(resp) and _na_carteira(resp, client_id)):
         ids.add(resp.id)
     return ids
+
+
+def avisados_de_chamado_novo(client_id):
+    """Quem recebe "Novo chamado": a gestão do local e os supervisores que
+    cuidam dele (regra A, 05/11/2026: o supervisor distribui, então precisa
+    saber que chegou chamado)."""
+    return gestores_do_contrato(client_id) | {
+        u.id for u in pessoas_do_contrato(client_id, ('supervisor',))}
+
+
+def responsavel_ativo(user_id, client_id):
+    """O responsável ainda pode atender este local? (ativo, não excluído e
+    com o local na carteira) — D7: desativar não transfere nada sozinho."""
+    u = db.session.get(User, user_id) if user_id else None
+    return (u is not None and u.is_active and not u.is_deleted
+            and u.can_view(MODULO_CHAMADOS) and _na_carteira(u, client_id))
+
+
+def quem_atende(ch):
+    """A quem vão os avisos de quem atende (prazo, reabertura): o
+    responsável, se ainda pode atender; senão a gestão do local.
+
+    Desativar o responsável não transfere o chamado (D7): sem esta volta, o
+    "vence em breve" ia só a ele, o ``_avisar`` o filtrava e ninguém sabia.
+    """
+    if responsavel_ativo(ch.responsavel_id, ch.client_id):
+        return {ch.responsavel_id}
+    return gestores_do_contrato(ch.client_id)
 
 
 def _avisar(user_ids, ch, titulo, mensagem, exceto=None):
@@ -311,7 +360,7 @@ def abrir(user, client_id, titulo, descricao='', local='', categoria='outro',
     db.session.add(ch)
     db.session.flush()
     _evento(ch, 'aberto', user, f'Prioridade {PRIORIDADES[prioridade].lower()}.')
-    avisados = _avisar(gestores_do_contrato(client_id), ch, f'Novo chamado: {ch.titulo}',
+    avisados = _avisar(avisados_de_chamado_novo(client_id), ch, f'Novo chamado: {ch.titulo}',
                        f'{contrato.name} · prioridade {PRIORIDADES[prioridade].lower()}'
                        f'{" · " + ch.local if ch.local else ""}. Atribua a um técnico.',
                        exceto=user.id)
@@ -320,6 +369,8 @@ def abrir(user, client_id, titulo, descricao='', local='', categoria='outro',
         from facilities.core import push
         push.avisar(avisados, f'Urgente: {ch.numero}', f'{contrato.name} · {ch.titulo}',
                     f'/chamados/{ch.id}', marca=f'novo-{ch.id}')
+    # Para a tela dizer a verdade (D3): sem ninguém avisado, ela não promete.
+    ch.avisados_na_abertura = avisados
     return ch
 
 
@@ -604,8 +655,8 @@ def executar(user, ch, acao, form):
         ch.aviso_vencendo_em = None
         ch.aviso_vencido_em = None
         _evento(ch, 'reaberto', user, f'{texto} — novo prazo: {_prazo_txt(ch)}.')
-        _avisar([ch.responsavel_id] if ch.responsavel_id else gestores_do_contrato(ch.client_id),
-                ch, f'Chamado reaberto: {ch.titulo}', texto[:300], exceto=user.id)
+        _avisar(quem_atende(ch), ch, f'Chamado reaberto: {ch.titulo}', texto[:300],
+                exceto=user.id)
 
     elif acao == 'cancelar':
         _exigir(texto, 'Diga por que o chamado está sendo cancelado.', 400)
@@ -677,7 +728,8 @@ def _antecedencia(ch):
 
 
 def avisar_prazos(agora=None):
-    """Vence em breve: avisa quem atende. Venceu: avisa quem atende e a gestão.
+    """Vence em breve: avisa quem atende (``quem_atende``: o responsável, ou a
+    gestão do local se ele foi desativado). Venceu: quem atende e a gestão.
     Cada aviso uma vez só; em "Aguardando" o relógio está parado (D8)."""
     from facilities import tempo
     from facilities.core import push
@@ -688,7 +740,7 @@ def avisar_prazos(agora=None):
                                    Chamado.prazo.isnot(None),
                                    Chamado.aviso_vencido_em.is_(None)).all():
         link = f'/chamados/{ch.id}'
-        quem = {ch.responsavel_id} if ch.responsavel_id else gestores_do_contrato(ch.client_id)
+        quem = quem_atende(ch)
         if agora - ch.prazo > VENCIDO_HA_MUITO:
             ch.aviso_vencido_em = agora
             ch.aviso_vencendo_em = ch.aviso_vencendo_em or agora

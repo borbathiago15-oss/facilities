@@ -237,7 +237,7 @@ def create_app(config=None):
         REMEMBER_COOKIE_SECURE=cookie_seguro,
         REMEMBER_COOKIE_SAMESITE='Lax',
         RATELIMIT_ENABLED=_flag('RATELIMIT_ENABLED', True),
-        # Auditoria SEC-001: gestão e diretoria só entram com a segunda etapa.
+        # Auditoria SEC-001: gestão, diretoria e supervisor só entram com a segunda etapa.
         # Desligar é só para os testes automatizados.
         MFA_OBRIGATORIO_GESTAO=_flag('MFA_OBRIGATORIO_GESTAO', True),
         # memory:// conta POR PROCESSO: com N workers o limite real é N vezes
@@ -433,7 +433,8 @@ def _sessao(app):
     @app.before_request
     def _segunda_etapa_obrigatoria():
         """Auditoria SEC-001 (decisão do dono, 19/10/2026): quem enxerga
-        vários locais (gestão e diretoria) não usa o sistema só com a senha.
+        vários locais (gestão, diretoria e, desde 05/11/2026, o supervisor)
+        não usa o sistema só com a senha.
         Até cadastrar o código do aplicativo autenticador, só abre a tela de
         segurança (e trocar a senha, sair). O cliente tem a porta própria."""
         if _eh_sonda():

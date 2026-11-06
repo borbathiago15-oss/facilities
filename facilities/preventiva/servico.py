@@ -98,6 +98,12 @@ def _abrir_ordem(plano, vencimento, agora_utc):
     db.session.add(ciclo)
     db.session.flush()
     onde = f'{plano.ponto.ambiente.nome} · {plano.ponto.nome}'
+    # D7: o responsável do plano foi desativado (ou saiu do local)? A ordem
+    # nasce SEM responsável e o aviso vai à gestão do local, que escolhe
+    # quem atende. O plano fica como está: a gestão troca o responsável
+    # nele quando puder (a tela do plano mostra quem está lá).
+    resp = plano.responsavel_id if chamados.responsavel_ativo(
+        plano.responsavel_id, plano.client_id) else None
     ch = Chamado(client_id=plano.client_id,
                  titulo=f'Preventiva: {plano.nome}'[:200],
                  descricao=(f'Plano preventivo "{plano.nome}", a cada {plano.intervalo_dias} '
@@ -105,16 +111,17 @@ def _abrir_ordem(plano, vencimento, agora_utc):
                             f'checklist "{plano.modelo.nome}" lendo o QR do ponto.'),
                  local=onde[:200], categoria='equipamento' if plano.equipamento_id else 'outro',
                  prioridade=plano.prioridade, status=ABERTO, solicitante_id=plano.criado_por,
-                 responsavel_id=plano.responsavel_id, prazo=_prazo_do_vencimento(vencimento),
+                 responsavel_id=resp, prazo=_prazo_do_vencimento(vencimento),
                  origem=ORIGEM_PREVENTIVA, origem_id=ciclo.id, aberto_em=agora_utc)
     db.session.add(ch)
     db.session.flush()
     ciclo.chamado_id = ch.id
     chamados._evento(ch, 'aberto', None, 'Aberto pelo plano preventivo.')
-    quem = {plano.responsavel_id} if plano.responsavel_id else \
-        chamados.gestores_do_contrato(plano.client_id)
+    quem = {resp} if resp else chamados.gestores_do_contrato(plano.client_id)
+    sem_dono = (' O responsável do plano não está mais ativo: escolha quem vai atender.'
+                if plano.responsavel_id and not resp else '')
     chamados._avisar(quem, ch, f'Preventiva: {plano.nome}',
-                     f'{onde} · vence em {vencimento.strftime("%d/%m")}.')
+                     f'{onde} · vence em {vencimento.strftime("%d/%m")}.{sem_dono}')
     return ch
 
 

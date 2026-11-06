@@ -58,12 +58,12 @@ MIGRADOS_EXATOS = ('/painel', '/')
 # de insumo (``/materiais/pedidos/<id>/foto``) e o PDF e o Excel do
 # relatório do cliente (``/relatorios/cliente/<id>/<mês>/arquivo.pdf``).
 FORA = ('/etiquetas.pdf', '/logo.png', '/foto', '/arquivo.pdf', '/arquivo.xlsx')
-# Da rotina dos locais, os arquivos (POP/FIT, fotos, referências) e o
-# agendador continuam no servidor; dos chamados, as fotos e os PDFs; do
+# Da rotina dos locais, os arquivos (POP/FIT, fotos, referências) continuam
+# no servidor; dos chamados, as fotos e os PDFs; do
 # portal do cliente, as fotos e os POP/FIT (o PDF e o Excel do relatório já
 # saem pelo ``FORA``).
 FORA_DAS_ROTAS = ('/rotas/documentos/', '/rotas/fotos/', '/rotas/referencias/',
-                  '/rotas/ocorrencias/', '/rotas/agendador', '/chamados/anexos/',
+                  '/rotas/ocorrencias/', '/chamados/anexos/',
                   '/cliente/fotos/', '/cliente/documentos/', '/app/visitas/fotos/')
 
 
@@ -651,7 +651,10 @@ def api_montagem_convites():
         'onde': ', '.join(loc.name for loc in c['locais_do'](x))
         or (x.cliente.nome if x.cliente else ''),
         'criado_por': x.criado_por.name, 'criado_em': _hora(x.criado_em),
-    } for x in c['convites']]})
+    } for x in c['convites']], 'encarregados': [{
+        'id': u.id, 'nome': u.name, 'locais': ', '.join(sorted(x.name for x in u.clients)),
+        'autorizado': c['permissao_passagem'] in u.permissions,
+    } for u in c['encarregados']]})
 
 
 def dados_do_convite_criado(c):
@@ -711,6 +714,18 @@ def api_montagem_convidar(cid):
 @login_required
 def api_montagem_cancelar_convite(conv_id):
     return _feito(nc.acao_cancelar_convite(conv_id))
+
+
+@api.post('/cadastros/convites/pessoas/<int:uid>/autorizar-passagem')
+@login_required
+def api_montagem_autorizar_passagem(uid):
+    return _feito(nc.acao_autorizar_passagem(uid, True))
+
+
+@api.post('/cadastros/convites/pessoas/<int:uid>/retirar-passagem')
+@login_required
+def api_montagem_retirar_passagem(uid):
+    return _feito(nc.acao_autorizar_passagem(uid, False))
 
 
 @api.post('/cadastros/convites/<int:conv_id>/novo-link')

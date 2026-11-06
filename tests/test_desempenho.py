@@ -158,5 +158,8 @@ def test_quem_pode_ser_escalado_e_a_mesma_conta_da_carteira(app_module):
         nomes = {p.email for p in pessoas_escalaveis(loc.id)}
         # O supervisor vê o local pelo encarregado abaixo (atravessando o
         # supervisor desativado); o do encarregado desativado, não.
-        assert {'sup.esc@d.com', 'enc.esc@d.com', 'tec.todos@d.com'} <= nomes
+        assert {'sup.esc@d.com', 'enc.esc@d.com'} <= nomes
         assert 'sup.sem@d.com' not in nomes
+        # R1 (05/11/2026): o técnico com "todos" e sem gestão acima não vê o
+        # grupo inteiro — antes entrava na escala de qualquer local.
+        assert 'tec.todos@d.com' not in nomes

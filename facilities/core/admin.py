@@ -9,6 +9,7 @@ import secrets
 
 from flask import Blueprint, flash, make_response, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
+from sqlalchemy.exc import IntegrityError
 
 from facilities.extensions import db
 from facilities.core.acesso import admin_required
@@ -95,13 +96,13 @@ def _pagina_com_senha(texto, senha):
 
 def contexto_usuarios():
     from facilities.cadastros.models import Contratante
-    from facilities.core.hierarquia import superiores_possiveis
+    from facilities.core.hierarquia import alcance, superiores_possiveis
     from sqlalchemy.orm import selectinload
     pessoas = (User.query.filter(User.is_deleted.is_(False))
                .options(selectinload(User.clients))
                .order_by(User.is_active.desc(), User.name).all())
     contratos = Client.query.filter(Client.is_deleted.is_(False)).order_by(Client.name).all()
-    return dict(pessoas=pessoas, contratos=contratos, perfis=PERFIS,
+    return dict(pessoas=pessoas, contratos=contratos, perfis=PERFIS, alcance=alcance,
                 permissoes=User.PERMISSOES_FINAS, superiores=superiores_possiveis(),
                 clientes=Contratante.query.order_by(Contratante.nome).all())
 
@@ -111,7 +112,9 @@ def _aplicar_formulario(u, form):
     u.email = (form.get('email') or '').strip().lower()[:150]
     role = form.get('role') or 'encarregado'
     u.role = role if role in PERFIS else 'encarregado'
-    u.all_clients = bool(form.get('all_clients'))
+    # R5: a diretoria vê sempre todos os locais (como pelo convite), com ou
+    # sem a caixinha.
+    u.all_clients = bool(form.get('all_clients')) or u.role == 'visualizador'
     ids = [int(x) for x in form.getlist('clients') if str(x).isdigit()]
     u.clients = Client.query.filter(Client.id.in_(ids or [-1])).all()
     finas = [p for p in form.getlist('permissoes') if p in User.PERMISSOES_FINAS]
@@ -144,6 +147,9 @@ def _aplicar_cadeia(u, form, role_antes=None):
     return None
 
 
+MSG_EMAIL_REPETIDO = 'Já existe uma pessoa com este e-mail.'
+
+
 def _validar(u, original_id=None):
     if not u.name:
         return 'Informe o nome.'
@@ -151,7 +157,7 @@ def _validar(u, original_id=None):
         return 'Informe um e-mail válido.'
     outro = User.por_email(u.email)
     if outro is not None and outro.id != original_id:
-        return 'Já existe uma pessoa com este e-mail.'
+        return MSG_EMAIL_REPETIDO
     return None
 
 
@@ -179,7 +185,17 @@ def acao_criar_usuario(dados):
     u.set_password(senha)
     u.must_change_password = True
     db.session.add(u)
-    db.session.commit()
+    try:
+        db.session.commit()
+    except IntegrityError:
+        # Duplo clique em "Criar" (ou dois administradores ao mesmo tempo):
+        # os dois passam pela conferência de ``_validar`` antes de qualquer
+        # um gravar, e o índice único do e-mail recusa o segundo. Antes era
+        # "erro interno" (500) e a pessoa não sabia se a conta tinha sido
+        # criada (auditoria, Fase 3, L2). A primeira foi; esta não.
+        db.session.rollback()
+        flash(MSG_EMAIL_REPETIDO, 'danger')
+        return None
     return u, senha
 
 
@@ -207,9 +223,36 @@ def acao_editar_usuario(uid, dados):
         return url_for('admin.usuarios')
     if era_ativo and not u.is_active:
         u.session_epoch = (u.session_epoch or 0) + 1   # derruba as sessões abertas
-    db.session.commit()
+    try:
+        db.session.commit()
+    except IntegrityError:
+        # O e-mail novo acabou de ser cadastrado para outra pessoa (a mesma
+        # corrida do cadastro, em ``acao_criar_usuario``).
+        db.session.rollback()
+        flash(MSG_EMAIL_REPETIDO, 'danger')
+        return url_for('admin.usuarios')
     flash(f'Cadastro de {u.name} atualizado.', 'success')
+    if era_ativo and not u.is_active:
+        pendente = _o_que_fica_com(u)
+        if pendente:
+            flash(f'{u.name} era responsável por {pendente}. Nada foi transferido: os avisos '
+                  f'disso passam para a gestão de cada local até ela escolher outro '
+                  f'responsável.', 'warning')
     return url_for('admin.usuarios')
+
+
+def _o_que_fica_com(u):
+    """D7: o que a pessoa desativada deixa (chamados em aberto e planos
+    preventivos ativos de que é responsável), em texto para o recado."""
+    from facilities.chamados.models import STATUS_EM_ABERTO, Chamado
+    from facilities.preventiva.models import PlanoPreventivo
+    n_ch = Chamado.query.filter(Chamado.responsavel_id == u.id,
+                                Chamado.status.in_(STATUS_EM_ABERTO)).count()
+    n_pl = PlanoPreventivo.query.filter(PlanoPreventivo.responsavel_id == u.id,
+                                        PlanoPreventivo.is_active.is_(True)).count()
+    partes = ([f'{n_ch} chamado(s) em aberto'] if n_ch else []) + \
+        ([f'{n_pl} plano(s) preventivo(s)'] if n_pl else [])
+    return ' e '.join(partes)
 
 
 @bp.post('/usuarios/<int:uid>/nova-senha')

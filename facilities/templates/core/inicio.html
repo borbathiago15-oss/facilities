@@ -4,7 +4,7 @@
 <div class="fc-ola">
   <div>
     <h1 class="fc-titulo">Olá, {{ current_user.name.split(' ')[0] }}</h1>
-    <p class="fc-sub mb-0">{{ tempo.agora().strftime('%d/%m/%Y') }} · {{ current_user.perfil_rotulo }}{% if current_user._effective_role() != 'master' and not current_user.all_clients %} · {{ current_user.clients|length }} local(is) na sua carteira{% endif %}</p>
+    <p class="fc-sub mb-0">{{ tempo.agora().strftime('%d/%m/%Y') }} · {{ current_user.perfil_rotulo }}{% if current_user._effective_role() not in ('master', 'visualizador') and not current_user.all_clients %} · {{ current_user.clients|length }} local(is) na sua carteira{% endif %}</p>
   </div>
   {% if current_user.can_access('chamados') %}<a class="btn btn-primary fw-bold" href="{{ url_for('chamados.novo') }}"><i class="bi bi-plus-lg" aria-hidden="true"></i> Abrir chamado</a>{% endif %}
 </div>

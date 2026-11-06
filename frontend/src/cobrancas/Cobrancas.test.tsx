@@ -95,7 +95,7 @@ describe('a cobrança na equipe', () => {
 
   it('quem não responde e a respondida: os avisos da antiga', () => {
     const { unmount } = abrir(<CobrancaDaEquipe dados={cobranca({ pode_responder: false })} />);
-    expect(screen.getByText('Quem responde é a coordenação do contrato.')).toBeInTheDocument();
+    expect(screen.getByText('Quem responde é a coordenação ou a supervisão do local.')).toBeInTheDocument();
     expect(screen.queryByRole('button')).toBeNull();
     unmount();
     abrir(<CobrancaDaEquipe dados={cobranca({ pode_responder: false, status: 'respondida', reaberturas: 0 })} />);

@@ -34,6 +34,9 @@ def pessoa(app_module, email, papel='encarregado', locais=(), **extra):
     u.failed_login_count = 0
     u.lockout_until = None
     u.all_clients = False
+    # A pessoa é reaproveitada pelo e-mail: a permissão concedida num teste
+    # (R10) não passa para o próximo.
+    u.permissions_json = '[]'
     for k, v in extra.items():
         setattr(u, k, v)
     u.set_password(SENHA)

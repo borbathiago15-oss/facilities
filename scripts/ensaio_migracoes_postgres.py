@@ -14,7 +14,10 @@ O banco é ZERADO (precisa ter "test" no nome). O ensaio:
    (todas as colunas, ordenadas; os campos cifrados entram DECIFRADOS, porque
    o texto cifrado muda a cada gravação) ficaram iguais — nada se perdeu nem
    mudou;
-5. ``flask db check`` sem diferença.
+5. ``flask db check`` sem diferença;
+6. ``ensaiar_passagem_unica``: as passagens repetidas semeadas antes de
+   ``c85ddc846b35`` — quem fica, para onde vão os filhos, a quarentena, e a
+   volta devolvendo todas as tabelas exatamente como estavam.
 
 Sai com código 1 e diz a tabela quando algo se perde.
 """
@@ -290,6 +293,47 @@ SEMENTES = [
     "WHERE email='gerente@ensaio')",
     "UPDATE execucoes SET gps_situacao='fora', gps_distancia_m=1100, gps_precisao_m=25",
     "UPDATE chegadas SET gps_situacao='sem_gps'",
+    # Passagem de turno com DUPLICATAS (o estado de antes de c85ddc846b35):
+    # no 1º Turno de 16/10, um rascunho velho e duas encerradas (a das 09:00
+    # fica); no 2º Turno, dois rascunhos (o de maior id fica); o 3º Turno é
+    # único. Filhos (pendência, ocorrência, anexo, correção, trilha) nas que
+    # saem — a migração os leva para a que fica, e a volta os devolve.
+    "INSERT INTO diario_operacional_areas (client_id,nome,ativo,created_by,created_at,"
+    "updated_at) SELECT c.id,'Expedição',true,u.id,now(),now() FROM clients c, users u "
+    "WHERE c.name='GL Armazém 1' AND u.email='sup@ensaio'",
+    "INSERT INTO diario_operacional_configuracoes (client_id,area_id,nome,turnos_json,"
+    "campos_json,atividades_json,tipos_ocorrencia_json,ativo,created_by,created_at,updated_at) "
+    "SELECT a.client_id,a.id,'Expedição — passagem','[]','[]','[]','[]',true,a.created_by,"
+    "now(),now() FROM diario_operacional_areas a",
+    *[("INSERT INTO diario_operacional_turnos (client_id,configuracao_id,data_turno,turno,"
+       "status,dados_json,observacao,created_by,created_at,submitted_at,updated_at) "
+       f"SELECT g.client_id,g.id,'2026-10-16','{turno}','{status}','{{\"x\": \"{obs}\"}}',"
+       f"'{obs}',g.created_by,'2026-10-16 08:00',{enviado},now() "
+       "FROM diario_operacional_configuracoes g")
+      for turno, status, obs, enviado in (
+          ('1º Turno', 'aberto', 'ensaio-A-rascunho', 'NULL'),
+          ('1º Turno', 'encerrado', 'ensaio-A-segunda', "'2026-10-16 10:00'"),
+          ('1º Turno', 'encerrado', 'ensaio-A-primeira', "'2026-10-16 09:00'"),
+          ('2º Turno', 'aberto', 'ensaio-B-velho', 'NULL'),
+          ('2º Turno', 'aberto', 'ensaio-B-novo', 'NULL'),
+          ('3º Turno', 'encerrado', 'ensaio-C-unico', "'2026-10-16 23:00'"))],
+    "INSERT INTO diario_operacional_pendencias (client_id,turno_id,titulo,status,prioridade,"
+    "created_by,created_at) SELECT t.client_id,t.id,'Pendência de '||t.observacao,'aberta',"
+    "'media',t.created_by,now() FROM diario_operacional_turnos t",
+    "INSERT INTO diario_operacional_ocorrencias (client_id,turno_id,tipo,descricao,gravidade,"
+    "status,created_by,created_at) SELECT t.client_id,t.id,'Outros','Lâmpada','normal',"
+    "'aberta',t.created_by,now() FROM diario_operacional_turnos t "
+    "WHERE t.observacao='ensaio-A-segunda'",
+    "INSERT INTO diario_operacional_anexos (turno_id,storage_key,nome,uploaded_by,created_at) "
+    "SELECT t.id,'passagem/ensaio.jpg','ensaio.jpg',t.created_by,now() "
+    "FROM diario_operacional_turnos t WHERE t.observacao='ensaio-A-rascunho'",
+    "INSERT INTO diario_operacional_turno_correcoes (turno_id,motivo,antes_json,created_by,"
+    "created_at) SELECT t.id,'erro de digitação','{}',t.created_by,now() "
+    "FROM diario_operacional_turnos t WHERE t.observacao='ensaio-A-segunda'",
+    "INSERT INTO diario_operacional_pendencia_eventos (pendencia_id,turno_id,tipo,created_by,"
+    "created_at) SELECT p.id,t.id,'recebida',t.created_by,now() "
+    "FROM diario_operacional_pendencias p, diario_operacional_turnos t "
+    "WHERE p.titulo='Pendência de ensaio-C-unico' AND t.observacao='ensaio-A-segunda'",
 ]
 
 # Fases depois da cifra: o e-mail já não serve de filtro (está cifrado);
@@ -398,7 +442,98 @@ def ensaiar(url, sementes=SEMENTES, sementes_depois=SEMENTES_DEPOIS_DA_CIFRA):
     return antes
 
 
+# A migração da passagem única (c85ddc846b35) e a de antes dela.
+PASSAGEM_UNICA, ANTES_DA_PASSAGEM_UNICA = 'c85ddc846b35', 'f3b8d1a6c2e4'
+FILHOS_DA_PASSAGEM = (('diario_operacional_pendencias', 'turno_id'),
+                      ('diario_operacional_ocorrencias', 'turno_id'),
+                      ('diario_operacional_anexos', 'turno_id'),
+                      ('diario_operacional_turno_correcoes', 'turno_id'),
+                      ('diario_operacional_pendencia_eventos', 'turno_id'))
+
+
+def _passagens(engine):
+    with engine.connect() as c:
+        turnos = {r[1]: r[0] for r in c.execute(sa.text(
+            'SELECT id, observacao FROM diario_operacional_turnos'))}
+        dup = c.execute(sa.text(
+            'SELECT count(*) FROM (SELECT 1 FROM diario_operacional_turnos GROUP BY client_id, '
+            'configuracao_id, data_turno, turno HAVING count(*) > 1) d')).scalar()
+        filhos = {t: sorted(r[0] for r in c.execute(sa.text(f'SELECT {col} FROM {t}')))
+                  for t, col in FILHOS_DA_PASSAGEM}
+    return turnos, dup, filhos
+
+
+def ensaiar_passagem_unica(url):
+    """A deduplicação de c85ddc846b35 com duplicatas de verdade: semeia na
+    revisão de antes, sobe, confere quem ficou e para onde foram os filhos,
+    volta e confere que TODAS as tabelas ficaram iguais às de antes, e sobe de
+    novo (o mesmo resultado da primeira ida)."""
+    nome = sa.engine.make_url(url).database or ''
+    if 'test' not in nome.lower():
+        raise SystemExit(f'O banco {nome!r} não tem "test" no nome: o ensaio o zera.')
+    engine = sa.create_engine(url)
+    with engine.begin() as c:
+        c.execute(sa.text('DROP SCHEMA public CASCADE'))
+        c.execute(sa.text('CREATE SCHEMA public'))
+    cifra.configurar(CHAVE_ENSAIO)
+    _flask('upgrade', ANTES_DA_CIFRA, url=url)
+    with engine.begin() as c:
+        for sql in SEMENTES:
+            c.execute(sa.text(sql))
+    _flask('upgrade', ANTES_DA_PASSAGEM_UNICA, url=url)
+    antes = _digitais(engine)
+    turnos, dup, filhos = _passagens(engine)
+    print(f'antes: {len(turnos)} passagens, {dup} grupos repetidos, '
+          f'filhos {[len(v) for v in filhos.values()]}')
+    if dup != 2:
+        raise SystemExit(f'semente sem as duplicatas esperadas ({dup})')
+
+    def conferir_ida():
+        vivos, dup2, filhos2 = _passagens(engine)
+        if dup2 or set(vivos) != {'ensaio-A-primeira', 'ensaio-B-novo', 'ensaio-C-unico'}:
+            raise SystemExit(f'ida: ficaram {sorted(vivos)} ({dup2} grupos repetidos)')
+        for t, ids in filhos2.items():
+            if len(ids) != len(filhos[t]) or not set(ids) <= set(vivos.values()):
+                raise SystemExit(f'ida: {t} perdeu linha ou aponta para passagem que saiu')
+        a, b = vivos['ensaio-A-primeira'], vivos['ensaio-B-novo']
+        esperado = {'diario_operacional_pendencias': sorted([a, a, a, b, b,
+                                                             vivos['ensaio-C-unico']]),
+                    'diario_operacional_ocorrencias': [a], 'diario_operacional_anexos': [a],
+                    'diario_operacional_turno_correcoes': [a],
+                    'diario_operacional_pendencia_eventos': [a]}
+        if filhos2 != esperado:
+            raise SystemExit(f'ida: filhos {filhos2} != {esperado}')
+        with engine.connect() as c:
+            q = c.execute(sa.text(
+                'SELECT observacao FROM _quarentena_c85ddc846b35_diario_operacional_turnos '
+                'ORDER BY id')).scalars().all()
+            idx = c.execute(sa.text(
+                "SELECT indexdef FROM pg_indexes WHERE indexname='uq_diario_turnos_chave'"
+                )).scalar()
+        if q != ['ensaio-A-rascunho', 'ensaio-A-segunda', 'ensaio-B-velho'] or not idx:
+            raise SystemExit(f'ida: quarentena {q}, índice {idx}')
+        print(f'ok: ida — ficaram {sorted(vivos)}; quarentena {q}; filhos reapontados; {idx}')
+
+    _flask('upgrade', url=url)
+    conferir_ida()
+    depois = _digitais(engine)
+    _flask('downgrade', ANTES_DA_PASSAGEM_UNICA, url=url)
+    volta = _digitais(engine)
+    if volta != antes:
+        diff = [t for t in antes if volta.get(t) != antes[t]]
+        raise SystemExit(f'volta: as tabelas {diff} não ficaram como antes')
+    print(f'ok: volta — {len(antes)} tabelas idênticas às de antes da ida '
+          f'({len(_passagens(engine)[0])} passagens, duplicatas de volta)')
+    _flask('upgrade', url=url)
+    conferir_ida()
+    if _digitais(engine) != depois:
+        raise SystemExit('a segunda ida não deu o mesmo resultado da primeira')
+    print('ok: segunda ida — igual à primeira')
+    engine.dispose()
+
+
 if __name__ == '__main__':
     if len(sys.argv) != 2:
         raise SystemExit(__doc__)
     ensaiar(sys.argv[1])
+    ensaiar_passagem_unica(sys.argv[1])

@@ -111,6 +111,16 @@ mesmas funções em `core/auth.py` e `core/admin.py`):
   só uma marca dele (HMAC com a `SECRET_KEY`), que o prende à sessão que o
   pediu: outra sessão que abra a tela sorteia outro segredo, e o primeiro
   deixa de valer.
+* **Quem é obrigado a usar a segunda etapa** (o código do aplicativo
+  autenticador): administrador, gerente, coordenador, diretoria, cliente e,
+  desde 05/11/2026 (regra R2 do dono), o **supervisor** — ele vê os locais
+  da equipe, o painel e o custo de material, e distribui chamados. Até
+  ativar o código, quem é obrigado só abre "Segurança da conta" (e trocar a
+  senha, sair), e não pode desligá-lo. Encarregado/ASG e técnico continuam
+  sem a obrigação, mesmo com "acesso a todos os locais" (que para eles vale
+  só os locais da cadeia acima, R1). A lista mora em
+  `facilities/core/models.PERFIS_COM_SEGUNDA_ETAPA`; antes de publicar a
+  mudança, avise os supervisores de que o próximo login pedirá o código.
 * **Ligar e desligar a segunda etapa pedem a senha atual.** Só com a
   sessão (um cookie copiado, um computador esquecido aberto) ninguém
   cadastra o próprio autenticador nem tranca o dono fora.

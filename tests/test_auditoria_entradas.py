@@ -170,13 +170,14 @@ def test_login_sem_csrf_e_recusado(app_module, cena, csrf_ligado):
     assert r.status_code == 400
 
 
-def test_so_o_agendador_fica_fora_do_csrf():
-    """A única rota sem CSRF é ``POST /rotas/agendador`` (D10 da Fase 1)."""
+def test_nenhuma_rota_fica_fora_do_csrf():
+    """Nenhuma rota fica sem CSRF. A única que ficava, ``POST /rotas/agendador``
+    (D10 da Fase 1), foi desligada pela R9 (05/11/2026)."""
     import pathlib
     raiz = pathlib.Path(__file__).resolve().parent.parent / 'facilities'
     isentas = [str(p.relative_to(raiz)) for p in raiz.rglob('*.py')
                if 'csrf.exempt' in p.read_text(encoding='utf-8')]
-    assert isentas == ['rotas/telas.py']
+    assert isentas == []
 
 
 # ── 4. Erros da API sempre em JSON ────────────────────────────────────────

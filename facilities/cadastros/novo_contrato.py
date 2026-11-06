@@ -325,7 +325,43 @@ def convites():
 def contexto_convites():
     _exigir_montagem()
     return dict(convites=montagem.convites_visiveis(current_user),
-                perfis_nome=PERFIS, locais_do=montagem.locais_do_convite)
+                perfis_nome=PERFIS, locais_do=montagem.locais_do_convite,
+                encarregados=montagem.encarregados_autorizaveis(current_user),
+                permissao_passagem=montagem.PERMISSAO_PASSAGEM)
+
+
+# ── Quem configura a passagem (R10): a gestão autoriza o encarregado ───────
+
+@bp.post('/convites/pessoas/<int:uid>/autorizar-passagem')
+@login_required
+def autorizar_passagem(uid):
+    return redirect(acao_autorizar_passagem(uid, True))
+
+
+@bp.post('/convites/pessoas/<int:uid>/retirar-passagem')
+@login_required
+def retirar_passagem(uid):
+    return redirect(acao_autorizar_passagem(uid, False))
+
+
+def acao_autorizar_passagem(uid, autorizar):
+    """Concede ou retira "Configurar a passagem" de um encarregado da
+    carteira de quem está logado. A mesma regra nas duas telas."""
+    from facilities.core.models import User
+    _exigir_montagem()
+    # Id que não cabe na coluna (``/convites/pessoas/99999999999999999999``)
+    # é 404, não 500.
+    pessoa = db.session.get(User, uid) if 0 < uid < 2 ** 31 else None
+    if pessoa is None or not montagem.pode_autorizar_passagem(current_user, pessoa):
+        abort(404)
+    try:
+        frase = montagem.autorizar_passagem(current_user, pessoa, autorizar)
+        db.session.commit()
+        flash(frase, 'success')
+    except CadastroInvalido as erro:
+        db.session.rollback()
+        flash(str(erro), 'danger')
+    return url_for('montagem.convites')
 
 
 def _convite(conv_id):

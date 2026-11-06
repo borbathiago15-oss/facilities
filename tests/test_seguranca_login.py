@@ -1,6 +1,7 @@
 """Login forte (auditoria de segurança, bloco A, 19/10/2026).
 
-* SEC-001: gestão e diretoria só usam o sistema com a segunda etapa.
+* SEC-001: gestão, diretoria e supervisor (R2, 05/11/2026) só usam o sistema
+  com a segunda etapa.
 * SEC-002: o erro de senha é contado no banco (rajada em paralelo não escapa).
 * SEC-003: os erros de código ficam no servidor (repetir o cookie não zera).
 * SEC-007: conta bloqueada avisa o administrador.
@@ -49,7 +50,7 @@ def mfa_ligado(app_module):
 
 # ── SEC-001: segunda etapa obrigatória para a gestão ──────────────────────
 
-@pytest.mark.parametrize('papel', ['master', 'gerente', 'pleno', 'visualizador'])
+@pytest.mark.parametrize('papel', ['master', 'gerente', 'pleno', 'visualizador', 'supervisor'])
 def test_gestao_sem_codigo_so_abre_a_tela_de_seguranca(app_module, mfa_ligado, papel):
     _pessoa(app_module, f'mfa.{papel}@trino.com', papel)
     c = fabrica.entrar(app_module, f'mfa.{papel}@trino.com')
@@ -61,7 +62,9 @@ def test_gestao_sem_codigo_so_abre_a_tela_de_seguranca(app_module, mfa_ligado, p
     assert c.post('/app/api/leitura', json={}).status_code == 403
 
 
-@pytest.mark.parametrize('papel', ['supervisor', 'encarregado', 'tecnico'])
+# R2 (05/11/2026): o supervisor passou para o lado de quem é obrigado
+# (acima, em ``test_gestao_sem_codigo_so_abre_a_tela_de_seguranca``).
+@pytest.mark.parametrize('papel', ['encarregado', 'tecnico'])
 def test_pessoal_de_campo_segue_sem_codigo(app_module, mfa_ligado, papel):
     _pessoa(app_module, f'campo.{papel}@trino.com', papel)
     c = fabrica.entrar(app_module, f'campo.{papel}@trino.com')

@@ -1,7 +1,8 @@
 """Assistente "Novo contrato" e convites (decisões do dono, 22/10/2026).
 
 * O gerente cria cliente (vira o gerente dele), local, estrutura e convida;
-  o coordenador monta locais só nos clientes do gerente dele; quem é do
+  o coordenador monta locais só nos clientes da carteira dele (R6,
+  05/11/2026; antes, em todos os clientes do gerente dele); quem é do
   posto não abre o assistente.
 * Convite: link de uso único, 7 dias, só o hash no banco; a pessoa cria a
   senha e entra no perfil, no superior e nos locais escolhidos.
@@ -105,16 +106,26 @@ def test_numero_do_ponto_nao_muda_quando_outro_e_desativado(app_module, base):
         assert montagem.numeros_dos_pontos(cid)[p3.id] == 3
 
 
-def test_coordenador_monta_local_so_nos_clientes_do_gerente(app_module, base):
+def test_coordenador_monta_local_so_nos_clientes_da_carteira(app_module, base):
     from app import Client, User, db
     from facilities.cadastros import servico
-    _g, ctid, _cid = _cliente_e_local(app_module, base)
+    _g, ctid, cid = _cliente_e_local(app_module, base)
     with app_module.app.app_context():
         outro = servico.salvar_contratante(None, {'nome': 'Cliente de outro',
                                                   'empresa_id': base['empresa']}, None)
+        # Outro cliente do MESMO gerente, sem local na carteira do coordenador.
+        do_gerente = servico.salvar_contratante(None, {'nome': 'Outro do gerente',
+                                                       'empresa_id': base['empresa'],
+                                                       'gerente_id': str(base['gerente'])},
+                                                None)
         db.session.commit()
-        outro_id = outro.id
+        outro_id, do_gerente_id = outro.id, do_gerente.id
     c = fabrica.entrar(app_module, 'coord.nc@trino.com')
+    # Sem local na carteira, o coordenador não monta em cliente nenhum (R6).
+    assert c.get(f'/novo-contrato/cliente/{ctid}/local').status_code == 403
+    with app_module.app.app_context():
+        db.session.get(User, base['coord']).clients = [db.session.get(Client, cid)]
+        db.session.commit()
     # Cliente novo é do gerente.
     r = c.post('/novo-contrato/cliente', data={'nome': 'X', 'empresa_id': str(base['empresa'])})
     assert r.status_code == 302
@@ -122,6 +133,7 @@ def test_coordenador_monta_local_so_nos_clientes_do_gerente(app_module, base):
         from facilities.cadastros.models import Contratante
         assert Contratante.query.filter_by(nome='X').count() == 0
     assert c.get(f'/novo-contrato/cliente/{outro_id}/local').status_code == 403
+    assert c.get(f'/novo-contrato/cliente/{do_gerente_id}/local').status_code == 403
     r = c.post(f'/novo-contrato/cliente/{ctid}/local', data={
         'name': 'Local do coordenador NC', 'estado_id': str(base['ba'])})
     assert r.status_code == 302

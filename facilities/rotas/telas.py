@@ -20,7 +20,7 @@ from flask_login import current_user, login_required
 from werkzeug.exceptions import Forbidden
 
 from facilities import tempo
-from facilities.extensions import csrf, db
+from facilities.extensions import db
 from facilities.core.acesso import allowed_client_ids_or_none, clientes_visiveis, require_client
 from facilities.core.models import Client
 from facilities.cadastros.models import PontoInspecao
@@ -965,35 +965,11 @@ def foto(fid):
     return send_file(io.BytesIO(dados), mimetype=f.mime or 'image/jpeg')
 
 
-# ── Agendador por HTTP (o relógio externo da hospedagem) ──────────────────
-
-@bp.post('/rotas/agendador')
-@csrf.exempt
-def agendador_http():
-    """Uma rodada do agendador, chamada pelo relógio da hospedagem com
-    ``Authorization: Bearer <AGENDADOR_TOKEN>``. Sem o token configurado, a
-    rota não existe (404)."""
-    import hmac
-    import os
-    token = (os.environ.get('AGENDADOR_TOKEN') or '').strip()
-    if not token:
-        abort(404)
-    enviado = (request.headers.get('Authorization') or '').removeprefix('Bearer ').strip()
-    if not hmac.compare_digest(enviado.encode(), token.encode()):
-        abort(403)
-    try:
-        reg = servico.rodar(origem='http')
-        db.session.commit()
-    except Exception:
-        db.session.rollback()
-        current_app.logger.exception('agendador falhou')
-        return jsonify({'ok': False}), 500
-    if reg is None:
-        return jsonify({'ok': True, 'pulada': 'outra rodada em andamento'})
-    # Etapa com erro: o resto da rodada valeu (está gravado), mas o 500 avisa o
-    # monitor do serviço de que algo precisa de olho.
-    return jsonify({'ok': reg.ok, 'geradas': reg.tarefas_geradas,
-                    'perdidas': reg.tarefas_perdidas}), 200 if reg.ok else 500
+# O agendador por HTTP (``POST /rotas/agendador``) foi desligado (decisão do
+# dono, 05/11/2026, R9): a rodada roda só pelo comando
+# ``flask --app facilities agendador rodar`` (o Cron do Railway). Uma rota
+# aberta à internet, sem CSRF e sem limite, ligada por uma variável de
+# ambiente, era risco sem uso.
 
 
 # ── Aplicativo: o turno de quem está no posto ─────────────────────────────

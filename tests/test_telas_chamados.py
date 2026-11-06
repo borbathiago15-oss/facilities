@@ -185,7 +185,9 @@ def test_a_porta_e_a_mesma_da_tela_antiga(app_module, cena, papel):
     assert codigos['/chamados/'] == 200
     assert (codigos['/chamados/novo'] == 200) == (base != 'visualizador'), papel
     assert (codigos[f"/chamados/{cena['chamado']}"] == 200) == de_a, papel
-    assert (codigos[f"/chamados/?client_id={cena['local_b']}"] == 200) == (papel in ('master', 'pleno-de-b')), papel
+    # A diretoria vê todos os locais, com ou sem a caixinha (R5, 05/11/2026).
+    assert (codigos[f"/chamados/?client_id={cena['local_b']}"] == 200) == (
+        papel in ('master', 'visualizador', 'pleno-de-b')), papel
     assert (codigos[f"/preventiva/locais/{cena['local']}"] == 200) == \
         ((gestao or base in ('supervisor', 'visualizador')) and de_a), papel
     assert codigos['/chamados/999999'] == 404

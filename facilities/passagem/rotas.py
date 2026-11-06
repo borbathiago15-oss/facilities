@@ -18,6 +18,7 @@ from datetime import date, datetime
 
 from flask import Blueprint, abort, jsonify, make_response, render_template, request
 from flask_login import current_user, login_required
+from sqlalchemy.exc import IntegrityError
 
 from facilities import tempo
 from facilities.extensions import db
@@ -941,6 +942,16 @@ def salvar_turno():
     # responsáveis diferentes. Sem o modelo na chave, a segunda batia em 409
     # ("o 1º Turno de 21/09/2026 já foi encerrado") e o encarregado do
     # Almoxarifado simplesmente não conseguia lançar.
+    #
+    # A trava do contrato vem ANTES da busca (auditoria, Fase 3, L2): o
+    # "Encerrar" que chega duas vezes juntas (a fila do aparelho sem sinal
+    # reenviando + o toque na tela) e o rascunho salvo em dois aparelhos
+    # procuravam ao mesmo tempo, não achavam nada (ou achavam as pendências
+    # de antes) e gravavam tudo em dobro. Com a trava, o segundo só procura
+    # depois do commit do primeiro: acha a passagem, e as pendências e
+    # ocorrências que ela já tem. A chave única
+    # ``uq_diario_turnos_chave`` é a garantia de fundo.
+    _travar_contrato(client_id)
     t = (DiarioTurno.query
          .filter_by(client_id=client_id, configuracao_id=cfg.id,
                     data_turno=data_turno, turno=turno_nome)
@@ -982,7 +993,11 @@ def salvar_turno():
         dados[analitico.CHAVE_ENVIO] = envio
     t.dados_json = json.dumps(dados, ensure_ascii=False)
     t.observacao = (data.get('observacao') or '').strip()
-    db.session.flush()
+    try:
+        db.session.flush()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({'error': MSG_PASSAGEM_JA_GRAVADA}), 409
 
     # Ao reenviar, o navegador manda a lista inteira de novo. Somar cegamente
     # duplicaria tudo o que já entrou no rascunho; apagar e recriar destruiria
@@ -1061,13 +1076,38 @@ def salvar_turno():
                     'Abra a passagem para ver o que ficou para o seu turno.',
                     _link_do_turno(client_id), client_id)
         _avisar_pendencias_paradas(client_id)
-    db.session.commit()
+    try:
+        db.session.commit()
+    except IntegrityError:
+        # Só acontece se a trava não segurou (não deveria): a chave única
+        # recusou a segunda passagem da mesma chave. Nada foi gravado por
+        # este envio; a tela mostra a que entrou.
+        db.session.rollback()
+        return jsonify({'error': MSG_PASSAGEM_JA_GRAVADA}), 409
     # Quantas pendências ESTA passagem deixou em aberto: é o número que a
     # tela escreve na confirmação ("2 pendências ficaram para o próximo
     # turno"). No celular o painel é longo, e sem a frase a pessoa não sabia
     # se o encerramento tinha entrado.
     deixadas = DiarioPendencia.query.filter_by(turno_id=t.id, status='aberta').count()
     return jsonify(dict(_turno_payload(t), pendencias_deixadas=deixadas)), 201
+
+
+MSG_PASSAGEM_JA_GRAVADA = ('Esta passagem acabou de ser gravada por outro envio. '
+                           'Abra a passagem de novo para ver o que entrou.')
+
+
+def _travar_contrato(client_id):
+    """Põe em fila quem grava passagem no MESMO contrato, até o commit.
+
+    A mesma trava de ``chamados.servico._travar_contrato`` (``SELECT … FOR NO
+    KEY UPDATE`` na linha do contrato): dois envios da mesma passagem passam
+    um depois do outro, e o segundo vê o que o primeiro gravou. ``NO KEY``
+    não segura quem só grava registro filho do contrato. No SQLite (testes)
+    a cláusula é ignorada — lá as escritas já são em fila.
+    """
+    from facilities.core.models import Client
+    db.session.execute(db.select(Client.id).where(Client.id == client_id)
+                       .with_for_update(key_share=True))
 
 
 def _registrar_passagem_das_abertas(t):
@@ -1521,24 +1561,22 @@ def _time_do_piso(client_id, configuracao_id=None, exceto=None):
     Não há cadastro de "quem trabalha em qual turno" — então vale quem de
     fato lança. Um gestor que nunca lançou passagem não recebe aviso de piso.
 
-    O piso "do contrato" é quem o tem na carteira: vinculado, ou com "todos
-    os contratos" (o volante que cobre qualquer posto) — a mesma régua do
-    ``require_client``, que já o deixa lançar em qualquer contrato.
+    O piso "do contrato" é quem está vinculado a ele, ou tem "todos os
+    locais" E o local na carteira (o volante: desde 05/11/2026, R1, "todos"
+    do piso vale os locais da gestão acima dele, não o grupo inteiro — a
+    mesma régua do ``require_client``, ``hierarquia.carteira``).
 
     "Desta área" é a ÁREA do modelo, não o modelo: no CD com um modelo por
     turno, quem lança o T2 noutro modelo é justamente quem herda o que o T1
     deixou (a mesma régua de ``analitico.area_carrega``).
     """
     from datetime import timedelta
-    from sqlalchemy import or_
+    from facilities.chamados.servico import pessoas_do_contrato
     from facilities.core.models import User
-    ids = set()
-    piso = (User.query
-            .filter(User.role.in_(PERFIS_DO_PISO),
-                    or_(User.clients.any(id=client_id), User.all_clients.is_(True)),
-                    User.is_active.is_(True), User.is_deleted.isnot(True))
-            .all())
-    ids |= {u.id for u in piso}
+    ids = {u.id for u in User.query.filter(
+        User.role.in_(PERFIS_DO_PISO), User.clients.any(id=client_id),
+        User.is_active.is_(True), User.is_deleted.isnot(True))}
+    ids |= {u.id for u in pessoas_do_contrato(client_id, PERFIS_DO_PISO) if u.all_clients}
     desde = datetime.utcnow() - timedelta(days=JANELA_DO_PISO_DIAS)
     q = DiarioTurno.query.with_entities(DiarioTurno.created_by).filter(
         DiarioTurno.client_id == client_id, DiarioTurno.created_at >= desde)
@@ -1616,25 +1654,25 @@ LIMITE_GESTORES_AVISADOS = LIMITE_DO_PISO
 
 def _gestores_do_contrato(client_id):
     """Quem responde pelo contrato: o responsável cadastrado nele; sem
-    responsável, os plenos vinculados. Nunca "todos os Masters" — o Master é
+    responsável, a gestão do local (gerentes e coordenadores que cuidam dele,
+    pelo vínculo, pelo cliente ou pela cadeia — R4, 05/11/2026). Nunca "todos os Masters" — o Master é
     global e receberia a pendência parada de todos os contratos da casa.
 
     O responsável vale se ainda enxerga o contrato pela régua do
     ``require_client`` — o gestor regional com "todos os contratos" é
     responsável de verdade, e antes ficava de fora por não ter o vínculo
-    explícito. Já na falta de responsável entram só os VINCULADOS: o regional
-    receberia o aviso de todos os contratos da casa, a mesma conta que os
-    chamados fazem (``chamados.servico.gestores_do_contrato``)."""
-    from facilities.core.models import Client, User
+    explícito. Já na falta de responsável entra a gestão que CUIDA do local,
+    nunca a que só tem "todos os contratos": o regional receberia o aviso de
+    todos os contratos da casa, a mesma conta que os chamados fazem
+    (``chamados.servico.pessoas_do_contrato``)."""
+    from facilities.chamados.servico import PERFIS_GESTORES, pessoas_do_contrato
+    from facilities.core.models import Client
     cli = Client.query.get(client_id)
     if cli is not None and cli.responsible_user_id and \
             _ve_o_contrato(cli.responsible_user_id, client_id):
         return [cli.responsible_user_id]
-    plenos = (User.query
-              .filter(User.clients.any(id=client_id), User.role.in_(('pleno', 'gerente')),
-                      User.is_active.is_(True), User.is_deleted.isnot(True))
-              .order_by(User.id).limit(LIMITE_GESTORES_AVISADOS).all())
-    return [u.id for u in plenos]
+    plenos = pessoas_do_contrato(client_id, PERFIS_GESTORES)
+    return sorted(u.id for u in plenos)[:LIMITE_GESTORES_AVISADOS]
 
 
 def link_da_pendencia(client_id, pendencia_id):
@@ -2130,7 +2168,9 @@ def corrigir_turno(turno_id):
 
     if (nova_data, novo_turno) != (t.data_turno, t.turno):
         # Mover para cima de uma passagem que já existe fundiria duas
-        # realidades numa linha só.
+        # realidades numa linha só. A trava do contrato põe esta conferência
+        # em fila com o "Encerrar" da mesma chave (ver ``salvar_turno``).
+        _travar_contrato(t.client_id)
         choque = (DiarioTurno.query
                   .filter(DiarioTurno.client_id == t.client_id,
                           DiarioTurno.configuracao_id == t.configuracao_id,
@@ -2191,7 +2231,15 @@ def corrigir_turno(turno_id):
     if 'data' in campos or 'turno' in campos:
         db.session.flush()
         _tarefas_no_encerramento(t)
-    db.session.commit()
+    try:
+        db.session.commit()
+    except IntegrityError:
+        # A chave única recusou: outra passagem desta chave entrou entre a
+        # conferência acima e o commit. Nada desta correção foi gravado.
+        db.session.rollback()
+        return jsonify({'error': f'Já existe passagem de {novo_turno} em '
+                                 f'{nova_data.strftime("%d/%m/%Y")} neste '
+                                 f'modelo.'}), 409
     return jsonify({'ok': True, 'id': t.id, 'campos': campos})
 
 
