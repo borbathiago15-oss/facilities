@@ -172,6 +172,11 @@ def criar():
 
 
 def acao_criar(f, arquivos):
+    # As fotos sobem ANTES do chamado (e da trava do local): o R2 lento não
+    # segura os outros chamados do local, e a foto que não subiu não impede
+    # o chamado de ser gravado (auditoria, Fase 4).
+    lidos = _ler_anexos(arquivos.getlist('arquivo'))
+    subidos = _subir_anexos(lidos, 'chamados/novos')
     try:
         ch, criado = servico.abrir_sem_duplicar(
             current_user, f.get('client_id'), f.get('titulo'),
@@ -180,11 +185,15 @@ def acao_criar(f, arquivos):
             prioridade=f.get('prioridade') or 'media',
             area_id=f.get('area_id') or None)
     except servico.RecusaChamado as ex:
-        db.session.rollback()
+        db.session.rollback()               # apaga também as fotos já subidas
         flash(ex.mensagem, 'danger')
         return url_for('chamados.novo', client_id=f.get('client_id') or None)
     # Formulário enviado duas vezes: as fotos já vieram com o primeiro envio.
-    erro = _guardar_anexos(ch, arquivos.getlist('arquivo'), 'antes') if criado else None
+    if criado:
+        _gravar_anexos(ch, subidos, 'antes')
+    else:
+        _descartar(subidos)
+    erro = _mensagem_dos_anexos(lidos, subidos) if criado else None
     db.session.commit()
     if erro:
         flash(f'Chamado {ch.numero} aberto, mas {erro}', 'warning')
@@ -242,28 +251,38 @@ def acao_executar(chamado_id, dados, arquivos, recusa_em_json=False):
     """A ação do chamado (``dados['acao']``). Devolve o endereço de volta;
     com ``recusa_em_json`` (o corpo JSON da rota antiga), a recusa volta
     como a resposta JSON de sempre."""
+    arquivos = [a for a in arquivos.getlist('arquivo') if a and a.filename]
+    lidos = subidos = None
+    if arquivos:
+        # As fotos sobem ANTES da trava da linha do chamado (auditoria, Fase 4).
+        _chamado_autorizado(chamado_id)
+        lidos = _ler_anexos(arquivos)
+        subidos = _subir_anexos(lidos, f'chamados/{chamado_id}')
     ch = _chamado_autorizado(chamado_id, travar=True)
     nome = dados.get('acao') or ''
     try:
         feito = servico.executar(current_user, ch, nome, dados)
     except servico.RecusaChamado as ex:
-        db.session.rollback()
+        db.session.rollback()               # apaga também as fotos já subidas
         if recusa_em_json:
             return jsonify({'error': ex.mensagem}), ex.status
         flash(ex.mensagem, 'danger')
         return url_for('chamados.ver', chamado_id=ch.id)
     erro = None
-    arquivos = [a for a in arquivos.getlist('arquivo') if a and a.filename]
     # Anexo só entra em chamado que continua vivo depois da ação (o
     # "resolver" leva a foto do serviço feito). Fechado ou cancelado não
     # recebe arquivo — a mesma regra da rota /anexos, que um POST montado
     # com acao=cancelar contornava. Pedido repetido não grava a foto de novo.
     if arquivos and feito.gravou:
         if ch.status in STATUS_ENCERRADOS:
+            _descartar(subidos)
             erro = 'os arquivos não foram guardados: o chamado está encerrado.'
         else:
             momento = 'depois' if nome == 'resolver' else 'antes'
-            erro = _guardar_anexos(ch, arquivos, momento)
+            _gravar_anexos(ch, subidos, momento)
+            erro = _mensagem_dos_anexos(lidos, subidos)
+    elif arquivos:
+        _descartar(subidos)
     db.session.commit()
     flash(feito.mensagem, feito.categoria)
     if erro:
@@ -273,20 +292,23 @@ def acao_executar(chamado_id, dados, arquivos, recusa_em_json=False):
 
 # ── Anexos ───────────────────────────────────────────────────────────────
 
-def _guardar_anexos(ch, arquivos, momento):
-    """Guarda as fotos/PDFs enviados; devolve uma mensagem se algum foi recusado.
+class _Lidos:
+    """Os arquivos do envio já conferidos: os aceitos (nome, ext, dados) e
+    os recusados (nomes)."""
 
-    Extensão E assinatura conferidas (``facilities.core.anexos``). O que passa
-    é gravado; o que não passa vira aviso — o chamado não deixa de existir
-    porque uma foto veio num formato estranho.
+    def __init__(self, aceitos, recusados, demais):
+        self.aceitos, self.recusados, self.demais = aceitos, recusados, demais
+
+
+def _ler_anexos(arquivos):
+    """Confere e reduz as fotos/PDFs enviados — sem banco e sem armazenamento.
+
+    Extensão E assinatura conferidas (``facilities.core.anexos``). O que não
+    passa vira aviso — o chamado não deixa de existir porque uma foto veio
+    num formato estranho.
     """
     arquivos = [a for a in (arquivos or []) if a and a.filename]
-    if not arquivos:
-        return None
-    aviso = None
-    if len(arquivos) > ANEXOS_POR_ENVIO:
-        aviso = f'só os {ANEXOS_POR_ENVIO} primeiros arquivos foram considerados.'
-    recusados = []
+    aceitos, recusados = [], []
     for arq in arquivos[:ANEXOS_POR_ENVIO]:
         nome = secure_filename(arq.filename) or 'arquivo'
         ext = nome.rsplit('.', 1)[-1].lower() if '.' in nome else ''
@@ -297,16 +319,60 @@ def _guardar_anexos(ch, arquivos, momento):
                 or not imagem_aceitavel(dados, ext)):
             recusados.append(arq.filename)
             continue
-        chave = f'chamados/{ch.id}/{uuid.uuid4().hex}.{ext}'
-        dados = foto_leve(dados, ext)
-        storage().save(chave, dados, ANEXO_TIPOS[ext])
+        aceitos.append((nome, ext, foto_leve(dados, ext)))
+    return _Lidos(aceitos, recusados, len(arquivos) > ANEXOS_POR_ENVIO)
+
+
+class _Subidos(list):
+    """Os arquivos que o armazenamento guardou; ``falhou``: algum não foi."""
+    falhou = False
+
+
+def _subir_anexos(lidos, pasta):
+    """Sobe os arquivos aceitos ANTES de gravar as linhas (e antes de travar
+    o chamado ou o local), com a conexão do banco devolvida ao pool. Presos
+    à gravação seguinte: desfeita, eles são apagados (``core.anexos.subir``)."""
+    from facilities.core import pos_commit
+    from facilities.core.anexos import FalhaNoArmazenamento, subir
+    subidos = _Subidos()
+    if not lidos.aceitos:
+        return subidos
+    pos_commit.soltar_conexao()
+    for nome, ext, dados in lidos.aceitos:
+        chave = f'{pasta}/{uuid.uuid4().hex}.{ext}'
+        try:
+            subir(chave, dados, ANEXO_TIPOS[ext])
+        except FalhaNoArmazenamento:
+            subidos.falhou = True
+            continue
+        subidos.append((nome, ext, len(dados), chave))
+    return subidos
+
+
+def _gravar_anexos(ch, subidos, momento):
+    for nome, ext, tamanho, chave in subidos or ():
         db.session.add(ChamadoAnexo(chamado=ch, nome=nome[:200], mime=ANEXO_TIPOS[ext],
-                                    tamanho=len(dados), storage_key=chave, momento=momento,
+                                    tamanho=tamanho, storage_key=chave, momento=momento,
                                     uploaded_by=current_user.id))
-    if recusados:
+
+
+def _descartar(subidos):
+    from facilities.core.anexos import descartar
+    for _nome, _ext, _tamanho, chave in subidos or ():
+        descartar(chave)
+
+
+def _mensagem_dos_anexos(lidos, subidos):
+    """O aviso do que não entrou (ou None)."""
+    if subidos is not None and subidos.falhou:
+        return ('a foto não foi guardada: o armazenamento de arquivos não respondeu. '
+                'O resto ficou salvo; anexe a foto de novo pelo chamado daqui a pouco.')
+    if lidos.recusados:
         return ('arquivo recusado (formato, tamanho ou conteúdo não confere): '
-                + ', '.join(recusados[:3]) + '.')
-    return aviso
+                + ', '.join(lidos.recusados[:3]) + '.')
+    if lidos.demais:
+        return f'só os {ANEXOS_POR_ENVIO} primeiros arquivos foram considerados.'
+    return None
 
 
 @bp.post('/<int:chamado_id>/anexos')
@@ -319,7 +385,7 @@ def anexar(chamado_id):
 def acao_anexar(chamado_id, dados, arquivos):
     # Travado como as ações: a foto que chega junto com um cancelamento só
     # confere o status depois que o cancelamento gravou.
-    ch = _chamado_autorizado(chamado_id, travar=True)
+    ch = _chamado_autorizado(chamado_id)
     if not servico.pode_agir(current_user, ch) or ch.status in STATUS_ENCERRADOS:
         abort(403)
     momento = 'depois' if dados.get('momento') == 'depois' else 'antes'
@@ -327,7 +393,16 @@ def acao_anexar(chamado_id, dados, arquivos):
     if not arquivos:
         flash('Escolha ao menos um arquivo.', 'warning')
         return url_for('chamados.ver', chamado_id=ch.id)
-    erro = _guardar_anexos(ch, arquivos, momento)
+    # Sobe antes de travar a linha (auditoria, Fase 4); depois confere de
+    # novo, com a trava: o cancelamento que chegou junto já gravou.
+    lidos = _ler_anexos(arquivos)
+    subidos = _subir_anexos(lidos, f'chamados/{chamado_id}')
+    ch = _chamado_autorizado(chamado_id, travar=True)
+    if not servico.pode_agir(current_user, ch) or ch.status in STATUS_ENCERRADOS:
+        _descartar(subidos)
+        abort(403)
+    _gravar_anexos(ch, subidos, momento)
+    erro = _mensagem_dos_anexos(lidos, subidos)
     db.session.commit()
     flash(erro or 'Arquivo anexado.', 'warning' if erro else 'success')
     return url_for('chamados.ver', chamado_id=ch.id)

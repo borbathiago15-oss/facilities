@@ -240,7 +240,7 @@ def anexar_documento(modelo, arquivo, autor):
     """Guarda o POP/FIT (PDF, Excel, Word ou imagem — extensão E assinatura
     conferidas, a mesma regra dos anexos da casa)."""
     from facilities.core.anexos import (ANEXO_ASSINATURA, ANEXO_MAX, ANEXO_TIPOS,
-                                        imagem_aceitavel, storage)
+                                        imagem_aceitavel, subir)
     from facilities.rotas.models import ChecklistDocumento
     if arquivo is None or not getattr(arquivo, 'filename', ''):
         raise RegraDaRota('Escolha o arquivo do POP ou da FIT.')
@@ -256,7 +256,8 @@ def anexar_documento(modelo, arquivo, autor):
             or not imagem_aceitavel(dados, ext):
         raise RegraDaRota('Envie o POP/FIT em PDF, Excel, Word ou imagem (até 25 MB).')
     chave = f'checklists/{modelo.id}/docs/{uuid.uuid4().hex}.{ext}'
-    storage().save(chave, dados, ANEXO_TIPOS[ext])
+    # Gravação desfeita → o arquivo é apagado (sem órfão no armazenamento).
+    subir(chave, dados, ANEXO_TIPOS[ext])
     doc = ChecklistDocumento(modelo_id=modelo.id, nome=nome, mime=ANEXO_TIPOS[ext],
                              tamanho=len(dados), storage_key=chave,
                              enviado_por=autor.id if autor else None)
@@ -875,9 +876,10 @@ def avisar_tarefas(agora_utc):
         if agora_utc > t.previsto_para + timedelta(minutes=t.tolerancia_min):
             t.avisada_em = agora_utc            # passou: não avisa atrasado
             continue
-        push.avisar([t.user_id], f'{tempo.fmt(t.previsto_para, "%H:%M")} · {t.ponto.nome}',
-                    f'{t.versao.modelo.nome} — {t.ponto.ambiente.nome}. Leia o QR do local.',
-                    f'/app/turno?ponto={t.ponto.codigo_qr}', marca=f'tarefa-{t.id}')
+        push.avisar_ao_gravar(
+            [t.user_id], f'{tempo.fmt(t.previsto_para, "%H:%M")} · {t.ponto.nome}',
+            f'{t.versao.modelo.nome} — {t.ponto.ambiente.nome}. Leia o QR do local.',
+            f'/app/turno?ponto={t.ponto.codigo_qr}', marca=f'tarefa-{t.id}')
         t.avisada_em = agora_utc
         n += 1
     return n
@@ -1263,14 +1265,44 @@ def ler_imagem(arquivo):
     return foto_leve(dados, ext), ext, ANEXO_TIPOS[ext]
 
 
-def _guardar_foto(execucao, arquivo, momento, item_codigo=None):
-    from facilities.core.anexos import storage
-    dados, ext, mime = ler_imagem(arquivo)
-    chave = f'execucoes/{execucao.id}/{uuid.uuid4().hex}.{ext}'
-    storage().save(chave, dados, mime)
-    db.session.add(ExecucaoFoto(execucao_id=execucao.id, momento=momento,
-                                item_codigo=item_codigo, mime=mime,
-                                tamanho=len(dados), storage_key=chave))
+def _ler_fotos_da_execucao(fotos):
+    """Confere e reduz as fotos do envio, sem banco nem armazenamento.
+    → ([(momento, item, dados, ext, mime)], recusa ou None). A recusa só é
+    dita depois das outras conferências (a ordem das mensagens de sempre)."""
+    lidas = []
+    try:
+        for chave, arquivos in fotos.items():
+            for arq in arquivos[:5]:
+                if chave in ('antes', 'depois'):
+                    lidas.append((chave, None) + ler_imagem(arq))
+                elif chave.startswith('item:'):
+                    lidas.append(('item', chave.split(':', 1)[1]) + ler_imagem(arq))
+    except RegraDaRota as recusa:
+        return [], recusa
+    return lidas, None
+
+
+def _subir_fotos_da_execucao(lidas):
+    """Sobe as fotos ANTES da trava da tarefa e da gravação (auditoria, Fase
+    4): o R2 lento não segura a tarefa nem a conexão. Desfeita a gravação,
+    os arquivos são apagados (``core.anexos.subir``). Armazenamento fora do
+    ar: 503 — nada é gravado e a fila do aparelho tenta de novo sozinha."""
+    from facilities.core import pos_commit
+    from facilities.core.anexos import FalhaNoArmazenamento, subir
+    if not lidas:
+        return []
+    pos_commit.soltar_conexao()
+    subidas = []
+    for momento, item, dados, ext, mime in lidas:
+        chave = f'execucoes/novas/{uuid.uuid4().hex}.{ext}'
+        try:
+            subir(chave, dados, mime)
+        except FalhaNoArmazenamento:
+            raise RegraDaRota('Não deu para guardar as fotos agora (o armazenamento de arquivos '
+                              'não respondeu). Nada se perdeu: o envio fica guardado no aparelho '
+                              'e sobe sozinho daqui a pouco — ou tente de novo.', 503)
+        subidas.append((momento, item, mime, len(dados), chave))
+    return subidas
 
 
 def registrar_execucao(user, dados, fotos, agora_utc=None):
@@ -1311,6 +1343,8 @@ def registrar_execucao(user, dados, fotos, agora_utc=None):
         raise RegraDaRota('Este local não está entre os seus.', 403)
     if not ponto.is_active:
         raise RegraDaRota('Este ponto foi desativado. Avise a gestão.', 409)
+    fotos_lidas, recusa_da_foto = _ler_fotos_da_execucao(fotos)
+    fotos_subidas = [] if recusa_da_foto else _subir_fotos_da_execucao(fotos_lidas)
 
     tarefa = None
     chamado = None
@@ -1458,12 +1492,11 @@ def registrar_execucao(user, dados, fotos, agora_utc=None):
         if ja is not None and ja.user_id == user.id:
             return ja, False
         raise RegraDaRota('Envio repetido.', 409)
-    for chave, arquivos in fotos.items():
-        for arq in arquivos[:5]:
-            if chave in ('antes', 'depois'):
-                _guardar_foto(ex, arq, chave)
-            elif chave.startswith('item:'):
-                _guardar_foto(ex, arq, 'item', chave.split(':', 1)[1])
+    if recusa_da_foto is not None:
+        raise recusa_da_foto
+    for momento, item, mime, tamanho, chave in fotos_subidas:
+        db.session.add(ExecucaoFoto(execucao_id=ex.id, momento=momento, item_codigo=item,
+                                    mime=mime, tamanho=tamanho, storage_key=chave))
     novas_ncs = []
     for item in ncs:
         nc = NaoConformidade(execucao_id=ex.id, client_id=ex.client_id,

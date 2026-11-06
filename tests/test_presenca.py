@@ -172,6 +172,9 @@ def test_aviso_da_hora_da_tarefa_uma_vez(app_module, cena):
         assert s.avisar_tarefas(utc(SEGUNDA, '08:50')) == 0
         assert s.avisar_tarefas(utc(SEGUNDA, '08:59')) == 1
         assert s.avisar_tarefas(utc(SEGUNDA, '09:05')) == 0
+        assert enviados == []           # o aviso só sai depois do commit (auditoria, Fase 4)
+        db.session.commit()
+        assert len(enviados) == 1
         assert enviados[0]['titulo'].startswith('09:00') and '/app/turno?ponto=' in enviados[0]['link']
 
 

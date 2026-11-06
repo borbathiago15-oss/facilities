@@ -37,6 +37,19 @@ SERVICOS = ('fcm.googleapis.com', 'android.googleapis.com', 'updates.push.servic
 TEMPO_DE_VIDA = 3600       # segundos que o serviço guarda o aviso se o celular estiver fora
 
 
+def _numero(nome, padrao):
+    try:
+        return max(0.1, float(os.environ.get(nome) or padrao))
+    except ValueError:
+        return padrao
+
+
+def tempo_limite():
+    """Segundos de espera por aparelho (``PUSH_TIMEOUT``, padrão 3). Era 10:
+    com o serviço de push engasgado, cada aparelho segurava a requisição."""
+    return _numero('PUSH_TIMEOUT', 3)
+
+
 def _b64(dados):
     return base64.urlsafe_b64encode(dados).rstrip(b'=').decode('ascii')
 
@@ -118,7 +131,7 @@ def _enviar_de_verdade(inscricao, carga):
         'Content-Encoding': 'aes128gcm', 'Content-Type': 'application/octet-stream',
         'TTL': str(TEMPO_DE_VIDA), 'Urgency': 'high'})
     try:
-        with urllib.request.urlopen(pedido, timeout=10) as r:
+        with urllib.request.urlopen(pedido, timeout=tempo_limite()) as r:
             return r.status
     except urllib.error.HTTPError as e:
         return e.code
@@ -131,21 +144,69 @@ def _remetente():
     return current_app.extensions.get('facilities_push') or _enviar_de_verdade
 
 
+def _carga(titulo, texto, link, marca):
+    return {'titulo': titulo[:120], 'texto': (texto or '')[:240], 'link': link,
+            'marca': marca or link}
+
+
+def _ids(user_ids):
+    ids = {u for u in (user_ids or []) if u}
+    if not ids or not (ligado() or 'facilities_push' in current_app.extensions):
+        return None
+    return ids
+
+
+def _mandar(inscricoes, carga, enviar=None, app=None):
+    """Manda a todos os aparelhos AO MESMO TEMPO (antes: um por vez — 9
+    aparelhos com o serviço a 5 s eram 45 s). → [(inscrição, código)];
+    código 0 = rede/erro. Exceção no envio vira 0 e log: nunca sobe.
+
+    Espera no máximo ``PUSH_TEMPO_MAXIMO`` (padrão: o tempo limite + 2 s)
+    pelo conjunto; o aparelho que não respondeu até lá fica sem anotação."""
+    enviar = enviar or _remetente()
+    app = app or current_app._get_current_object()
+
+    def um(insc):
+        try:
+            with app.app_context():
+                return insc, enviar(insc, carga)
+        except Exception:                    # noqa: BLE001 — o aviso nunca derruba quem chamou
+            log.exception('push: falha ao enviar para a inscrição %s', getattr(insc, 'id', '?'))
+            return insc, 0
+
+    if len(inscricoes) <= 1:
+        return [um(i) for i in inscricoes]
+    from concurrent.futures import ThreadPoolExecutor, wait
+    paralelo = int(_numero('PUSH_PARALELO', 8))
+    maximo = _numero('PUSH_TEMPO_MAXIMO', tempo_limite() + 2)
+    grupo = ThreadPoolExecutor(max_workers=max(1, min(paralelo, len(inscricoes))),
+                               thread_name_prefix='push')
+    try:
+        futuros = [grupo.submit(um, i) for i in inscricoes]
+        prontos, atrasados = wait(futuros, timeout=maximo)
+        if atrasados:
+            log.warning('push: %s aparelho(s) sem resposta em %.0f s', len(atrasados), maximo)
+        return [f.result() for f in futuros if f in prontos]
+    finally:
+        grupo.shutdown(wait=False, cancel_futures=True)
+
+
 def avisar(user_ids, titulo, texto, link='/app/', marca=None):
-    """Manda o aviso a todos os aparelhos das pessoas. Devolve quantos foram.
+    """Manda o aviso AGORA a todos os aparelhos das pessoas. Devolve quantos foram.
+
+    As anotações (inscrição morta, falhas) ficam na sessão; o commit é de
+    quem chama. Para o aviso de algo que acabou de ser gravado, use
+    ``avisar_ao_gravar`` — este aqui não espera a gravação.
 
     ``marca`` (tag) faz o aviso novo SUBSTITUIR o anterior da mesma coisa no
     celular, em vez de empilhar.
     """
-    ids = {u for u in (user_ids or []) if u}
-    if not ids or not (ligado() or 'facilities_push' in current_app.extensions):
+    ids = _ids(user_ids)
+    if ids is None:
         return 0
-    carga = {'titulo': titulo[:120], 'texto': (texto or '')[:240], 'link': link,
-             'marca': marca or link}
     enviados = 0
-    enviar = _remetente()
-    for insc in PushInscricao.query.filter(PushInscricao.user_id.in_(ids)).all():
-        codigo = enviar(insc, carga)
+    inscricoes = PushInscricao.query.filter(PushInscricao.user_id.in_(ids)).all()
+    for insc, codigo in _mandar(inscricoes, _carga(titulo, texto, link, marca)):
         if codigo in (404, 410):
             db.session.delete(insc)             # o navegador desfez a inscrição
             continue
@@ -157,6 +218,63 @@ def avisar(user_ids, titulo, texto, link='/app/', marca=None):
             insc.falhas = (insc.falhas or 0) + 1
             log.warning('push recusado (%s) para a inscrição %s', codigo, insc.id)
     return enviados
+
+
+class _Aparelho:
+    """A inscrição copiada para fora da sessão (o envio roda depois do
+    commit, sem a sessão)."""
+    __slots__ = ('id', 'user_id', 'endpoint', 'p256dh', 'auth', 'aparelho')
+
+    def __init__(self, insc):
+        for campo in self.__slots__:
+            setattr(self, campo, getattr(insc, campo))
+
+
+def _anotar(engine, resultados):
+    """Anota o resultado do envio numa conexão própria (fora da sessão)."""
+    from sqlalchemy import delete, update
+    t = PushInscricao.__table__
+    mortas = [i.id for i, c in resultados if c in (404, 410)]
+    foram = [i.id for i, c in resultados if 200 <= c < 300]
+    falharam = [i.id for i, c in resultados if not (200 <= c < 300) and c not in (404, 410)]
+    for i, c in resultados:
+        if not (200 <= c < 300) and c not in (404, 410):
+            log.warning('push recusado (%s) para a inscrição %s', c, i.id)
+    if not (mortas or foram or falharam):
+        return
+    with engine.begin() as con:
+        if mortas:
+            con.execute(delete(t).where(t.c.id.in_(mortas)))
+        if foram:
+            con.execute(update(t).where(t.c.id.in_(foram))
+                        .values(ultimo_envio_em=datetime.utcnow(), falhas=0))
+        if falharam:
+            con.execute(update(t).where(t.c.id.in_(falharam))
+                        .values(falhas=db.func.coalesce(t.c.falhas, 0) + 1))
+
+
+def avisar_ao_gravar(user_ids, titulo, texto, link='/app/', marca=None):
+    """O aviso no celular de algo gravado NESTA transação: sai só DEPOIS do
+    commit (``core.pos_commit``), com a trava e a conexão já soltas.
+
+    Se a gravação for desfeita, o aviso não sai. Se o envio falhar, o que foi
+    gravado continua gravado (vira log). Quem chama segue igual: o commit é
+    dele. → quantos aparelhos vão receber (0 sem push ligado)."""
+    from facilities.core import pos_commit
+    ids = _ids(user_ids)
+    if ids is None:
+        return 0
+    aparelhos = [_Aparelho(i) for i in
+                 PushInscricao.query.filter(PushInscricao.user_id.in_(ids)).all()]
+    if not aparelhos:
+        return 0
+    carga = _carga(titulo, texto, link, marca)
+    enviar, app, engine = _remetente(), current_app._get_current_object(), db.engine
+
+    def mandar():
+        _anotar(engine, _mandar(aparelhos, carga, enviar=enviar, app=app))
+    pos_commit.depois_de_gravar(mandar)
+    return len(aparelhos)
 
 
 def inscrever(user, dados, aparelho=''):

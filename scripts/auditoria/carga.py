@@ -223,10 +223,10 @@ def amostrar_pg(dsn, parar, saida):
     while not parar.is_set():
         try:
             cur.execute("select coalesce(state,'?'), count(*) from pg_stat_activity "
-                        "where datname = 'f3_carga' and backend_type = 'client backend' "
+                        "where datname = current_database() and backend_type = 'client backend' "
                         "and pid <> pg_backend_pid() group by 1")
             d = dict(cur.fetchall())
-            cur.execute("select count(*) from pg_stat_activity where datname='f3_carga' "
+            cur.execute("select count(*) from pg_stat_activity where datname=current_database() "
                         "and wait_event_type = 'Lock'")
             d['espera_lock'] = cur.fetchone()[0]
             saida.append((time.time(), d))

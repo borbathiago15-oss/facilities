@@ -122,9 +122,9 @@ def avisar_e_fechar(agora_utc):
         quem = avisar_no_sino([c.user_id], 'Confirme que você está no posto',
                               f'Toque para confirmar até {tempo.fmt(c.prazo_ate, "%H:%M")}.',
                               link, tipo='presenca', client_id=c.client_id)
-        push.avisar(quem, 'Confirme que você está no posto',
-                    f'Toque para confirmar até {tempo.fmt(c.prazo_ate, "%H:%M")}.', link,
-                    marca=f'presenca-{c.id}')
+        push.avisar_ao_gravar(quem, 'Confirme que você está no posto',
+                              f'Toque para confirmar até {tempo.fmt(c.prazo_ate, "%H:%M")}.', link,
+                              marca=f'presenca-{c.id}')
         c.avisado_em = agora_utc
         avisados += 1
     for c in ConfirmacaoPresenca.query.filter(
@@ -144,8 +144,8 @@ def avisar_e_fechar(agora_utc):
             quem = avisar_no_sino(quem, 'Presença sem resposta', texto,
                                   f'/rotas/locais/{c.client_id}/dia', tipo='presenca',
                                   client_id=c.client_id)
-            push.avisar(quem, 'Presença sem resposta', texto,
-                        f'/rotas/locais/{c.client_id}/dia', marca=f'sem-resposta-{c.id}')
+            push.avisar_ao_gravar(quem, 'Presença sem resposta', texto,
+                                  f'/rotas/locais/{c.client_id}/dia', marca=f'sem-resposta-{c.id}')
             c.supervisor_avisado = True
         fechados += 1
     return avisados, fechados

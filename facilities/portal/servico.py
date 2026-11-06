@@ -134,8 +134,8 @@ def _avisar_coordenacao(cob, titulo, texto):
     link = f'/cobrancas/{cob.id}'
     ids = avisar(ids, f'{cob.numero} · {titulo}', texto, link=link, tipo='cobranca',
                  client_id=cob.client_id)
-    push.avisar(ids, f'{titulo} — {cob.local.name}', cob.titulo, link=link,
-                marca=f'cobranca-{cob.id}')
+    push.avisar_ao_gravar(ids, f'{titulo} — {cob.local.name}', cob.titulo, link=link,
+                          marca=f'cobranca-{cob.id}')
     return ids
 
 

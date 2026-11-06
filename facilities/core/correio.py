@@ -5,8 +5,9 @@ o botão que abre o e-mail do próprio aparelho com o texto pronto. Com o
 SMTP configurado, o convite sai sozinho.
 
 Variáveis: ``SMTP_HOST``, ``SMTP_PORT`` (587), ``SMTP_USUARIO``,
-``SMTP_SENHA``, ``SMTP_REMETENTE`` (padrão: o usuário) e ``SMTP_SSL=1``
-para a porta 465.
+``SMTP_SENHA``, ``SMTP_REMETENTE`` (padrão: o usuário), ``SMTP_SSL=1``
+para a porta 465 e ``SMTP_TIMEOUT`` (segundos por etapa da conversa,
+padrão 10).
 
 Nos testes, ``app.extensions['facilities_correio']`` (uma função
 ``(para, assunto, texto)``) substitui o envio: nenhum teste fala com
@@ -46,17 +47,18 @@ def enviar(para, assunto, texto):
     msg.set_content(texto)
     try:
         porta = int(os.environ.get('SMTP_PORT') or 587)
+        limite = float(os.environ.get('SMTP_TIMEOUT') or 10)
         contexto = ssl.create_default_context()
         if os.environ.get('SMTP_SSL') == '1':
-            servidor = smtplib.SMTP_SSL(host, porta, context=contexto, timeout=15)
+            servidor = smtplib.SMTP_SSL(host, porta, context=contexto, timeout=limite)
         else:
-            servidor = smtplib.SMTP(host, porta, timeout=15)
+            servidor = smtplib.SMTP(host, porta, timeout=limite)
             servidor.starttls(context=contexto)
         with servidor:
             if usuario:
                 servidor.login(usuario, os.environ.get('SMTP_SENHA') or '')
             servidor.send_message(msg)
         return True
-    except (OSError, smtplib.SMTPException) as erro:
+    except (OSError, ValueError, smtplib.SMTPException) as erro:
         log.warning('E-mail para %s não saiu: %s', para.split('@')[-1], erro)
         return False

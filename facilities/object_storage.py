@@ -18,6 +18,25 @@ import io
 import os
 
 
+def _segundos(nome, padrao):
+    try:
+        return max(1, int(float(os.environ.get(nome) or padrao)))
+    except ValueError:
+        return padrao
+
+
+def config_do_cliente():
+    """Tempos limite do boto3 (auditoria, Fase 4): o padrão do botocore é 60 s
+    para conectar, 60 s para ler e novas tentativas — um R2 engasgado
+    segurava a requisição por minutos. ``R2_CONNECT_TIMEOUT`` (3),
+    ``R2_READ_TIMEOUT`` (10) e ``R2_TENTATIVAS`` (2 novas tentativas depois da primeira)."""
+    from botocore.config import Config
+    return Config(signature_version='s3v4',
+                  connect_timeout=_segundos('R2_CONNECT_TIMEOUT', 3),
+                  read_timeout=_segundos('R2_READ_TIMEOUT', 10),
+                  retries={'max_attempts': _segundos('R2_TENTATIVAS', 2), 'mode': 'standard'})
+
+
 class StorageError(Exception):
     """Falha de armazenamento (não expor detalhes ao usuário final)."""
 
@@ -63,13 +82,12 @@ class R2Storage:
 
     def __init__(self, endpoint, access_key, secret_key, bucket, prefix=''):
         import boto3
-        from botocore.config import Config
         self.bucket = bucket
         self.prefix = prefix or ''
         self._client = boto3.client(
             's3', endpoint_url=endpoint,
             aws_access_key_id=access_key, aws_secret_access_key=secret_key,
-            region_name='auto', config=Config(signature_version='s3v4'))
+            region_name='auto', config=config_do_cliente())
 
     def _key(self, key):
         return f'{self.prefix}{key}'

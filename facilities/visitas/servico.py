@@ -93,7 +93,7 @@ def _avisar_quem_faz(visita):
     texto = f'{visita.local.name} · até {visita.vencimento.strftime("%d/%m")}.'
     link = f'/app/visitas/{visita.id}'
     quem = avisar(quem, titulo, texto, link, tipo='visita', client_id=visita.client_id)
-    push.avisar(quem, titulo, texto, link, marca=f'visita-{visita.id}')
+    push.avisar_ao_gravar(quem, titulo, texto, link, marca=f'visita-{visita.id}')
 
 
 def gerar_visitas(hoje=None, agora_utc=None):
@@ -176,10 +176,15 @@ def _ler_fotos(fotos):
     return {k: v for k, v in lidas.items() if v}
 
 
-def _guardar_fotos(visita, lidas):
+def _subir_fotos(visita_id, lidas):
+    """Sobe as fotos ANTES de gravar a visita (auditoria, Fase 4), com a
+    conexão devolvida ao pool. Desfeita a gravação, os arquivos são apagados
+    (``core.anexos.subir``). → [(momento, item, mime, tamanho, chave)]."""
     import uuid
-    from facilities.core.anexos import storage
-    gravadas = []
+    from facilities.core import pos_commit
+    from facilities.core.anexos import FalhaNoArmazenamento, subir
+    subidas = []
+    pos_commit.soltar_conexao()
     for campo, lista in lidas.items():
         if campo in ('antes', 'depois', 'livre'):
             momento, item = campo, None
@@ -188,12 +193,24 @@ def _guardar_fotos(visita, lidas):
         else:
             continue
         for dados, ext, mime in lista:
-            chave = f'visitas/{visita.id}/{uuid.uuid4().hex}.{ext}'
-            storage().save(chave, dados, mime)
-            f = VisitaFoto(visita_id=visita.id, momento=momento, item_codigo=item, mime=mime,
-                           tamanho=len(dados), storage_key=chave)
-            db.session.add(f)
-            gravadas.append(f)
+            chave = f'visitas/{visita_id}/{uuid.uuid4().hex}.{ext}'
+            try:
+                subir(chave, dados, mime)
+            except FalhaNoArmazenamento:
+                raise RegraDaVisita('Não deu para guardar as fotos agora (o armazenamento de '
+                                    'arquivos não respondeu). A visita não foi registrada: '
+                                    'tente de novo daqui a pouco.', 503)
+            subidas.append((momento, item, mime, len(dados), chave))
+    return subidas
+
+
+def _guardar_fotos(visita, subidas):
+    gravadas = []
+    for momento, item, mime, tamanho, chave in subidas:
+        f = VisitaFoto(visita_id=visita.id, momento=momento, item_codigo=item, mime=mime,
+                       tamanho=tamanho, storage_key=chave)
+        db.session.add(f)
+        gravadas.append(f)
     db.session.flush()
     return gravadas
 
@@ -233,13 +250,14 @@ def registrar(user, visita, respostas, observacao='', agora_utc=None, fotos=None
         raise RegraDaVisita('Tire a foto de ANTES.')
     if versao.exige_foto_depois and not lidas.get('depois'):
         raise RegraDaVisita('Tire a foto de DEPOIS.')
+    subidas = _subir_fotos(visita.id, lidas) if lidas else []
     visita.status = FEITA
     visita.feita_por, visita.feita_em = user.id, agora_utc
     visita.versao_id = versao.id
     visita.respostas_json = json.dumps(limpas, ensure_ascii=False)
     visita.observacao = (observacao or '').strip()[:2000] or None
     visita.n_nao_conformes = len(ncs)
-    gravadas = _guardar_fotos(visita, lidas)
+    gravadas = _guardar_fotos(visita, subidas)
     if ncs:
         lista = '; '.join(f'"{i["texto"]}": {limpas.get(i["codigo"], "—")}' for i in ncs)
         ch = chamados.abrir(

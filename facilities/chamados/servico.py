@@ -367,8 +367,8 @@ def abrir(user, client_id, titulo, descricao='', local='', categoria='outro',
     if prioridade == 'urgente':
         # Urgente não espera alguém abrir o sino: vai também para o celular.
         from facilities.core import push
-        push.avisar(avisados, f'Urgente: {ch.numero}', f'{contrato.name} · {ch.titulo}',
-                    f'/chamados/{ch.id}', marca=f'novo-{ch.id}')
+        push.avisar_ao_gravar(avisados, f'Urgente: {ch.numero}', f'{contrato.name} · {ch.titulo}',
+                              f'/chamados/{ch.id}', marca=f'novo-{ch.id}')
     # Para a tela dizer a verdade (D3): sem ninguém avisado, ela não promete.
     ch.avisados_na_abertura = avisados
     return ch
@@ -632,9 +632,9 @@ def executar(user, ch, acao, form):
                            exceto=user.id)
         if avisados:
             from facilities.core import push
-            push.avisar(avisados, f'Resolvido: {ch.numero}',
-                        f'{ch.titulo} — confira e confirme.', f'/chamados/{ch.id}',
-                        marca=f'resolvido-{ch.id}')
+            push.avisar_ao_gravar(avisados, f'Resolvido: {ch.numero}',
+                                  f'{ch.titulo} — confira e confirme.', f'/chamados/{ch.id}',
+                                  marca=f'resolvido-{ch.id}')
             mensagem = 'Chamado marcado como resolvido. Quem pediu foi avisado para conferir.'
 
     elif acao == 'confirmar':
@@ -749,16 +749,16 @@ def avisar_prazos(agora=None):
             # O push vai só a quem o sino aceitou (ativo, com o local na carteira).
             avisados = _avisar(todos, ch, f'Prazo vencido: {ch.titulo}',
                                f'{ch.numero} venceu às {tempo.fmt(ch.prazo, "%d/%m %H:%M")}.')
-            push.avisar(avisados, f'Prazo vencido: {ch.numero}', ch.titulo, link,
-                        marca=f'prazo-{ch.id}')
+            push.avisar_ao_gravar(avisados, f'Prazo vencido: {ch.numero}', ch.titulo, link,
+                                  marca=f'prazo-{ch.id}')
             ch.aviso_vencido_em = agora
             ch.aviso_vencendo_em = ch.aviso_vencendo_em or agora
             n += 1
         elif ch.aviso_vencendo_em is None and ch.prazo - agora <= _antecedencia(ch):
             avisados = _avisar(quem, ch, f'Vence às {tempo.fmt(ch.prazo, "%H:%M")}: {ch.titulo}',
                                f'{ch.numero} · prioridade {ch.prioridade_rotulo.lower()}.')
-            push.avisar(avisados, f'Vence às {tempo.fmt(ch.prazo, "%H:%M")}: {ch.numero}',
-                        ch.titulo, link, marca=f'prazo-{ch.id}')
+            push.avisar_ao_gravar(avisados, f'Vence às {tempo.fmt(ch.prazo, "%H:%M")}: {ch.numero}',
+                                  ch.titulo, link, marca=f'prazo-{ch.id}')
             ch.aviso_vencendo_em = agora
             n += 1
     return n
@@ -786,8 +786,8 @@ def lembrar_confirmacao(agora=None):
         avisados = _avisar([ch.solicitante_id], ch, f'Falta confirmar: {ch.titulo}',
                            'O chamado foi resolvido. Confira no local e confirme — '
                            'ou reabra se não ficou bom.')
-        push.avisar(avisados, f'Falta confirmar: {ch.numero}', ch.titulo,
-                    f'/chamados/{ch.id}', marca=f'resolvido-{ch.id}')
+        push.avisar_ao_gravar(avisados, f'Falta confirmar: {ch.numero}', ch.titulo,
+                              f'/chamados/{ch.id}', marca=f'resolvido-{ch.id}')
         db.session.add(ChamadoEvento(chamado_id=ch.id, tipo='lembrete', created_at=agora,
                                      texto='Lembrete para quem abriu conferir e confirmar.'))
         n += 1

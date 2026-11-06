@@ -284,9 +284,13 @@ def _enviar_por_email(convite, token):
     from facilities.core import correio
     if not correio.configurado():
         return None
+    from facilities.core import pos_commit
     link = url_for('montagem.aceitar', token=token, _external=True)
-    return correio.enviar(convite.email, 'Seu acesso ao Trino Facilities',
-                          montagem.texto_do_convite(convite, link))
+    para, texto = convite.email, montagem.texto_do_convite(convite, link)
+    # O convite já está gravado: a conexão volta ao pool enquanto o servidor
+    # de e-mail responde (ou não — SMTP_TIMEOUT).
+    pos_commit.soltar_conexao()
+    return correio.enviar(para, 'Seu acesso ao Trino Facilities', texto)
 
 
 @bp.post('/novo-contrato/<int:cid>/equipe')

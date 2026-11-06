@@ -70,7 +70,10 @@ def abrir_ocorrencia(codigo):
     except RegraDaRota as erro:
         db.session.rollback()
         return pagina_publica(ponto, erro.mensagem, erro.codigo)
-    return redirect(url_for('publico.acompanhar', codigo=ponto.codigo_qr, token=oc.token))
+    # Armazenamento fora do ar: o aviso entrou sem a foto, e a página diz.
+    extra = {'sem_foto': 1} if getattr(oc, 'foto_nao_guardada', False) else {}
+    return redirect(url_for('publico.acompanhar', codigo=ponto.codigo_qr, token=oc.token,
+                            **extra))
 
 
 @bp.route('/q/<codigo>/elogio', methods=['GET', 'POST'])

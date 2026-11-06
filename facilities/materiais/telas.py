@@ -359,9 +359,13 @@ def acao_app_pedido(dados, arquivos):
     loc = _local(servico._id(dados, 'client_id') or -1)
     arq = arquivos.get('foto')
     try:
-        servico.pedir(current_user, loc, dados, arq if arq and arq.filename else None)
+        p = servico.pedir(current_user, loc, dados, arq if arq and arq.filename else None)
         db.session.commit()
     except RegraDoMaterial as erro:
         return _recusa(erro, url_for('materiais.app'))
-    flash('Pedido enviado ao gestor do contrato.', 'success')
+    if getattr(p, 'foto_nao_guardada', False):
+        flash('Pedido enviado ao gestor do contrato, mas a foto não foi guardada (o '
+              'armazenamento de arquivos não respondeu).', 'warning')
+    else:
+        flash('Pedido enviado ao gestor do contrato.', 'success')
     return url_for('materiais.app')
