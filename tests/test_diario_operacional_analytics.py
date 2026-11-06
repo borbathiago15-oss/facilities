@@ -188,8 +188,10 @@ def test_faixa_da_aderencia_segue_o_semaforo_da_casa():
 def test_raio_x_das_rotinas_poe_o_gargalo_primeiro(app_module, cenario):
     hoje = tempo.hoje()
     with app_module.app.app_context():
-        for _ in range(3):
-            _turno(app_module, cenario, hoje, 'T1', ['dts', 'reconf'])
+        # Três passagens do dia (uma por turno: a chave única
+        # uq_diario_turnos_chave não deixa repetir o mesmo turno).
+        for nome in ('T1', 'T2', 'T3'):
+            _turno(app_module, cenario, hoje, nome, ['dts', 'reconf'])
         app_module.db.session.commit()
 
         p = an.painel(cenario['client_id'], periodo='30d', hoje=hoje)
