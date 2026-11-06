@@ -60,5 +60,9 @@ def enviar(para, assunto, texto):
             servidor.send_message(msg)
         return True
     except (OSError, ValueError, smtplib.SMTPException) as erro:
-        log.warning('E-mail para %s não saiu: %s', para.split('@')[-1], erro)
+        # Sem a mensagem: a do SMTP repete o endereço recusado e, às vezes,
+        # o usuário do login. O código SMTP (550, 535...) basta.
+        codigo = getattr(erro, 'smtp_code', None)
+        log.warning('E-mail para %s não saiu: %s%s', para.split('@')[-1], type(erro).__name__,
+                    f' (SMTP {codigo})' if codigo else '')
         return False

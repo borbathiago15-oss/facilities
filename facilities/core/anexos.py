@@ -7,6 +7,8 @@ import io
 
 from flask import current_app
 
+from facilities.core import log_seguro
+
 ANEXO_TIPOS = {
     'pdf':  'application/pdf',
     'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -149,8 +151,8 @@ def subir(chave, dados, mime):
     try:
         destino.save(chave, dados, mime)
     except Exception as erro:                # noqa: BLE001 — R2/disco: qualquer erro é "não guardou"
-        current_app.logger.warning('anexo %s não foi guardado: %s: %s', chave,
-                                   type(erro).__name__, erro)
+        current_app.logger.warning('anexo %s não foi guardado: %s', chave,
+                                   log_seguro.resumo(erro))
         raise FalhaNoArmazenamento(str(erro)) from erro
     pos_commit.depois_de_gravar(None, lambda: _apagar_sem_falhar(destino, chave))
     return chave

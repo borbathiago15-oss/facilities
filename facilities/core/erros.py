@@ -15,6 +15,7 @@ O 401 de API continua com o ``unauthorized_handler`` da fábrica (JSON
 from flask import current_app, g, jsonify, render_template, request
 from sqlalchemy import exc as sa_exc
 
+from facilities.core import log_seguro
 from facilities.extensions import db
 
 TITULOS = {
@@ -152,8 +153,9 @@ def _erro_de_banco(e):
     pessoa logada.
     """
     g.erro_de_banco = True
-    current_app.logger.warning('banco indisponível (503): %s: %s',
-                               type(e).__name__, str(e).splitlines()[0] if str(e) else '')
+    # Só a classe e um motivo curto: a mensagem do psycopg2 traz host, usuário
+    # e nome do banco, e a do SQLAlchemy, a consulta com os parâmetros.
+    current_app.logger.warning('banco indisponível (503): %s', log_seguro.resumo(e))
     try:
         db.session.rollback()
     except Exception:  # o banco pode estar fora — a resposta sai mesmo assim
