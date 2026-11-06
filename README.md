@@ -71,6 +71,12 @@ flask --app facilities criar-admin        # mostra uma senha temporária
 flask --app facilities run                # http://127.0.0.1:5000
 ```
 
+Todas as variáveis que o sistema lê, com uma linha de explicação cada:
+`.env.example` (copie para `.env`, que nunca vai para o git). Para subir a
+produção do zero: `docs/DEPLOY_RAILWAY.md` (passo a passo) e
+`docs/CONFIG-MANUAL.md` (tudo o que é clique ou variável no painel). O que
+funciona hoje e o que falta: `STATUS.md`.
+
 Sem `DATABASE_URL`, usa SQLite em `instance/facilities.db`. O schema vem das
 migrações também aqui — o boot não cria tabela nenhuma —, então rode
 `flask --app facilities db upgrade` antes do primeiro uso e depois de cada

@@ -24,3 +24,8 @@ do Trino Intelligence. Repositório: borbathiago15-oss/facilities (privado).
   filtro `hora_local`).
 - Textos de tela em português claro, para quem está no posto — não para quem
   já conhece o sistema.
+- **Dependência nova (Python ou do `frontend/`)**: antes de acrescentar, diga
+  para que serve e se dá para evitar (biblioteca padrão, o que já está no
+  projeto, poucas linhas de código). Nunca instale versão publicada há menos
+  de 7 dias — fixe a versão exata. Anote a dependência nova no `STATUS.md`
+  (seção "Dependências"), com o motivo.
