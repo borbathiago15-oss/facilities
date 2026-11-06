@@ -47,7 +47,9 @@ Todos os módulos abaixo estão no `main`, com testes em SQLite e em Postgres
 ## Defeitos conhecidos (testes `xfail(strict=True)`)
 
 Cada um é um teste que falha de propósito enquanto o defeito existir;
-corrigido, o teste passa a reprovar e é só tirar a marca.
+corrigido, o teste passa a reprovar e é só tirar a marca. São 11 defeitos
+em 13 casos de teste (alguns testes rodam com mais de uma entrada); em
+06/11/2026 a suíte deu 13 `xfailed` no SQLite e no Postgres.
 
 `tests/test_auditoria_entradas.py` (leva L4, validação das entradas):
 
