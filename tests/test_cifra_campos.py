@@ -6,9 +6,13 @@
 * e-mail repetido continua barrado (o índice é único);
 * rodízio: chave nova + a antiga em FIELD_ENCRYPTION_OLD_KEYS lê tudo, o
   ``flask chaves girar`` recifra, e depois a antiga pode sair;
-* a cifra é OPCIONAL: sem a chave o sistema sobe com os campos em texto
-  aberto e o login funciona; pôr a chave e rodar ``chaves girar`` cifra o
-  que já existe; tirar a chave com dado cifrado no banco é erro claro.
+* fora da produção a cifra é opcional: sem a chave o sistema sobe com os
+  campos em texto aberto e o login funciona; pôr a chave e rodar
+  ``chaves girar`` cifra o que já existe; tirar a chave com dado cifrado no
+  banco é erro claro;
+* na imagem de produção (``EXIGIR_DATABASE_URL=1``) a chave é obrigatória:
+  sem ela o boot para, com o passo a passo; ``CIFRA_OPCIONAL=1`` (emergência)
+  sobe com alerta no log.
 """
 import pytest
 import sqlalchemy as sa
@@ -147,15 +151,66 @@ def test_conferir_acusa_campo_sem_cifra(app_module):
         db.session.commit()
 
 
-def test_sem_chave_o_sistema_sobe_com_aviso(monkeypatch, tmp_path):
-    from types import SimpleNamespace
-    monkeypatch.delenv('FIELD_ENCRYPTION_KEY')
+def _producao(monkeypatch, tmp_path, chave):
+    if chave:
+        monkeypatch.setenv('FIELD_ENCRYPTION_KEY', chave)
+    else:
+        monkeypatch.delenv('FIELD_ENCRYPTION_KEY', raising=False)
+    monkeypatch.delenv('CIFRA_OPCIONAL', raising=False)
     monkeypatch.setenv('EXIGIR_DATABASE_URL', '1')
     monkeypatch.setenv('DATABASE_URL', 'postgresql://u:p@127.0.0.1:1/facilities')
+    monkeypatch.setenv('STORAGE_BACKEND', 'local')
+    monkeypatch.setenv('UPLOAD_FOLDER', str(tmp_path))
+
+
+def test_producao_sem_chave_nao_sobe(monkeypatch, tmp_path):
+    _producao(monkeypatch, tmp_path, None)
+    try:
+        with pytest.raises(cifra.ChaveAusente) as e:
+            create_app()
+        texto = str(e.value)
+        # Diz o que definir, como gerar e o comando que cifra o que já existe.
+        assert 'FIELD_ENCRYPTION_KEY' in texto and 'chaves gerar' in texto
+        assert 'chaves girar' in texto and 'agendador' in texto
+        assert 'CIFRA_OPCIONAL' in texto
+    finally:
+        cifra.configurar(CHAVE_SUITE)
+
+
+def test_producao_com_chave_sobe_com_a_cifra_ligada(monkeypatch, tmp_path):
+    _producao(monkeypatch, tmp_path, CHAVE_SUITE)
+    try:
+        create_app()
+        assert cifra.ligada()
+    finally:
+        cifra.configurar(CHAVE_SUITE)
+
+
+def test_producao_com_cifra_opcional_sobe_com_alerta(monkeypatch, tmp_path, caplog):
+    import logging
+    _producao(monkeypatch, tmp_path, None)
+    monkeypatch.setenv('CIFRA_OPCIONAL', '1')
+    try:
+        with caplog.at_level(logging.WARNING):
+            create_app()
+        assert not cifra.ligada()
+        alertas = [r for r in caplog.records if 'CIFRA_OPCIONAL=1' in r.getMessage()]
+        assert alertas and alertas[0].levelno == logging.CRITICAL
+        assert 'TEXTO ABERTO' in alertas[0].getMessage()
+    finally:
+        cifra.configurar(CHAVE_SUITE)
+
+
+def test_fora_da_producao_sem_chave_sobe_com_aviso(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+    monkeypatch.delenv('FIELD_ENCRYPTION_KEY')
+    monkeypatch.delenv('EXIGIR_DATABASE_URL', raising=False)
+    monkeypatch.delenv('CIFRA_OPCIONAL', raising=False)
+    monkeypatch.setenv('DATABASE_URL', f'sqlite:///{tmp_path / "dev.db"}')
     monkeypatch.setenv('UPLOAD_FOLDER', str(tmp_path))
     avisos = []
     try:
-        create_app()            # a imagem de produção sobe sem a chave
+        create_app()            # desenvolvimento: sobe sem a chave
         assert not cifra.ligada()
         cifra.configurar_app(SimpleNamespace(
             logger=SimpleNamespace(warning=lambda msg, *a: avisos.append(msg))))

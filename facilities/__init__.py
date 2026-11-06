@@ -265,7 +265,9 @@ def create_app(config=None):
     sqlite = _eh_sqlite(app.config['SQLALCHEMY_DATABASE_URI'])
     _garantir_segredo(app, sqlite)
     from facilities.core import cifra
-    cifra.configurar_app(app)
+    # A mesma marca de "isto é produção" da DATABASE_URL e da SECRET_KEY.
+    cifra.configurar_app(app, producao=_flag('EXIGIR_DATABASE_URL', False),
+                         cifra_opcional=_flag('CIFRA_OPCIONAL', False))
     _conferir_limites_compartilhados(app)
     # Antes das extensões: configuração recusada não toca em nada.
     storage = get_storage(app.config['UPLOAD_FOLDER'], local_implicito=sqlite)
