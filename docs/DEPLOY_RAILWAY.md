@@ -1,5 +1,12 @@
 # Publicar o Trino Facilities no Railway
 
+> **ATENÇÃO (06/11/2026):** a imagem passou a EXIGIR `FIELD_ENCRYPTION_KEY`.
+> Antes de publicar esta versão num projeto que já está no ar, ponha a chave
+> no `web` **e** no `agendador` (ordem completa em
+> `docs/SEGURANCA_DADOS.md` › "Primeira vez em produção"). Sem isso o deploy
+> do `web` falha no boot e o `agendador` para de rodar. Todos os cliques no
+> painel, em um lugar só: `docs/CONFIG-MANUAL.md`.
+
 Guia do primeiro deploy (decisão D2, 18/10/2026: Railway, plano Hobby, anexos
 num volume do Railway). **O Railway é o ambiente de TESTES e de
 aperfeiçoamento**; a produção virá depois, com o banco migrado (ver "Migrar
@@ -40,6 +47,7 @@ Onde os dados ficam, e o que apaga:
    ```
    DATABASE_URL=${{Postgres.DATABASE_URL}}
    SECRET_KEY=${{secret(64)}}
+   FIELD_ENCRYPTION_KEY=<a chave gerada no seu computador; cópia no cofre>
    STORAGE_BACKEND=local
    UPLOAD_FOLDER=/data/uploads
    RATELIMIT_STORAGE_URI=${{Redis.REDIS_URL}}
@@ -56,12 +64,15 @@ Onde os dados ficam, e o que apaga:
 
    * `${{secret(64)}}` faz o Railway sortear a chave uma vez e guardar. **Não
      troque depois**: trocar derruba todas as sessões (ninguém perde dado).
-   * **Opcional — cifra dos campos sensíveis:** `FIELD_ENCRYPTION_KEY`
+   * **Obrigatória — cifra dos campos sensíveis:** `FIELD_ENCRYPTION_KEY`
      cifra no banco e-mails, telefones, endereços, o segredo da segunda etapa
-     e as chaves do aviso no celular. Sem ela tudo funciona, com esses campos
-     em texto aberto. Como gerar, guardar no cofre e ligar num banco que já
-     tem dado: `docs/SEGURANCA_DADOS.md` (vale para qualquer servidor). Se
-     ligar, ponha a mesma variável no `agendador` (passo 6).
+     e as chaves do aviso no celular. **Sem ela o `web` e o `agendador` não
+     sobem** (desde 06/11/2026). Ordem: gerar a chave no seu computador
+     (`flask --app facilities chaves gerar`) → cópia no cofre offline → a
+     MESMA chave nas *Variables* do `web` e do `agendador` (passo 6) →
+     deploy → `flask --app facilities chaves girar` uma vez (cifra o que já
+     existe) → `chaves conferir`. Detalhes e a saída de emergência
+     (`CIFRA_OPCIONAL=1`): `docs/SEGURANCA_DADOS.md`.
    * **Não** defina `RAILWAY_RUN_UID`. O contêiner começa como root só para
      acertar o dono do volume e larga o privilégio sozinho
      (`docker-entrypoint.sh`); o app nunca roda como root e o código fica só
@@ -84,6 +95,7 @@ Onde os dados ficam, e o que apaga:
    DATABASE_URL=${{Postgres.DATABASE_URL}}
    DIRECT_DATABASE_URL=${{Postgres.DATABASE_URL}}
    SECRET_KEY=${{web.SECRET_KEY}}
+   FIELD_ENCRYPTION_KEY=${{web.FIELD_ENCRYPTION_KEY}}
    STORAGE_BACKEND=local
    ```
 
@@ -238,8 +250,7 @@ pasta dos anexos. Para levar o que foi feito nos testes para a produção:
    `execucoes/12/ab3f….jpg`). Para o Cloudflare R2: a mesma árvore vira as
    chaves do bucket (`rclone copy /data/uploads r2:<bucket>`), e o app passa a
    usar `STORAGE_BACKEND=r2` + as variáveis `R2_*`.
-4. **Variáveis:** se a cifra dos campos estiver ligada, a
-   `FIELD_ENCRYPTION_KEY` tem de ser a MESMA (sem ela os campos cifrados não
+4. **Variáveis:** a `FIELD_ENCRYPTION_KEY` tem de ser a MESMA (sem ela os campos cifrados não
    abrem: ninguém entra). Banco fora da rede interna: a conexão ganha
    `sslmode=require` sozinha (`DATABASE_SSLMODE` muda). `SECRET_KEY` nova só derruba as sessões (todos entram de
    novo). Mantenha as MESMAS chaves `VAPID_*`, senão os celulares precisam

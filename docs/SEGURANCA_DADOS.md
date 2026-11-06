@@ -1,12 +1,50 @@
 # Segurança dos dados no banco
 
 Pedido do dono (30/10/2026): "o banco de dados precisa estar criptografado,
-não podemos deixar dados vazarem, nem senha". Decisão do mesmo dia: a cifra
-é uma **opção**, que se liga em **qualquer lugar onde o banco estiver**
-(Railway, servidor da empresa, outra nuvem, Docker local). Nada aqui depende
-de hospedagem: são variáveis de ambiente e comandos do próprio sistema.
+não podemos deixar dados vazarem, nem senha". A cifra se liga em **qualquer
+lugar onde o banco estiver** (Railway, servidor da empresa, outra nuvem,
+Docker local). Nada aqui depende de hospedagem: são variáveis de ambiente e
+comandos do próprio sistema.
 
-## O que já vale sempre, e o que é opcional
+> **ATENÇÃO — a cifra passou a ser OBRIGATÓRIA na produção** (pacote rápido
+> da linha de base do Grupo, aprovado pelo dono em 06/11/2026). A imagem
+> Docker (`EXIGIR_DATABASE_URL=1`) **não sobe** sem `FIELD_ENCRYPTION_KEY`:
+> o `web` e o `agendador` param no boot com a mensagem do que fazer.
+> **Publicar esta versão antes de pôr a chave no `web` E no `agendador`
+> derruba o sistema.** Siga a ordem de "Primeira vez em produção", abaixo,
+> ANTES do deploy. No desenvolvimento e nos testes (sem a marca de
+> produção) a chave continua opcional.
+
+## Primeira vez em produção (a ordem importa)
+
+1. **Gerar a chave no seu computador** (no ambiente de desenvolvimento, que
+   sobe sem ela): `flask --app facilities chaves gerar`, ou
+   `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`.
+   Não gere nem cole a chave em conversa, e-mail, chamado ou repositório.
+2. **Guardar a cópia no cofre offline** (1Password/Bitwarden do dono, ou
+   envelope lacrado), com a data. Perder a chave = perder os campos cifrados.
+3. **Pôr a chave na hospedagem**, a MESMA nos dois serviços:
+   Railway › `web` › *Variables* › `FIELD_ENCRYPTION_KEY=<chave>` e
+   Railway › `agendador` › *Variables* › a mesma linha (ou
+   `FIELD_ENCRYPTION_KEY=${{web.FIELD_ENCRYPTION_KEY}}`).
+4. **Só agora o deploy** da versão que exige a chave.
+5. **Cifrar o que já existe**, uma vez: `railway ssh --service web` e
+   `flask --app facilities chaves girar`. Até isso rodar, o sistema funciona
+   normalmente (as linhas antigas ficam abertas, as novas já nascem
+   cifradas, e o login acha as duas).
+6. **Conferir:** `flask --app facilities chaves conferir` → "Todos os campos
+   sensíveis estão cifrados". E entrar no sistema com uma conta antiga.
+
+**Saída de emergência:** `CIFRA_OPCIONAL=1` nas variáveis faz a imagem de
+produção subir sem a chave, com um alerta (`CRITICAL`) no log a cada boot
+dizendo que os campos estão em texto aberto. Serve só para pôr o sistema de
+pé se a chave ainda não chegou ou foi publicada a versão antes da hora.
+Tire a variável assim que a chave estiver no lugar. **Nunca** use
+`CIFRA_OPCIONAL=1` num banco que já tem dado cifrado: aí o problema é a
+chave que sumiu (ponha de volta a do cofre), e o sistema não abriria esses
+campos de qualquer jeito.
+
+## O que já vale sempre, e o que vem com a cifra
 
 | Dado | Sempre | Com a cifra ligada |
 |---|---|---|
@@ -23,7 +61,7 @@ Não há importação de senhas do .NET (decisão do dono, 30/10/2026). O scrypt
 daqui resiste mais a ataque com placa de vídeo que o PBKDF2 do ASP.NET
 Identity.
 
-## Ligar a cifra (qualquer servidor)
+## Ligar a cifra (qualquer servidor, inclusive fora do Railway)
 
 1. **Gerar a chave:** `flask --app facilities chaves gerar` (ou
    `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`).
@@ -40,8 +78,9 @@ Identity.
 5. **Conferir:** `flask --app facilities chaves conferir` → "Todos os campos
    sensíveis estão cifrados".
 
-Sem a chave, o sistema sobe e avisa no log que esses campos estão abertos.
-Ligada a cifra, **não tire a chave**: o sistema para de abrir esses campos
+Sem a chave: no desenvolvimento o sistema sobe e avisa no log que esses
+campos estão abertos; na imagem de produção ele não sobe (salvo
+`CIFRA_OPCIONAL=1`, acima). Ligada a cifra, **não tire a chave**: o sistema para de abrir esses campos
 (erro claro, nunca dado trocado) até ela voltar.
 
 ## Trocar a chave (rodízio)
@@ -151,3 +190,15 @@ mesmas funções em `core/auth.py` e `core/admin.py`):
   pelo índice; qualquer outra comparação dá erro de propósito.
 * Teste de que o valor bruto no banco não contém o texto, com a cifra ligada
   (`tests/test_cifra_campos.py`).
+
+## Erros no log
+
+O log da hospedagem é lido por mais gente que o banco. Por isso
+(`facilities/core/log_seguro.py`): erro do banco vai para o log só com a
+classe, o SQLSTATE e um motivo curto ("tempo esgotado", "conexão recusada"),
+nunca a mensagem do driver (que traz host, usuário e nome do banco) nem a
+consulta com os parâmetros (que podem ter e-mail e nome). Nos outros erros,
+URL com senha, e-mail e host/usuário entre aspas são apagados. Falha de
+e-mail registra só o domínio do destinatário e o código SMTP. Código novo
+que registra erro: use `log_seguro.resumo(erro)`, nunca `str(erro)` de erro
+do banco.

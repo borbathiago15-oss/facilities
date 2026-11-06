@@ -1,10 +1,13 @@
 """Criptografia dos campos sensíveis no banco (pedido do dono, 30/10/2026).
 
-É OPCIONAL e não depende de hospedagem: liga com ``FIELD_ENCRYPTION_KEY`` no
-ambiente de qualquer servidor onde o sistema e o banco estiverem (Railway,
-servidor da empresa, outra nuvem). Sem a chave, os campos ficam em texto
-aberto, como antes. Para ligar num banco que já tem dado: pôr a chave e
-rodar ``flask chaves girar``.
+Não depende de hospedagem: liga com ``FIELD_ENCRYPTION_KEY`` no ambiente de
+qualquer servidor onde o sistema e o banco estiverem (Railway, servidor da
+empresa, outra nuvem). **Na imagem de produção ela é obrigatória** (pacote
+rápido da linha de base do Grupo, 06/11/2026): sem a chave o sistema não sobe,
+salvo ``CIFRA_OPCIONAL=1`` (só para emergência, com alerta no log). No
+desenvolvimento e nos testes (sem a marca de produção) continua opcional:
+sem a chave, os campos ficam em texto aberto. Para ligar num banco que já tem
+dado: pôr a chave e rodar ``flask chaves girar``.
 
 Com a cifra ligada, quem copiar o banco, um backup ou um log de consulta NÃO lê e-mail, telefone,
 endereço, segredo da segunda etapa nem as chaves do aviso no celular: essas
@@ -81,17 +84,47 @@ def configurar(principal, antigas=''):
     _estado['chaves'] = _ler_chaves(principal, antigas)
 
 
-def configurar_app(app):
-    """Chamado pela fábrica. A cifra é OPCIONAL (decisão do dono, 30/10/2026:
-    ligar quando quiser, em qualquer servidor onde o banco estiver): com
-    ``FIELD_ENCRYPTION_KEY`` no ambiente ela vale; sem, o sistema sobe com os
-    campos em texto aberto, como antes, e avisa no log."""
+MSG_PRODUCAO_SEM_CHAVE = (
+    'FIELD_ENCRYPTION_KEY não definida. Na imagem de produção a cifra dos campos '
+    'sensíveis é obrigatória: sem ela e-mails, telefones, endereços e o segredo da '
+    'segunda etapa ficam em texto aberto no banco. Faça, nesta ordem: (1) gere a chave '
+    'no seu computador com "flask --app facilities chaves gerar"; (2) guarde uma cópia '
+    'no cofre offline; (3) ponha FIELD_ENCRYPTION_KEY=<chave> nas variáveis do web E do '
+    'agendador; (4) depois do deploy, rode uma vez "flask --app facilities chaves girar" '
+    '(cifra as linhas que já existem) e confira com "flask --app facilities chaves '
+    'conferir". Emergência (só para pôr o sistema de pé enquanto a chave não chega): '
+    'CIFRA_OPCIONAL=1. Passo a passo: docs/SEGURANCA_DADOS.md.')
+
+MSG_ESCAPE = (
+    'ATENÇÃO — CIFRA_OPCIONAL=1: o sistema subiu em produção SEM FIELD_ENCRYPTION_KEY. '
+    'E-mails, telefones, endereços e o segredo da segunda etapa estão em TEXTO ABERTO no '
+    'banco. Isto é só para emergência: ponha a chave e tire CIFRA_OPCIONAL o quanto antes '
+    '(docs/SEGURANCA_DADOS.md).')
+
+
+def configurar_app(app, producao=False, cifra_opcional=False):
+    """Chamado pela fábrica com a chave do ambiente.
+
+    * com ``FIELD_ENCRYPTION_KEY``: a cifra vale (em qualquer servidor);
+    * sem a chave, fora da produção (desenvolvimento, testes): sobe com os
+      campos em texto aberto e avisa no log, como antes;
+    * sem a chave na imagem de produção (``producao``, que é o
+      ``EXIGIR_DATABASE_URL`` do Dockerfile): **não sobe** — a menos que
+      ``cifra_opcional`` (``CIFRA_OPCIONAL=1``), a saída de emergência, que
+      sobe gritando no log a cada boot."""
     configurar(os.environ.get('FIELD_ENCRYPTION_KEY') or '',
                os.environ.get('FIELD_ENCRYPTION_OLD_KEYS') or '')
-    if not ligada():
+    if ligada():
+        return
+    if not producao:
         app.logger.warning('FIELD_ENCRYPTION_KEY não definida: e-mails, telefones, endereços e '
                            'o segredo da segunda etapa ficam em TEXTO ABERTO no banco. Para '
                            'ligar a cifra, veja docs/SEGURANCA_DADOS.md.')
+        return
+    if cifra_opcional:
+        app.logger.critical(MSG_ESCAPE)
+        return
+    raise ChaveAusente(MSG_PRODUCAO_SEM_CHAVE)
 
 
 def _chaves():

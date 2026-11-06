@@ -71,6 +71,12 @@ flask --app facilities criar-admin        # mostra uma senha temporária
 flask --app facilities run                # http://127.0.0.1:5000
 ```
 
+Todas as variáveis que o sistema lê, com uma linha de explicação cada:
+`.env.example` (copie para `.env`, que nunca vai para o git). Para subir a
+produção do zero: `docs/DEPLOY_RAILWAY.md` (passo a passo) e
+`docs/CONFIG-MANUAL.md` (tudo o que é clique ou variável no painel). O que
+funciona hoje e o que falta: `STATUS.md`.
+
 Sem `DATABASE_URL`, usa SQLite em `instance/facilities.db`. O schema vem das
 migrações também aqui — o boot não cria tabela nenhuma —, então rode
 `flask --app facilities db upgrade` antes do primeiro uso e depois de cada
@@ -116,12 +122,15 @@ Passo a passo do Railway (a hospedagem escolhida): `docs/DEPLOY_RAILWAY.md`.
   |---|---|---|
   | `DATABASE_URL` | sim (a imagem Docker exige, via `EXIGIR_DATABASE_URL=1`) | não sobe — sem ela o app usaria um SQLite dentro do contêiner, que some a cada reinício |
   | `SECRET_KEY` | sim, fora do SQLite de desenvolvimento | não sobe — sem ela cada processo do gunicorn sortearia a sua, e o login e as sessões falhariam ao acaso |
+  | `FIELD_ENCRYPTION_KEY` | sim, na imagem Docker | não sobe — sem ela os dados pessoais ficariam em texto aberto no banco (`CIFRA_OPCIONAL=1` só em emergência) |
   | `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` | sim, para anexos no Cloudflare R2 | não sobe, dizendo qual falta — a menos que `STORAGE_BACKEND=local` esteja escrito (anexos no disco do servidor: só com volume persistente) |
 
-- **Cifra dos campos sensíveis (opcional, qualquer servidor):**
+- **Cifra dos campos sensíveis (obrigatória na imagem de produção):**
   `FIELD_ENCRYPTION_KEY` cifra no banco e-mails, telefones, endereços e o
-  segredo da segunda etapa. Sem ela o app sobe com esses campos em texto
-  aberto (e avisa no log). Ligar, trocar a chave, backup cifrado:
+  segredo da segunda etapa. Na imagem Docker o app **não sobe** sem ela
+  (saída de emergência: `CIFRA_OPCIONAL=1`, com alerta no log); no
+  desenvolvimento ela é opcional. A ordem para ligar (gerar → cofre → `web` e
+  `agendador` → deploy → `chaves girar`), trocar a chave e o backup cifrado:
   `docs/SEGURANCA_DADOS.md`.
 
 - **Agendador das rotas**: gera as tarefas do dia, avisa a hora de cada uma,

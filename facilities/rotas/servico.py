@@ -28,6 +28,7 @@ from flask import current_app
 from sqlalchemy.exc import IntegrityError
 
 from facilities import tempo
+from facilities.core import log_seguro
 from facilities.extensions import db
 from facilities.core.models import User
 from facilities.cadastros.models import PontoInspecao
@@ -736,8 +737,8 @@ def gerar(dia, client_ids=None, agora_utc=None, erros=None):
         except Exception as erro:          # noqa: BLE001 — a rota quebrada fica registrada
             if erros is None:
                 raise
-            current_app.logger.exception('rota %s: geração falhou', rota.id)
-            erros.append(f'rota {rota.id} ({rota.nome}): {type(erro).__name__}: {erro}')
+            log_seguro.registrar_falha(current_app.logger, erro, 'rota %s: geração falhou', rota.id)
+            erros.append(f'rota {rota.id} ({rota.nome}): {log_seguro.resumo(erro)}')
     return criadas
 
 
@@ -955,8 +956,8 @@ def rodar(origem='comando', agora_utc=None):
             with db.session.begin_nested():
                 etapa()
         except Exception as erro:          # noqa: BLE001 — registrada e a rodada segue
-            current_app.logger.exception('agendador: etapa %s falhou', nome)
-            erros.append(f'{nome}: {type(erro).__name__}: {erro}')
+            log_seguro.registrar_falha(current_app.logger, erro, 'agendador: etapa %s falhou', nome)
+            erros.append(f'{nome}: {log_seguro.resumo(erro)}')
     reg.ok = not erros
     reg.erro = '\n'.join(erros)[:2000] or None
     reg.concluida_em = datetime.utcnow()

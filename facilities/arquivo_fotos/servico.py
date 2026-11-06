@@ -22,6 +22,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import exists, extract, func, or_
 
 from facilities import tempo
+from facilities.core import log_seguro
 from facilities.extensions import db
 from facilities.arquivo_fotos.models import (
     DIAS_PADRAO, LOTE_CONCLUIDO, LOTE_CONCLUIDO_COM_FALHAS, LOTE_EM_ANDAMENTO,
@@ -335,7 +336,7 @@ def _arquivar_uma(lote, fonte, linha_id, chave, mime, principal, arquivo, agora_
         if _sha(volta) != _sha(dados):
             raise ValueError('a cópia no arquivo não confere com a original')
     except Exception as erro:                   # noqa: BLE001 — anotado; a foto fica
-        _falhou(lote, fonte, linha_id, chave, f'{type(erro).__name__}: {erro}', agora_utc)
+        _falhou(lote, fonte, linha_id, chave, log_seguro.resumo(erro), agora_utc)
         return False
     try:
         with db.session.begin_nested():
@@ -345,7 +346,7 @@ def _arquivar_uma(lote, fonte, linha_id, chave, mime, principal, arquivo, agora_
                                          lote_id=lote.id))
             FalhaArquivo.query.filter_by(storage_key=chave).delete()
     except Exception as erro:                   # noqa: BLE001 — ex.: chave repetida
-        _falhou(lote, fonte, linha_id, chave, f'{type(erro).__name__}: {erro}', agora_utc)
+        _falhou(lote, fonte, linha_id, chave, log_seguro.resumo(erro), agora_utc)
         return False
     lote.arquivadas += 1
     lote.bytes_arquivados += len(dados)
@@ -370,7 +371,7 @@ def _remover_do_principal(principal, arquivo, agora_utc, limite):
                 continue
             principal.delete(fa.storage_key)
         except Exception as erro:               # noqa: BLE001 — fica para a próxima
-            erros.append((fa, f'{fa.origem} #{fa.origem_id}: {type(erro).__name__}: {erro}'))
+            erros.append((fa, f'{fa.origem} #{fa.origem_id}: {log_seguro.resumo(erro)}'))
             continue
         fa.removida_do_principal_em = agora_utc
         removidas += 1

@@ -123,6 +123,45 @@ def test_a_pagina_do_503_nao_consulta_o_banco(app_module, logado, monkeypatch):
     assert visto['consultas'] == 0
 
 
+def test_o_log_do_503_nao_traz_host_usuario_nem_parametros(app_module, logado, monkeypatch,
+                                                           caplog):
+    """A mensagem do psycopg2 diz host, usuário e banco; a do SQLAlchemy, a
+    consulta com os parâmetros. No log vai só a classe e um motivo curto."""
+    import logging
+
+    class _Driver(Exception):
+        pgcode = None
+
+    def erro():
+        return sa_exc.OperationalError(
+            'SELECT * FROM users WHERE email_index = %(e)s', {'e': 'joana.silva@trino.com'},
+            _Driver('connection to server at "db-producao.exemplo.net" (10.1.2.3), port 5432 '
+                    'failed: FATAL:  password authentication failed for user "facilities_app"'))
+
+    monkeypatch.setitem(app_module.app.view_functions, 'api_v1.eu', _que_levanta(erro))
+    # No Postgres a suíte roda as migrações, e o fileConfig do Alembic
+    # desliga os loggers que já existiam (o do app entre eles).
+    monkeypatch.setattr(app_module.app.logger, 'disabled', False)
+    with caplog.at_level(logging.WARNING):
+        r = logado.get('/api/v1/eu')
+    assert r.status_code == 503
+    texto = caplog.text
+    assert 'banco indisponível (503)' in texto and 'OperationalError' in texto
+    assert 'usuário ou senha do banco recusados' in texto
+    for vazado in ('db-producao.exemplo.net', '10.1.2.3', 'facilities_app',
+                   'joana.silva', 'email_index'):
+        assert vazado not in texto
+
+
+def test_resumo_de_erro_comum_apaga_url_com_senha_e_email():
+    from facilities.core.log_seguro import resumo
+    texto = resumo(ValueError('falhou em postgresql://u:segredo@h/db para ana@trino.com '
+                              'user "fac"\nsegunda linha'))
+    assert texto.startswith('ValueError: falhou em')
+    for vazado in ('segredo', 'ana@trino.com', '"fac"', 'segunda linha'):
+        assert vazado not in texto
+
+
 def test_banco_fora_ao_carregar_a_pessoa_logada_tambem_e_503(app_module, logado,
                                                               monkeypatch):
     """O primeiro toque no banco costuma ser o ``user_loader`` (antes da tela)."""
@@ -221,3 +260,17 @@ def test_readyz_logado_so_faz_o_select_1(app_module, logado):
     assert r.status_code == 200
     # SELECT 1 (+ o SET LOCAL no Postgres; + o ping do pool): nada da pessoa.
     assert cont.n <= 3
+
+
+def test_falha_de_banco_no_agendador_vai_sem_o_rastro(caplog):
+    """O rastro (``logger.exception``) repetiria a mensagem do driver."""
+    import logging
+
+    from facilities.core.log_seguro import registrar_falha
+    log = logging.getLogger('teste.agendador')
+    erro = sa_exc.OperationalError('SELECT 1', {}, Exception('user "facilities_app" timed out'))
+    with caplog.at_level(logging.WARNING):
+        registrar_falha(log, erro, 'agendador: etapa %s falhou', 'tarefas')
+    assert 'etapa tarefas falhou' in caplog.text and 'tempo esgotado' in caplog.text
+    assert 'facilities_app' not in caplog.text
+    assert all(r.exc_info is None for r in caplog.records)
