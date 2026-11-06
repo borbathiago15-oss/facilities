@@ -139,6 +139,9 @@ def test_o_log_do_503_nao_traz_host_usuario_nem_parametros(app_module, logado, m
                     'failed: FATAL:  password authentication failed for user "facilities_app"'))
 
     monkeypatch.setitem(app_module.app.view_functions, 'api_v1.eu', _que_levanta(erro))
+    # No Postgres a suíte roda as migrações, e o fileConfig do Alembic
+    # desliga os loggers que já existiam (o do app entre eles).
+    monkeypatch.setattr(app_module.app.logger, 'disabled', False)
     with caplog.at_level(logging.WARNING):
         r = logado.get('/api/v1/eu')
     assert r.status_code == 503

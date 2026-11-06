@@ -190,6 +190,8 @@ def test_producao_com_cifra_opcional_sobe_com_alerta(monkeypatch, tmp_path, capl
     import logging
     _producao(monkeypatch, tmp_path, None)
     monkeypatch.setenv('CIFRA_OPCIONAL', '1')
+    # O fileConfig do Alembic (suíte no Postgres) desliga o logger do app.
+    monkeypatch.setattr(logging.getLogger('facilities'), 'disabled', False)
     try:
         with caplog.at_level(logging.WARNING):
             create_app()
