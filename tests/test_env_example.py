@@ -139,4 +139,4 @@ def test_env_example_sem_valor_secreto():
 
 def test_env_fica_fora_do_git():
     with open(os.path.join(RAIZ, '.gitignore'), encoding='utf-8') as f:
-        assert '.env' in [l.strip() for l in f]
+        assert '.env' in [linha.strip() for linha in f]
