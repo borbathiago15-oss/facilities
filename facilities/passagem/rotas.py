@@ -18,6 +18,7 @@ from datetime import date, datetime
 
 from flask import Blueprint, abort, jsonify, make_response, render_template, request
 from flask_login import current_user, login_required
+from sqlalchemy.exc import IntegrityError
 
 from facilities import tempo
 from facilities.extensions import db
@@ -941,6 +942,16 @@ def salvar_turno():
     # responsáveis diferentes. Sem o modelo na chave, a segunda batia em 409
     # ("o 1º Turno de 21/09/2026 já foi encerrado") e o encarregado do
     # Almoxarifado simplesmente não conseguia lançar.
+    #
+    # A trava do contrato vem ANTES da busca (auditoria, Fase 3, L2): o
+    # "Encerrar" que chega duas vezes juntas (a fila do aparelho sem sinal
+    # reenviando + o toque na tela) e o rascunho salvo em dois aparelhos
+    # procuravam ao mesmo tempo, não achavam nada (ou achavam as pendências
+    # de antes) e gravavam tudo em dobro. Com a trava, o segundo só procura
+    # depois do commit do primeiro: acha a passagem, e as pendências e
+    # ocorrências que ela já tem. A chave única
+    # ``uq_diario_turnos_chave`` é a garantia de fundo.
+    _travar_contrato(client_id)
     t = (DiarioTurno.query
          .filter_by(client_id=client_id, configuracao_id=cfg.id,
                     data_turno=data_turno, turno=turno_nome)
@@ -982,7 +993,11 @@ def salvar_turno():
         dados[analitico.CHAVE_ENVIO] = envio
     t.dados_json = json.dumps(dados, ensure_ascii=False)
     t.observacao = (data.get('observacao') or '').strip()
-    db.session.flush()
+    try:
+        db.session.flush()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({'error': MSG_PASSAGEM_JA_GRAVADA}), 409
 
     # Ao reenviar, o navegador manda a lista inteira de novo. Somar cegamente
     # duplicaria tudo o que já entrou no rascunho; apagar e recriar destruiria
@@ -1061,13 +1076,38 @@ def salvar_turno():
                     'Abra a passagem para ver o que ficou para o seu turno.',
                     _link_do_turno(client_id), client_id)
         _avisar_pendencias_paradas(client_id)
-    db.session.commit()
+    try:
+        db.session.commit()
+    except IntegrityError:
+        # Só acontece se a trava não segurou (não deveria): a chave única
+        # recusou a segunda passagem da mesma chave. Nada foi gravado por
+        # este envio; a tela mostra a que entrou.
+        db.session.rollback()
+        return jsonify({'error': MSG_PASSAGEM_JA_GRAVADA}), 409
     # Quantas pendências ESTA passagem deixou em aberto: é o número que a
     # tela escreve na confirmação ("2 pendências ficaram para o próximo
     # turno"). No celular o painel é longo, e sem a frase a pessoa não sabia
     # se o encerramento tinha entrado.
     deixadas = DiarioPendencia.query.filter_by(turno_id=t.id, status='aberta').count()
     return jsonify(dict(_turno_payload(t), pendencias_deixadas=deixadas)), 201
+
+
+MSG_PASSAGEM_JA_GRAVADA = ('Esta passagem acabou de ser gravada por outro envio. '
+                           'Abra a passagem de novo para ver o que entrou.')
+
+
+def _travar_contrato(client_id):
+    """Põe em fila quem grava passagem no MESMO contrato, até o commit.
+
+    A mesma trava de ``chamados.servico._travar_contrato`` (``SELECT … FOR NO
+    KEY UPDATE`` na linha do contrato): dois envios da mesma passagem passam
+    um depois do outro, e o segundo vê o que o primeiro gravou. ``NO KEY``
+    não segura quem só grava registro filho do contrato. No SQLite (testes)
+    a cláusula é ignorada — lá as escritas já são em fila.
+    """
+    from facilities.core.models import Client
+    db.session.execute(db.select(Client.id).where(Client.id == client_id)
+                       .with_for_update(key_share=True))
 
 
 def _registrar_passagem_das_abertas(t):
@@ -2128,7 +2168,9 @@ def corrigir_turno(turno_id):
 
     if (nova_data, novo_turno) != (t.data_turno, t.turno):
         # Mover para cima de uma passagem que já existe fundiria duas
-        # realidades numa linha só.
+        # realidades numa linha só. A trava do contrato põe esta conferência
+        # em fila com o "Encerrar" da mesma chave (ver ``salvar_turno``).
+        _travar_contrato(t.client_id)
         choque = (DiarioTurno.query
                   .filter(DiarioTurno.client_id == t.client_id,
                           DiarioTurno.configuracao_id == t.configuracao_id,
@@ -2189,7 +2231,15 @@ def corrigir_turno(turno_id):
     if 'data' in campos or 'turno' in campos:
         db.session.flush()
         _tarefas_no_encerramento(t)
-    db.session.commit()
+    try:
+        db.session.commit()
+    except IntegrityError:
+        # A chave única recusou: outra passagem desta chave entrou entre a
+        # conferência acima e o commit. Nada desta correção foi gravado.
+        db.session.rollback()
+        return jsonify({'error': f'Já existe passagem de {novo_turno} em '
+                                 f'{nova_data.strftime("%d/%m/%Y")} neste '
+                                 f'modelo.'}), 409
     return jsonify({'ok': True, 'id': t.id, 'campos': campos})
 
 
