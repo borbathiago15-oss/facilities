@@ -12,7 +12,8 @@ dele nunca subiam. Em JSON a fila sabe o que fazer — 403/404 é conflito,
 O 401 de API continua com o ``unauthorized_handler`` da fábrica (JSON
 "Sessão expirada"); aqui ficam os erros que chegam como exceção.
 """
-from flask import current_app, jsonify, render_template, request
+from flask import current_app, g, jsonify, render_template, request
+from sqlalchemy import exc as sa_exc
 
 from facilities.extensions import db
 
@@ -24,6 +25,7 @@ TITULOS = {
     413: 'Envio grande demais',
     429: 'Muitas tentativas',
     500: 'Erro no sistema',
+    503: 'Sistema ocupado',
 }
 
 MENSAGENS = {
@@ -36,6 +38,8 @@ MENSAGENS = {
     500: 'Algo deu errado do nosso lado, e o que você fez pode não ter sido '
          'gravado. Tente de novo em instantes; se continuar, avise o '
          'administrador.',
+    503: 'O sistema está com dificuldade para falar com o banco. Tente de novo '
+         'em instantes.',
 }
 
 # Só nestes a mensagem própria do ``abort``/exceção vai para a tela (ex.: o
@@ -105,7 +109,13 @@ def _erro_interno(e):
     Depois de um erro de banco a transação fica abortada (no Postgres, toda
     consulta seguinte falha) — e a página de erro consulta o banco (o usuário
     logado, o número do sino). Se nem assim der, sai texto puro em português.
+
+    Erro de banco que escapou fora da view (num ``after_request``, por
+    exemplo) chega aqui embrulhado: vira o mesmo 503.
     """
+    original = getattr(e, 'original_exception', None)
+    if eh_erro_de_banco(original):
+        return _erro_de_banco(original)
     try:
         db.session.rollback()
     except Exception:  # o banco pode estar fora — a resposta sai mesmo assim
@@ -115,6 +125,53 @@ def _erro_interno(e):
     except Exception:
         current_app.logger.exception('a página de erro 500 não pôde ser montada')
         return MENSAGENS[500], 500, {'Content-Type': 'text/plain; charset=utf-8'}
+
+
+# O banco não respondeu a tempo (auditoria, Fase 3): fora do ar, pendurado,
+# pool sem conexão livre (``sqlalchemy.exc.TimeoutError``), consulta cortada
+# pelo ``statement_timeout`` ou trava que não veio (``QueryCanceled`` e
+# ``LockNotAvailable`` do psycopg2 chegam dentro do ``OperationalError``) ou
+# conexão que caiu no meio (``InterfaceError``). Não é defeito do sistema nem
+# do que a pessoa fez: 503 com ``Retry-After``, e a fila sem internet
+# (``fila-offline.js``) tenta de novo depois.
+ERROS_DE_BANCO = (sa_exc.OperationalError, sa_exc.TimeoutError, sa_exc.InterfaceError)
+ESPERA_SEGUNDOS = 5
+
+
+def eh_erro_de_banco(e):
+    return isinstance(e, ERROS_DE_BANCO)
+
+
+def _erro_de_banco(e):
+    """503 sem tocar no banco de novo.
+
+    A página normal de erro monta o menu e o número do sino (consultas): com
+    o banco pendurado ela esperava outra vez. Aqui a resposta sai de um
+    modelo sem o ``base.html`` e sem os ``context_processor``; o
+    ``_cabecalhos`` da fábrica olha ``g.erro_de_banco`` para não carregar a
+    pessoa logada.
+    """
+    g.erro_de_banco = True
+    current_app.logger.warning('banco indisponível (503): %s: %s',
+                               type(e).__name__, str(e).splitlines()[0] if str(e) else '')
+    try:
+        db.session.rollback()
+    except Exception:  # o banco pode estar fora — a resposta sai mesmo assim
+        current_app.logger.exception('rollback falhou ao tratar um erro de banco')
+    cabecalhos = {'Retry-After': str(ESPERA_SEGUNDOS)}
+    mensagem = MENSAGENS[503]
+    if pede_json():
+        return jsonify({'error': mensagem}), 503, cabecalhos
+    try:
+        # Direto do ambiente do Jinja: o ``render_template`` chamaria os
+        # context processors (o sino consulta o banco).
+        html = current_app.jinja_env.get_template('core/erro_banco.html').render(
+            titulo=TITULOS[503], mensagem=mensagem, espera=ESPERA_SEGUNDOS,
+            recarregar=request.method in ('GET', 'HEAD'))
+    except Exception:
+        current_app.logger.exception('a página de erro 503 não pôde ser montada')
+        return mensagem, 503, {**cabecalhos, 'Content-Type': 'text/plain; charset=utf-8'}
+    return html, 503, {**cabecalhos, 'Content-Type': 'text/html; charset=utf-8'}
 
 
 MSG_CSRF = ('A tela ficou aberta tempo demais e o envio não foi aceito, por segurança. '
@@ -134,3 +191,5 @@ def registrar(app):
         app.register_error_handler(codigo, _erro_http)
     app.register_error_handler(CSRFError, _erro_csrf)
     app.register_error_handler(500, _erro_interno)
+    for classe in ERROS_DE_BANCO:
+        app.register_error_handler(classe, _erro_de_banco)

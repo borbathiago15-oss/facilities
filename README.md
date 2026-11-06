@@ -125,7 +125,7 @@ Passo a passo do Railway (a hospedagem escolhida): `docs/DEPLOY_RAILWAY.md`.
   forjaria o próprio IP pelo cabeçalho `X-Forwarded-For`.
 - O limite de tentativas de login é por IP + e-mail (20 por minuto), além do
   bloqueio da conta após 5 senhas erradas. O contador padrão (`memory://`) é
-  por processo: com `WEB_CONCURRENCY=2` o limite real dobra. Para um contador
+  por processo: com `WEB_CONCURRENCY=4` o limite real é 4 vezes maior. Para um contador
   único entre os processos, `RATELIMIT_STORAGE_URI=redis://host:6379/0` (o
   pacote `redis` já vem na imagem). Na imagem de produção, `memory://` com
   mais de um worker gera aviso no log; com `RATELIMIT_EXIGIR_COMPARTILHADO=1`
@@ -134,7 +134,15 @@ Passo a passo do Railway (a hospedagem escolhida): `docs/DEPLOY_RAILWAY.md`.
   Permissions-Policy (câmera só do próprio sistema), nosniff, X-Frame-Options.
   Content-Security-Policy com `script-src 'self'` (Fase 9A: nenhum script
   embutido nas telas).
-- `GET /healthz` responde 200 sem login e sem banco (liveness).
+- `GET /healthz` responde 200 sem login, sem banco e sem carregar a pessoa
+  logada (liveness). `GET /readyz` faz `SELECT 1` com 2 s de limite: 200
+  pronto, 503 sem banco (readiness).
+- **Banco**: pool do tamanho das threads, tempos limite curtos (conexão 5 s,
+  pool 5 s, conexão perdida ~15 s) e 503 "tente de novo em instantes" quando
+  o banco não responde. Processos e threads do gunicorn: `WEB_CONCURRENCY`
+  (4) × `GUNICORN_THREADS` (8). Tempos limite no papel do banco (passo
+  manual), pooler (Neon/Supabase) e `DIRECT_DATABASE_URL`:
+  `docs/BANCO_E_POOLER.md`.
 - **Portal do cliente**: `CLIENTE_EXTERNO_LIBERADO=1` deixa a conta de cliente
   entrar (padrão desligado; ligar só com os termos do jurídico). O cliente
   ativa a segunda etapa no primeiro acesso, fica preso ao `/cliente` e vê só

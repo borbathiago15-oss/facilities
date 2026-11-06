@@ -44,9 +44,15 @@ Onde os dados ficam, e o que apaga:
    UPLOAD_FOLDER=/data/uploads
    RATELIMIT_STORAGE_URI=${{Redis.REDIS_URL}}
    PROXY_HOPS=1
-   WEB_CONCURRENCY=2
+   WEB_CONCURRENCY=4
+   DIRECT_DATABASE_URL=${{Postgres.DATABASE_URL}}
    CLIENTE_EXTERNO_LIBERADO=0
    ```
+
+   * `WEB_CONCURRENCY=4` (4 processos × 8 threads, `GUNICORN_THREADS`) e
+     `DIRECT_DATABASE_URL` (o agendador e as migrações com limites de tempo
+     próprios): ver `docs/BANCO_E_POOLER.md`, que também traz o passo manual
+     dos tempos limite no banco (`ALTER ROLE`).
 
    * `${{secret(64)}}` faz o Railway sortear a chave uma vez e guardar. **Não
      troque depois**: trocar derruba todas as sessões (ninguém perde dado).
@@ -67,7 +73,8 @@ Onde os dados ficam, e o que apaga:
      com `RATELIMIT_EXIGIR_COMPARTILHADO=1` ele se recusa a subir sem Redis.
    * `CLIENTE_EXTERNO_LIBERADO=0` até o jurídico entregar os termos (Grupo C).
 5. **Configuração do `web`:** *Settings › Deploy*: *Healthcheck Path*
-   `/healthz`; *Replicas* 1. *Networking › Generate Domain* (endereço
+   `/healthz` (o processo de pé, sem olhar o banco; o `/readyz` olha o banco
+   e serve para um monitor externo — ver `docs/BANCO_E_POOLER.md`); *Replicas* 1. *Networking › Generate Domain* (endereço
    `…up.railway.app`; o domínio próprio pode vir depois em *Custom Domain*).
    Não precisa de *Pre-deploy Command*: a imagem migra o banco ao subir.
 6. **Agendador:** *Create › GitHub Repo* › o mesmo repositório, nome
@@ -75,6 +82,7 @@ Onde os dados ficam, e o que apaga:
 
    ```
    DATABASE_URL=${{Postgres.DATABASE_URL}}
+   DIRECT_DATABASE_URL=${{Postgres.DATABASE_URL}}
    SECRET_KEY=${{web.SECRET_KEY}}
    STORAGE_BACKEND=local
    ```
