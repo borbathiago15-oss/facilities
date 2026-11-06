@@ -410,10 +410,6 @@ def test_servidor_de_email_calado_desiste_no_tempo_configurado(app_module, pendu
 
 # ── Redis do limitador ───────────────────────────────────────────────────
 
-@pytest.mark.xfail(strict=True, reason='BUG (L1): com RATELIMIT_STORAGE_URI apontando para um '
-                   'Redis fora do ar, o login dá 500 para TODO MUNDO (o Flask-Limiter não '
-                   'engole o erro do armazenamento). Correção proposta: '
-                   'RATELIMIT_SWALLOW_ERRORS=True + RATELIMIT_IN_MEMORY_FALLBACK_ENABLED=True.')
 def test_redis_do_limitador_fora_do_ar_nao_impede_o_login(tmp_path):
     """Num processo à parte (o limitador é um só por processo): o app com o
     Redis do limitador numa porta onde nada escuta (conexão recusada)."""

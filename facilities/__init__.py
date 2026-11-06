@@ -244,6 +244,11 @@ def create_app(config=None):
         # maior. Para valer igual em todos, aponte para um Redis
         # (redis://host:6379) — ver README.
         RATELIMIT_STORAGE_URI=os.environ.get('RATELIMIT_STORAGE_URI', 'memory://'),
+        # Auditoria, Fase 4: com o Redis do limitador fora do ar, o login dava
+        # 500 para todo mundo. O limitador passa a engolir o erro do
+        # armazenamento e a contar em memória até o Redis voltar.
+        RATELIMIT_SWALLOW_ERRORS=_flag('RATELIMIT_SWALLOW_ERRORS', True),
+        RATELIMIT_IN_MEMORY_FALLBACK_ENABLED=_flag('RATELIMIT_IN_MEMORY_FALLBACK_ENABLED', True),
         # Fase 9B: o portal do cliente. Desligado até o jurídico entregar os
         # termos (Grupo C): a conta de cliente não entra.
         CLIENTE_EXTERNO_LIBERADO=_flag('CLIENTE_EXTERNO_LIBERADO', False),
