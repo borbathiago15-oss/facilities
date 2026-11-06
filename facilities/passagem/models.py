@@ -82,7 +82,15 @@ class DiarioConfiguracao(db.Model):
 
 class DiarioTurno(db.Model):
     __tablename__ = 'diario_operacional_turnos'
-    __table_args__ = (db.Index('ix_diario_turnos_cliente_data', 'client_id', 'data_turno'),)
+    __table_args__ = (
+        db.Index('ix_diario_turnos_cliente_data', 'client_id', 'data_turno'),
+        # Uma passagem por contrato, MODELO, dia e turno (``salvar_turno``):
+        # rascunho e encerramento são a mesma linha. A chave é a garantia de
+        # fundo contra o envio em dobro ao mesmo tempo (auditoria, Fase 3, L2;
+        # migração com quarentena das duplicatas que já existiam).
+        db.Index('uq_diario_turnos_chave', 'client_id', 'configuracao_id',
+                 'data_turno', 'turno', unique=True),
+    )
     id = db.Column(db.Integer, primary_key=True)
     client_id = db.Column(db.Integer, db.ForeignKey('clients.id'), nullable=False, index=True)
     configuracao_id = db.Column(db.Integer, db.ForeignKey('diario_operacional_configuracoes.id'), nullable=False, index=True)
