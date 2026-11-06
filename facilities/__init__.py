@@ -28,6 +28,7 @@ from sqlalchemy.engine import make_url
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from facilities import tempo
+from facilities.core import banco
 from facilities.extensions import csrf, db, limiter, login_manager, migrate
 from facilities.object_storage import ComArquivo, arquivo_do_ambiente, get_storage
 
@@ -120,9 +121,9 @@ def _conferir_limites_compartilhados(app):
     if not _flag('EXIGIR_DATABASE_URL', False):
         return
     try:
-        workers = int(os.environ.get('WEB_CONCURRENCY', '2') or 2)
+        workers = int(os.environ.get('WEB_CONCURRENCY', '4') or 4)
     except ValueError:
-        workers = 2
+        workers = 4
     if workers <= 1:
         return
     aviso = (f'RATELIMIT_STORAGE_URI=memory:// com {workers} workers: cada limite de acesso '
@@ -138,8 +139,10 @@ def _atras_de_proxy(app, saltos):
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=saltos, x_proto=saltos)
 
 
-def _url_do_banco(app):
-    url = os.environ.get('DATABASE_URL', '').strip()
+def _url_do_banco(app, proc):
+    # Agendador e comandos preferem a URL direta (DIRECT_DATABASE_URL), sem
+    # pooler; o site usa a DATABASE_URL (ver core/banco.py).
+    url = banco.url_do_processo(proc)
     if not url:
         if _flag('EXIGIR_DATABASE_URL', False):
             # A imagem de produção liga isto (Dockerfile): sem DATABASE_URL o
@@ -214,12 +217,12 @@ def _garantir_segredo(app, sqlite):
 
 def create_app(config=None):
     app = Flask(__name__, instance_relative_config=True)
+    proc = banco.processo()
     cookie_seguro = _flag('SESSION_COOKIE_SECURE', True)
     app.config.update(
         SECRET_KEY=(os.environ.get('SECRET_KEY') or '').strip() or None,
-        SQLALCHEMY_DATABASE_URI=_url_do_banco(app),
+        SQLALCHEMY_DATABASE_URI=_url_do_banco(app, proc),
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
-        SQLALCHEMY_ENGINE_OPTIONS={'pool_pre_ping': True},
         UPLOAD_FOLDER=os.environ.get('UPLOAD_FOLDER')
         or os.path.join(app.instance_path, 'uploads'),
         MAX_CONTENT_LENGTH=30 * 1024 * 1024,
@@ -250,6 +253,10 @@ def create_app(config=None):
         if 'REMEMBER_COOKIE_SECURE' not in config:
             app.config['REMEMBER_COOKIE_SECURE'] = app.config['SESSION_COOKIE_SECURE']
 
+    if 'SQLALCHEMY_ENGINE_OPTIONS' not in (config or {}):
+        # Pool e tempos limite (core/banco.py) para a URL que valeu no fim.
+        app.config['SQLALCHEMY_ENGINE_OPTIONS'] = banco.opcoes_do_engine(
+            app.config['SQLALCHEMY_DATABASE_URI'], proc)
     sqlite = _eh_sqlite(app.config['SQLALCHEMY_DATABASE_URI'])
     _garantir_segredo(app, sqlite)
     from facilities.core import cifra
@@ -263,6 +270,8 @@ def create_app(config=None):
     _atras_de_proxy(app, _saltos_de_proxy())
 
     db.init_app(app)
+    with app.app_context():
+        banco.aplicar_limites_das_tarefas(db.engine, proc)
     migrate.init_app(app, db)
     csrf.init_app(app)
     limiter.init_app(app)

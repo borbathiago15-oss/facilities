@@ -43,5 +43,14 @@ if [ "${ARQUIVO_FOTOS_NO_WEB:-0}" = "1" ]; then
       flask --app facilities anexos arquivar || echo "anexos arquivar: falhou (o site segue)"
     done ) &
 fi
-exec gunicorn app:app --bind "0.0.0.0:${PORT:-8080}" --workers "${WEB_CONCURRENCY:-2}" \
-  --threads 4 --timeout 60 --access-logfile -
+# Processos × threads (auditoria, Fase 3: 4 × 8 em 2 vCPU atendeu ~300
+# pessoas; 2 × 4 parava em ~50). O pool do banco de cada processo tem o
+# tamanho das threads (facilities/core/banco.py lê o mesmo GUNICORN_THREADS).
+# Atrás de pooler, o pool dele precisa de >= processos × threads × 2 + 5
+# (ver docs/BANCO_E_POOLER.md). Tudo pode ser trocado pelo painel.
+export WEB_CONCURRENCY="${WEB_CONCURRENCY:-4}"
+export GUNICORN_THREADS="${GUNICORN_THREADS:-8}"
+exec gunicorn app:app --bind "0.0.0.0:${PORT:-8080}" --workers "$WEB_CONCURRENCY" \
+  --threads "$GUNICORN_THREADS" --timeout "${GUNICORN_TIMEOUT:-30}" \
+  --graceful-timeout "${GUNICORN_GRACEFUL_TIMEOUT:-25}" \
+  --keep-alive "${GUNICORN_KEEPALIVE:-5}" --access-logfile -
