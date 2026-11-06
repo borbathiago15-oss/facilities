@@ -49,7 +49,8 @@ MIGRADOS = ('/cadastros/', '/clientes', '/centros/', '/novo-contrato', '/convite
             '/chamados/', '/demandas/', '/preventiva/locais/', '/equipes/locais/',
             '/materiais/', '/visitas/locais/', '/relatorios/', '/admin/integracao/',
             '/cliente/', '/cobrancas/', '/admin/usuarios', '/admin/contratos', '/avisos',
-            '/conta/seguranca', '/trocar-senha')
+            '/conta/seguranca', '/trocar-senha', '/app/equipe', '/app/materiais',
+            '/app/visitas')
 # O painel e o Início (6a): só o endereço exato (com ou sem a busca), nada
 # que comece igual.
 MIGRADOS_EXATOS = ('/painel', '/')
@@ -63,7 +64,7 @@ FORA = ('/etiquetas.pdf', '/logo.png', '/foto', '/arquivo.pdf', '/arquivo.xlsx')
 # saem pelo ``FORA``).
 FORA_DAS_ROTAS = ('/rotas/documentos/', '/rotas/fotos/', '/rotas/referencias/',
                   '/rotas/ocorrencias/', '/chamados/anexos/',
-                  '/cliente/fotos/', '/cliente/documentos/')
+                  '/cliente/fotos/', '/cliente/documentos/', '/app/visitas/fotos/')
 
 
 def nova(url):

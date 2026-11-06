@@ -218,7 +218,7 @@ def api_chamados_ver(chamado_id):
             'responsavel_id': ch.responsavel_id,
             'prazo': _hora(ch.prazo) if ch.prazo else '—',
             'origem': ch.origem,
-            'visita': (url_for('visitas.ver', vid=ch.origem_id)
+            'visita': (nova(url_for('visitas.ver', vid=ch.origem_id))
                        if ch.origem == 'visita' else None),
             'pausa': _pausa(ch.pausa_total_seg) if ch.pausa_total_seg else None,
             'descricao': ch.descricao or '', 'motivo_espera': ch.motivo_espera or '',

@@ -7,8 +7,9 @@
 * ``/api/v1/campo/links``: os endereços da moldura (o leitor de QR não tem
   outro dado).
 
-Os endereços do turno, do leitor de QR e da passagem de turno apontam para
-as telas novas (``/novo/app/...``, ``/novo/passagem-de-turno/...``): quem
+Os endereços do turno, do leitor de QR, da equipe, dos materiais, das
+visitas (Fase 1d) e da passagem de turno apontam para as telas novas
+(``/novo/app/...``, ``/novo/passagem-de-turno/...``): quem
 está nelas continua nelas. Os demais, para as telas
 de sempre, até cada uma ser migrada. As ações continuam nas APIs do
 aplicativo que já existem (``/app/api/...``).
@@ -86,9 +87,9 @@ def campo_inicio():
         'hoje': tempo.fmt(tempo.agora(), '%d/%m/%Y'),
         'tem_locais': bool(c['locais']),
         'turno': _turno(c['turno_por_local']),
-        'material': url_for('materiais.app') if c['usa_material'] else None,
-        'equipe': url_for('equipes.app_equipe') if c['lanca_presenca'] else None,
-        'visitas': ({'url': url_for('visitas.app_lista'), 'abertas': c['visitas_abertas']}
+        'material': _nova('app/materiais') if c['usa_material'] else None,
+        'equipe': _nova('app/equipe') if c['lanca_presenca'] else None,
+        'visitas': ({'url': _nova('app/visitas'), 'abertas': c['visitas_abertas']}
                     if c['lanca_presenca'] else None),
         'ocorrencias': [{
             'id': o.id,

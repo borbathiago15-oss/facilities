@@ -314,7 +314,7 @@ def test_telas_do_campo_e_publicas_cabem_na_tela(servidor, navegador, tamanho):
         telas = ['/app/', '/app/turno', '/app/materiais', '/chamados/', '/chamados/novo',
                  f'/passagem-de-turno/turno?client_id={cid}', '/avisos']
         if os.path.exists(MANIFESTO):
-            telas += ['/novo/app/', '/novo/app/turno', '/novo/chamados/novo',
+            telas += ['/novo/app/', '/novo/app/turno', '/novo/app/materiais', '/novo/chamados/novo',
                       f'/novo/passagem-de-turno/turno?client_id={cid}']
         for t in telas:
             resp = pg.goto(base + t)
@@ -323,7 +323,10 @@ def test_telas_do_campo_e_publicas_cabem_na_tela(servidor, navegador, tamanho):
         # A supervisora: equipe e visitas no aplicativo.
         ctx.clear_cookies()
         entrar(pg, base, 'sueli@e2e.test')
-        for t in ('/app/', '/app/equipe', '/app/visitas'):
+        telas = ['/app/', '/app/equipe', '/app/visitas']
+        if os.path.exists(MANIFESTO):
+            telas += ['/novo/app/equipe', '/novo/app/visitas']
+        for t in telas:
             resp = pg.goto(base + t)
             assert resp.ok, f'{t} → {resp.status}'
             _medir(pg, t, vp['width'])

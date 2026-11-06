@@ -32,6 +32,10 @@ function pedaco<M extends Record<string, ComponentType<any>>, K extends keyof M>
 const PaginaInicioCampo = pedaco(campo, 'PaginaInicioCampo');
 const PaginaTurno = pedaco(campo, 'PaginaTurno');
 const PaginaLerQr = pedaco(campo, 'PaginaLerQr');
+const PaginaEquipeDoCampo = pedaco(campo, 'PaginaEquipeDoCampo');
+const PaginaMateriaisDoCampo = pedaco(campo, 'PaginaMateriaisDoCampo');
+const PaginaVisitasDoCampo = pedaco(campo, 'PaginaVisitasDoCampo');
+const PaginaVisitaDoCampo = pedaco(campo, 'PaginaVisitaDoCampo');
 const PaginaPainel = pedaco(passagem, 'PaginaPainel');
 const PaginaRelatorio = pedaco(passagem, 'PaginaRelatorio');
 const PaginaConfiguracao = pedaco(passagem, 'PaginaConfiguracao');
@@ -145,6 +149,10 @@ export function App() {
       <Route path="/app" element={<Carregar><PaginaInicioCampo eu={eu.data} /></Carregar>} />
       <Route path="/app/turno" element={<Carregar><PaginaTurno eu={eu.data} /></Carregar>} />
       <Route path="/app/ler-qr" element={<Carregar><PaginaLerQr eu={eu.data} /></Carregar>} />
+      <Route path="/app/equipe" element={<Carregar><PaginaEquipeDoCampo eu={eu.data} /></Carregar>} />
+      <Route path="/app/materiais" element={<Carregar><PaginaMateriaisDoCampo eu={eu.data} /></Carregar>} />
+      <Route path="/app/visitas" element={<Carregar><PaginaVisitasDoCampo eu={eu.data} /></Carregar>} />
+      <Route path="/app/visitas/:id" element={<Carregar><PaginaVisitaDoCampo eu={eu.data} /></Carregar>} />
       <Route path="*" element={
         <Casca eu={eu.data}>
           <Carregar>

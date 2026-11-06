@@ -1,5 +1,8 @@
 // O que /api/v1/campo/inicio entrega (facilities/telas/campo.py).
 
+/** Os endereços da moldura do campo (``/api/v1/campo/links``). */
+export type LinksDoCampo = { ler_qr: string; site: string; instalar: string; passagem: string | null; chamados: string | null };
+
 export type LocalDoTurno = {
   local_id: number;
   local: string;
@@ -28,5 +31,5 @@ export type InicioDoCampo = {
   pendencias: { id: number; titulo: string; desde: string | null; url: string }[];
   chamados: { id: number; titulo: string; prazo: string | null; url: string }[] | null;
   passagem: { nome: string; url: string }[] | null;
-  links: { ler_qr: string; site: string; instalar: string; passagem: string | null; chamados: string | null };
+  links: LinksDoCampo;
 };

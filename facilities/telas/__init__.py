@@ -111,6 +111,7 @@ from facilities.telas import cadastros as _cadastros  # noqa: E402,F401
 from facilities.telas import chamados as _chamados  # noqa: E402,F401
 from facilities.telas import conta as _conta  # noqa: E402,F401
 from facilities.telas import campo as _campo  # noqa: E402,F401
+from facilities.telas import campo_app as _campo_app  # noqa: E402,F401
 from facilities.telas import equipes as _equipes  # noqa: E402,F401
 from facilities.telas import integracao as _integracao  # noqa: E402,F401
 from facilities.telas import materiais as _materiais  # noqa: E402,F401

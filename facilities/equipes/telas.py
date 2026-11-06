@@ -197,17 +197,20 @@ def contexto_mes(cid, args):
 
 
 # ── Aplicativo: presença e cobertura ──────────────────────────────────────
+# As telas antiga e nova (React, Fase 1d: ``/novo/app/equipe`` e
+# ``/api/v1/campo/equipe...``) saem das MESMAS funções: ``contexto_app_equipe``
+# monta a página; ``acao_app_*`` faz o envio e devolve o endereço de volta.
 
 def _pode_lancar():
     if current_user._effective_role() not in servico.PERFIS_QUE_LANCAM:
         raise Forbidden('A presença é lançada pelo supervisor ou pela gestão.')
 
 
-def _dia_pedido():
+def _dia_pedido(bruto):
     hoje = tempo.hoje()
     try:
-        dia = datetime.strptime(request.values.get('data') or '', '%Y-%m-%d').date()
-    except ValueError:
+        dia = datetime.strptime(bruto or '', '%Y-%m-%d').date()
+    except (TypeError, ValueError):
         return hoje
     return dia if hoje - timedelta(days=servico.DIAS_PARA_TRAS) <= dia <= hoje else hoje
 
@@ -215,8 +218,13 @@ def _dia_pedido():
 @bp.get('/app/equipe')
 @login_required
 def app_equipe():
+    return render_template('equipes/app_equipe.html',
+                           **contexto_app_equipe(request.values.get('data')))
+
+
+def contexto_app_equipe(data):
     _pode_lancar()
-    dia = _dia_pedido()
+    dia = _dia_pedido(data)
     locais = clientes_visiveis()
     linhas = servico.escalados_do_dia([c.id for c in locais], dia)
     por_local = {}
@@ -224,26 +232,30 @@ def app_equipe():
         por_local.setdefault(linha['escala'].client_id, []).append(linha)
     cobridores = {c.id: servico.funcionarios_ativos(c.id) for c in locais if c.id in por_local}
     hoje = tempo.hoje()
-    return render_template('equipes/app_equipe.html', dia=dia, hoje=hoje,
-                           ontem=(dia - timedelta(days=1)).isoformat(),
-                           amanha=(dia + timedelta(days=1)).isoformat() if dia < hoje else None,
-                           locais=[c for c in locais if c.id in por_local],
-                           por_local=por_local, cobridores=cobridores,
-                           situacoes=SITUACOES_PRESENCA)
+    return dict(dia=dia, hoje=hoje,
+                ontem=(dia - timedelta(days=1)).isoformat(),
+                amanha=(dia + timedelta(days=1)).isoformat() if dia < hoje else None,
+                locais=[c for c in locais if c.id in por_local],
+                por_local=por_local, cobridores=cobridores,
+                situacoes=SITUACOES_PRESENCA)
 
 
 @bp.post('/app/equipe/presenca')
 @login_required
 def app_presenca():
+    return redirect(acao_app_presenca(request.form, request.values.get('data')))
+
+
+def acao_app_presenca(dados, data):
     _pode_lancar()
-    e = db.session.get(EscalaTrabalho, servico._id(request.form, 'escala_id'))
+    e = db.session.get(EscalaTrabalho, servico._id(dados, 'escala_id'))
     if e is None:
         abort(404)
     require_client(e.client_id)
-    dia = _dia_pedido()
+    dia = _dia_pedido(data)
     try:
-        p = servico.registrar_presenca(current_user, e, dia, request.form.get('situacao'),
-                                       request.form.get('observacao'))
+        p = servico.registrar_presenca(current_user, e, dia, dados.get('situacao'),
+                                       dados.get('observacao'))
         db.session.commit()
     except RegraDaEquipe as erro:
         db.session.rollback()
@@ -252,17 +264,21 @@ def app_presenca():
         flash(f'{e.funcionario.nome}: {p.situacao_rotulo.lower()}.'
               + (' Registre quem cobriu, se alguém cobriu.' if p.situacao == 'faltou' else ''),
               'success')
-    return redirect(url_for('equipes.app_equipe', data=dia.isoformat()) + f'#escala-{e.id}')
+    return url_for('equipes.app_equipe', data=dia.isoformat()) + f'#escala-{e.id}'
 
 
 @bp.post('/app/equipe/presencas/<int:prid>/cobertura')
 @login_required
 def app_cobertura(prid):
+    return redirect(acao_app_cobertura(prid, request.form))
+
+
+def acao_app_cobertura(prid, dados):
     _pode_lancar()
     p = db.get_or_404(Presenca, prid)
     require_client(p.client_id)
     try:
-        c, passadas = servico.registrar_cobertura(current_user, p, request.form)
+        c, passadas = servico.registrar_cobertura(current_user, p, dados)
         db.session.commit()
     except RegraDaEquipe as erro:
         db.session.rollback()
@@ -275,4 +291,4 @@ def app_cobertura(prid):
                      f' {passadas} tarefa(s) da rota ficaram sem escalado: '
                      f'{c.funcionario.nome} não usa o aplicativo.')
         flash(f'Cobertura registrada: {c.funcionario.nome}.{extra}', 'success')
-    return redirect(url_for('equipes.app_equipe', data=p.data.isoformat()))
+    return url_for('equipes.app_equipe', data=p.data.isoformat())

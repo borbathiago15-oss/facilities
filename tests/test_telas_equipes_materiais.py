@@ -388,9 +388,11 @@ def test_as_visitas_trazem_os_dados_da_tela_antiga(app_module, cena, auth_client
         assert f"{p['modelo']} · a cada {p['intervalo_dias']} dia(s) · {p['supervisor'] or 'qualquer supervisor'}" in texto
     assert f"próxima <strong>{ativa['proxima_em']}</strong>" in texto
     assert f"<strong>{parada['proxima_em']}</strong>" not in texto and not parada['ativo']
-    assert [v['url'] for v in d['recentes']] == re.findall(r'href="(/app/visitas/\d+)"', antigo)
+    # A visita em si leva ao aplicativo novo do supervisor (Fase 1d).
+    assert [v['url'] for v in d['recentes']] == [
+        '/novo' + u for u in re.findall(r'href="(/app/visitas/\d+)"', antigo)]
     [v] = d['recentes']
-    assert v['url'] == f"/app/visitas/{cena['visita']}" and v['status'] == 'prevista'
+    assert v['url'] == f"/novo/app/visitas/{cena['visita']}" and v['status'] == 'prevista'
     assert f"até {v['vencimento']}" in texto and f">{v['situacao_rotulo']}</span>" in texto
     assert [m['id'] for m in d['modelos']] == [
         int(x) for x in re.findall(r'<option value="(\d+)"', antigo.split('id="vmnova"')[1].split('</select>')[0])]
@@ -805,11 +807,11 @@ def test_dentro_das_telas_novas_os_links_sao_os_novos(app_module, cena, auth_cli
     assert d['links']['visitas'] == f'/novo/visitas/locais/{a}'
     itens = c.get('/api/v1/demandas/').get_json()['itens']
     assert [i['link'] for i in itens if i['tipo'] == 'insumo'] == ['/novo/materiais/pedidos']
-    # A visita em si e o aplicativo do supervisor seguem nas telas antigas.
-    assert all(i['link'].startswith('/app/visitas/') for i in itens if i['tipo'] == 'visita')
+    # A visita em si e o aplicativo do supervisor: nas telas novas desde a Fase 1d.
+    assert all(i['link'].startswith('/novo/app/visitas/') for i in itens if i['tipo'] == 'visita')
     with app_module.app.app_context():
         fabrica.pessoa(app_module, 'eq4b.sup@trino.com', 'supervisor', locais=[LOCAL_A])
     sup = fabrica.entrar(app_module, 'eq4b.sup@trino.com')
     d = sup.get('/api/v1/campo/inicio').get_json()
-    assert d['equipe'] == '/app/equipe' and d['material'] == '/app/materiais'
-    assert d['visitas']['url'] == '/app/visitas'
+    assert d['equipe'] == '/novo/app/equipe' and d['material'] == '/novo/app/materiais'
+    assert d['visitas']['url'] == '/novo/app/visitas'

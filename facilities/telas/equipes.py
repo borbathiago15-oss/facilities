@@ -16,8 +16,8 @@ como a tela antiga escreve. Os envios vão para o MESMO caminho da antiga
 abaixo de ``/api/v1`` e chamam a MESMA ação (``acao_*``): a resposta é o
 recado e o endereço de volta, já na tela nova; a recusa da regra é 400 com
 a mesma frase. O aplicativo do supervisor (``/app/equipe`` e
-``/app/visitas``) continua nas telas antigas. Sem cópia no aparelho
-(gestão).
+``/app/visitas``) tem as telas novas próprias (Fase 1d,
+``telas/campo_app.py``). Sem cópia no aparelho (gestão).
 """
 from flask import request, url_for
 from flask_login import login_required
@@ -188,8 +188,8 @@ def api_visitas_local(cid):
                       'quem_fez': v.quem_fez.name if v.quem_fez else None,
                       'status': v.status, 'situacao_rotulo': v.situacao_rotulo,
                       'n_nao_conformes': v.n_nao_conformes or 0,
-                      # A visita em si é do aplicativo do supervisor (tela antiga).
-                      'url': url_for('visitas.ver', vid=v.id)} for v in c['recentes']],
+                      # A visita em si é do aplicativo do supervisor (Fase 1d).
+                      'url': nova(url_for('visitas.ver', vid=v.id))} for v in c['recentes']],
         'supervisores': [{'id': s.id, 'nome': s.name, 'perfil': s.perfil_rotulo}
                          for s in c['supervisores']],
         'hoje': c['hoje'], 'pode_montar': c['pode_montar'],

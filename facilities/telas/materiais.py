@@ -16,8 +16,9 @@ escritos como a tela antiga escreve. Os envios vão para o MESMO caminho da
 antiga abaixo de ``/api/v1`` e chamam a MESMA ação (``acao_*``); o consumo
 do local usa a mesma ``/api/v1/materiais/locais/<id>/consumo`` do "Material
 usado" do chamado (Fase 4a). A foto do pedido continua servida pelo servidor
-(``/materiais/pedidos/<id>/foto``). O aplicativo (``/app/materiais``)
-continua na tela antiga. Sem cópia no aparelho (gestão).
+(``/materiais/pedidos/<id>/foto``). O aplicativo (``/app/materiais``) tem
+a tela nova própria (Fase 1d, ``telas/campo_app.py``). Sem cópia no aparelho
+(gestão).
 """
 from flask import request, url_for
 from flask_login import login_required

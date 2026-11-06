@@ -736,9 +736,12 @@ def test_dentro_das_telas_novas_os_links_sao_os_novos(app_module, cena, auth_cli
     assert nova('/materiais/') == '/novo/materiais/'
     assert nova('/materiais/pedidos') == '/novo/materiais/pedidos'
     assert nova('/materiais/pedidos/1/foto') == '/materiais/pedidos/1/foto'
-    assert nova('/app/visitas/1') == '/app/visitas/1'
-    assert nova('/app/materiais') == '/app/materiais'
-    assert nova('/app/equipe') == '/app/equipe'
+    # Fase 1d: o aplicativo do supervisor e de quem usa o material também; a
+    # foto da visita continua no servidor.
+    assert nova('/app/visitas/1') == '/novo/app/visitas/1'
+    assert nova('/app/visitas/fotos/1') == '/app/visitas/fotos/1'
+    assert nova('/app/materiais') == '/novo/app/materiais'
+    assert nova('/app/equipe') == '/novo/app/equipe'
     # As telas antigas e o menu não mudam.
     assert 'href="/rotas/locais/' in c.get('/rotas/').get_data(as_text=True)
     menu = [i['url'] for g in c.get('/api/v1/eu').get_json()['menu'] for i in g['itens']]
