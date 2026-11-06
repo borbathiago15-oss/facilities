@@ -21,13 +21,14 @@ import secrets
 from datetime import timedelta
 
 import click
-from flask import Flask, flash, jsonify, redirect, request, session, url_for
+from flask import Flask, flash, g, jsonify, redirect, request, session, url_for
 from flask_login import current_user, logout_user
 from werkzeug.exceptions import Forbidden
 from sqlalchemy.engine import make_url
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from facilities import tempo
+from facilities.core import banco
 from facilities.extensions import csrf, db, limiter, login_manager, migrate
 from facilities.object_storage import ComArquivo, arquivo_do_ambiente, get_storage
 
@@ -120,9 +121,9 @@ def _conferir_limites_compartilhados(app):
     if not _flag('EXIGIR_DATABASE_URL', False):
         return
     try:
-        workers = int(os.environ.get('WEB_CONCURRENCY', '2') or 2)
+        workers = int(os.environ.get('WEB_CONCURRENCY', '4') or 4)
     except ValueError:
-        workers = 2
+        workers = 4
     if workers <= 1:
         return
     aviso = (f'RATELIMIT_STORAGE_URI=memory:// com {workers} workers: cada limite de acesso '
@@ -138,8 +139,10 @@ def _atras_de_proxy(app, saltos):
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=saltos, x_proto=saltos)
 
 
-def _url_do_banco(app):
-    url = os.environ.get('DATABASE_URL', '').strip()
+def _url_do_banco(app, proc):
+    # Agendador e comandos preferem a URL direta (DIRECT_DATABASE_URL), sem
+    # pooler; o site usa a DATABASE_URL (ver core/banco.py).
+    url = banco.url_do_processo(proc)
     if not url:
         if _flag('EXIGIR_DATABASE_URL', False):
             # A imagem de produção liga isto (Dockerfile): sem DATABASE_URL o
@@ -214,12 +217,12 @@ def _garantir_segredo(app, sqlite):
 
 def create_app(config=None):
     app = Flask(__name__, instance_relative_config=True)
+    proc = banco.processo()
     cookie_seguro = _flag('SESSION_COOKIE_SECURE', True)
     app.config.update(
         SECRET_KEY=(os.environ.get('SECRET_KEY') or '').strip() or None,
-        SQLALCHEMY_DATABASE_URI=_url_do_banco(app),
+        SQLALCHEMY_DATABASE_URI=_url_do_banco(app, proc),
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
-        SQLALCHEMY_ENGINE_OPTIONS={'pool_pre_ping': True},
         UPLOAD_FOLDER=os.environ.get('UPLOAD_FOLDER')
         or os.path.join(app.instance_path, 'uploads'),
         MAX_CONTENT_LENGTH=30 * 1024 * 1024,
@@ -250,6 +253,10 @@ def create_app(config=None):
         if 'REMEMBER_COOKIE_SECURE' not in config:
             app.config['REMEMBER_COOKIE_SECURE'] = app.config['SESSION_COOKIE_SECURE']
 
+    if 'SQLALCHEMY_ENGINE_OPTIONS' not in (config or {}):
+        # Pool e tempos limite (core/banco.py) para a URL que valeu no fim.
+        app.config['SQLALCHEMY_ENGINE_OPTIONS'] = banco.opcoes_do_engine(
+            app.config['SQLALCHEMY_DATABASE_URI'], proc)
     sqlite = _eh_sqlite(app.config['SQLALCHEMY_DATABASE_URI'])
     _garantir_segredo(app, sqlite)
     from facilities.core import cifra
@@ -263,6 +270,8 @@ def create_app(config=None):
     _atras_de_proxy(app, _saltos_de_proxy())
 
     db.init_app(app)
+    with app.app_context():
+        banco.aplicar_limites_das_tarefas(db.engine, proc)
     migrate.init_app(app, db)
     csrf.init_app(app)
     limiter.init_app(app)
@@ -332,6 +341,16 @@ def _rotas(app):
         app.register_blueprint(bp)
 
 
+# As sondas da hospedagem (``/healthz``, ``/readyz``): não carregam a pessoa
+# logada (o ``user_loader`` consulta o banco) — com o banco pendurado o
+# ``/healthz`` também ficava pendurado (auditoria, Fase 3).
+SONDAS = frozenset({'core.healthz', 'core.readyz'})
+
+
+def _eh_sonda():
+    return request.endpoint in SONDAS
+
+
 def _quer_json():
     """As travas de sessão respondem JSON (e não redirecionam) a quem não
     navega: corpo JSON, envio (não-GET) e toda a API das telas novas."""
@@ -366,6 +385,8 @@ def _sessao(app):
         por padrão (rota nova do sistema não se abre ao cliente por descuido).
         Portal desligado derruba a sessão; sem a segunda etapa, só a tela de
         segurança."""
+        if _eh_sonda():
+            return None
         if not current_user.is_authenticated or current_user._effective_role() != 'cliente':
             return None
         from facilities.core.auth import MSG_CLIENTE_SEM_ACESSO
@@ -415,6 +436,8 @@ def _sessao(app):
         vários locais (gestão e diretoria) não usa o sistema só com a senha.
         Até cadastrar o código do aplicativo autenticador, só abre a tela de
         segurança (e trocar a senha, sair). O cliente tem a porta própria."""
+        if _eh_sonda():
+            return None
         if not current_user.is_authenticated or current_user._effective_role() == 'cliente':
             return None
         from facilities.core.auth import exige_segunda_etapa
@@ -431,6 +454,8 @@ def _sessao(app):
 
     @app.before_request
     def _troca_obrigatoria():
+        if _eh_sonda():
+            return None
         if (current_user.is_authenticated and current_user.must_change_password
                 and request.endpoint not in _LIVRES_NA_TROCA):
             if _quer_json():
@@ -444,7 +469,11 @@ def _sessao(app):
         # nem pelo cache o que o anterior abriu (auditoria SEC-014). A cópia
         # do modo sem sinal é do service worker, que se apaga ao sair.
         ep = request.endpoint or ''
-        if (current_user.is_authenticated and ep != 'static'
+        if _eh_sonda() or g.get('erro_de_banco'):
+            # Sem perguntar quem está logado (consulta o banco): sonda e
+            # erro de banco nunca vão para o cache, de ninguém.
+            resp.headers['Cache-Control'] = 'no-store'
+        elif (current_user.is_authenticated and ep != 'static'
                 and not ep.startswith('app_instalavel.') and ep != 'campo.manifesto'):
             resp.headers['Cache-Control'] = 'no-store'
         resp.headers.setdefault('X-Content-Type-Options', 'nosniff')

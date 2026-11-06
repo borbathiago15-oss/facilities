@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+{# 503: o banco não respondeu a tempo (facilities/core/erros.py, _erro_de_banco).
+   De propósito SEM o base.html: o menu, o sino e a pessoa logada consultam o
+   banco — e é ele que está com dificuldade. Montado direto do ambiente do
+   Jinja (sem context processors): só url_for e as variáveis passadas. #}
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b0d0f">
+  <title>{{ titulo }} — Trino Facilities</title>
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='pwa/icone-192.png') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap-icons/bootstrap-icons.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+</head>
+<body>
+<main class="container py-4">
+  <div class="fc-cartao fc-erro" role="alert">
+    <p class="fc-erro-codigo">Erro 503</p>
+    <h1 class="fc-titulo">{{ titulo }}</h1>
+    <p class="fc-sub">{{ mensagem }}</p>
+    {% if recarregar %}
+    <p class="fc-sub">Espere uns {{ espera }} segundos e toque em "Tentar de novo".</p>
+    <div class="d-flex flex-wrap gap-2">
+      <button type="button" class="btn btn-primary fw-bold" data-recarregar><i class="bi bi-arrow-clockwise"></i> Tentar de novo</button>
+      <button type="button" class="btn btn-outline-secondary" data-voltar><i class="bi bi-arrow-left"></i> Voltar à tela anterior</button>
+    </div>
+    {% else %}
+    {# Era um envio: recarregar mandaria de novo. Volta, confere e envia. #}
+    <p class="fc-sub">O que você enviou pode não ter sido gravado. Espere uns
+      {{ espera }} segundos, volte à tela anterior, confira e envie de novo.</p>
+    <div class="d-flex flex-wrap gap-2">
+      <button type="button" class="btn btn-primary fw-bold" data-voltar><i class="bi bi-arrow-left"></i> Voltar à tela anterior</button>
+    </div>
+    {% endif %}
+  </div>
+</main>
+<script src="{{ url_for('static', filename='js/acoes.js') }}"></script>
+</body>
+</html>
