@@ -59,7 +59,7 @@ def contrato(app_module):
     que ainda não se dividiu."""
     with app_module.app.app_context():
         from app import Client, db
-        cliente = Client.query.first()
+        cliente = Client.query.order_by(Client.id).first()
         enc = _usuario(app_module, 'enc.porarea@trino.com', 'Encarregado das áreas',
                        'encarregado', [cliente])
         gestora = _usuario(app_module, 'gestora.porarea@trino.com', 'Gestora das áreas',

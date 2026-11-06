@@ -59,7 +59,7 @@ def cena(app_module):
     """Um contrato com duas áreas (modelos) e dois encarregados."""
     with app_module.app.app_context():
         from app import Client, db
-        cliente = Client.query.first()
+        cliente = Client.query.order_by(Client.id).first()
         paulo = _usuario(app_module, 'paulo.semresposta@trino.com',
                          'Paulo do Piso', [cliente])
         rita = _usuario(app_module, 'rita.semresposta@trino.com',

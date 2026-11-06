@@ -40,7 +40,7 @@ def operacao(app_module):
     """Um contrato com um modelo de passagem sem área, e nada lançado."""
     from facilities.passagem.models import DiarioConfiguracao
     with app_module.app.app_context():
-        cliente = app_module.Client.query.first()
+        cliente = app_module.Client.query.order_by(app_module.Client.id).first()
         admin = app_module.User.query.filter_by(
             email='admin@grupotrino.com.br').first()
         cfg = DiarioConfiguracao(

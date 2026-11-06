@@ -35,7 +35,7 @@ from facilities.passagem.models import DiarioConfiguracao, DiarioPendencia, Diar
 def operacao(app_module):
     with app_module.app.app_context():
         from app import db
-        cliente = app_module.Client.query.first()
+        cliente = app_module.Client.query.order_by(app_module.Client.id).first()
         admin = app_module.User.query.filter_by(
             email='admin@grupotrino.com.br').first()
         cfg = DiarioConfiguracao(

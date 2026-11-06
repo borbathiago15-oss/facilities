@@ -34,7 +34,7 @@ def test_o_banco_guarda_so_o_texto_cifrado(app_module):
         uid = fabrica.pessoa(app_module, 'cifra.ana@trino.com')
         u = db.session.get(User, uid)
         u.totp_segredo = 'JBSWY3DPEHPK3PXP'
-        local = Client.query.first()
+        local = Client.query.order_by(Client.id).first()
         local.endereco = 'Rua das Flores, 123'
         p = PushInscricao(user_id=uid, endpoint='https://fcm.googleapis.com/fcm/send/cifra',
                           p256dh='chave-publica-do-aparelho', auth='segredo-auth')

@@ -54,7 +54,7 @@ def recife(app_module):
     """
     with app_module.app.app_context():
         db = app_module.db
-        cliente = app_module.Client.query.first()
+        cliente = app_module.Client.query.order_by(app_module.Client.id).first()
         admin = app_module.User.query.filter_by(
             email='admin@grupotrino.com.br').first()
         ids = {}
@@ -254,7 +254,7 @@ def test_modelos_sem_area_sao_a_area_do_contrato(app_module, client):
     """
     with app_module.app.app_context():
         db = app_module.db
-        cliente = app_module.Client.query.first()
+        cliente = app_module.Client.query.order_by(app_module.Client.id).first()
         admin = app_module.User.query.filter_by(
             email='admin@grupotrino.com.br').first()
         ids = {}
